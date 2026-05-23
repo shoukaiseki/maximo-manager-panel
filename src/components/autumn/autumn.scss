@@ -1,0 +1,10 @@
+/** 不要添加scoped会导致样式无效 */
+.el-table__body tr.current-row>td{
+    /*background-color: #ff784a !important;*/
+    background-color: #DCDCDC !important;
+    color: #000000;
+}
+
+.rowClass {
+    background-color: rgb(250, 195, 100);
+}

@@ -1,0 +1,126 @@
+@media print {
+    //定义纸张旋转
+    //@page { size: landscape; }
+    .printTextCenter{
+        text-align: center;
+        vertical-align:middle;
+    }
+    .app-container1{
+
+        // display: inline-block!important;
+        .qrcodemain{
+            border-color:white!important;
+            margin:0!important;
+            .codelistmain{
+                //  writing-mode: tb-rl;
+            }
+            .codelistmain{
+                // display: flex;
+
+                .inxxdiv{
+                    // position: relative;
+                    // margin: auto ;
+                    // text-align: center;
+                    // width: 60px;
+                    // height: 60px;
+                    .inxxdiv1{
+                        // position: absolute;
+                        // top: 50%;
+                        // left: 50%;
+                        // transform: translate(-50%,-50%) rotate(-90deg);
+                        .fontdiv{
+                            // direction: rtl
+                        }
+                    }
+                }
+            }
+        }
+    }
+    .btn-content{
+        display: none;
+    }
+}
+
+.printTextCenter{
+    text-align: center;
+    vertical-align:middle;
+}
+
+.app-container1{
+    position: relative;
+    padding: 0!important;
+    // display: flex;
+    .qrcodemain{
+        // transform: rotate(-90deg);
+        page-break-after:always;
+        width: fit-content;
+        // width: 150px;
+        // height:150px;
+        box-sizing: border-box;
+        padding: 6px;
+        border-radius: 6px;
+        border: 1px solid #ddd;
+        margin: 5px 10px 10px;
+        .codelistmain{
+            display: flex;
+            .inxxdiv{
+                // position: relative;
+                // margin: auto ;
+                // text-align: center;
+                // width: 60px;
+                // height: 60px;
+                .inxxdiv1{
+                    // text-align: center;
+                    // display: flex;
+                    // position: absolute;
+                    // top: 50%;
+                    // left: 50%;
+                    // transform: translate(-50%,-50%) rotate(-90deg);
+                    width: 50px;
+                    height: 100%;
+                    position: relative;
+                    .fontdiv{
+                        font-size: 12px;
+                        // direction: rtl
+                        // writing-mode: vertical-rl;
+                        -moz-transform: rotate(-90deg);
+                        -webkit-transform: rotate(-90deg);
+                        // top: 50%;
+                        // left:50%;
+                        // transform: translate(-50%,-50%) rotate(-90deg);
+                        top: 35px;
+                        display: block;
+                        position: absolute;
+                        filter:progid:DXImageTransform.Microsoft.BasicImage(rotation=3);
+                        height: 16px;
+                        width: 88px;
+                        text-align: center;
+                        left: -8px;
+                    }
+                    .fontdiv:first-child{
+                        height: 16px;
+                        width: 88px;
+                        text-align: center;
+                        left: -25px;
+                    }
+                }
+            }
+        }
+    }
+
+    .btn-content{
+        position: fixed;
+        bottom: 100px;
+        right: 50px;
+        color: white;
+        border-radius: 6px;
+        background: #409eff;
+        box-sizing: border-box;
+        padding: 5px 15px;
+    }
+}
+
+.app-container{
+    padding: 0!important;
+
+}
