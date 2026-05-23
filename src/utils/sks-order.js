@@ -1,8 +1,8 @@
 /**
  * 订单管理通用方法
  */
-import CHANGE_BIT_FLAG from '/src/utils/wangbao-constant'
-import { calcNotTaxCost, calcTaxCost, divideNullIsZero, multiplyNullIsZero } from '/src/utils/wangbao-number-math'
+import CHANGE_BIT_FLAG from '/src/utils/sks-constant'
+import { calcNotTaxCost, calcTaxCost, divideNullIsZero, multiplyNullIsZero } from '/src/utils/sks-number-math'
 
 /**
  * 更新 bom 的公司Id

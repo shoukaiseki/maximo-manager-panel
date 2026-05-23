@@ -135,7 +135,7 @@ Vue.component('SysUserNickNameInput', SysUserNickNameInput)
 
 
 
-// import { isNumberInRuleValidate,isIntegerInRuleValidate,isPositiveIntegerInRuleValidate,isPositiveIntegerAndNotZeroInRuleValidate } from '/src/utils/wangbao-validate'
+// import { isNumberInRuleValidate,isIntegerInRuleValidate,isPositiveIntegerInRuleValidate,isPositiveIntegerAndNotZeroInRuleValidate } from '/src/utils/sks-validate'
 import {
     searchValueListSearchToSearchValueList,
     formatOssUrl,
@@ -145,27 +145,27 @@ import {
     generateUUID,
     canEditProcessNode,
     getNowDate, relationshipParserToString, isNullOrUndefined
-} from '/src/utils/wangbao'
-import {numberIsNotZeroOrNull,numberIsZeroOrNull,mergeFromObject,extendObject,arrayToBitFlag,bitFlagToArray,bitFlagToStringArray} from "/src/utils/wangbao";
+} from '/src/utils/sks'
+import {numberIsNotZeroOrNull,numberIsZeroOrNull,mergeFromObject,extendObject,arrayToBitFlag,bitFlagToArray,bitFlagToStringArray} from "/src/utils/sks";
 
 
 
-import { getCompanyByCompanyId,getCompanyNameByCompanyId } from '/src/utils/wangbao-lookup-format'
+import { getCompanyByCompanyId,getCompanyNameByCompanyId } from '/src/utils/sks-lookup-format'
 
-import { inputRestrictedDecimal } from '/src/utils/wangbao-input-restricted'
+import { inputRestrictedDecimal } from '/src/utils/sks-input-restricted'
 
-import { negateNumber } from '/src/utils/wangbao-number-utils'
-import { rowStyle } from '/src/utils/wangbao-table'
+import { negateNumber } from '/src/utils/sks-number-utils'
+import { rowStyle } from '/src/utils/sks-table'
 import { aqoeous, aqoeousNoToQueryFunction } from '/src/api/base/aqoeous.js'
 import { syncAction } from '/src/api/base/syncAction.js'
-import { changeInventoryTypeFormat, initItemToDomain } from '/src/utils/wangbao-inventory'
+import { changeInventoryTypeFormat, initItemToDomain } from '/src/utils/sks-inventory'
 import {
     dictValueToSelectOptions,
     dictValueTypeToInteger, formatInventoryBomType,
     formatStatusColumn
-} from '/src/utils/wangbao-dict'
-import { isInArray, isNotInArray } from '/src/utils/wangbao-array'
-import { calcPercentageProgressValue } from './utils/wangbao-number-math'
+} from '/src/utils/sks-dict'
+import { isInArray, isNotInArray } from '/src/utils/sks-array'
+import { calcPercentageProgressValue } from './utils/sks-number-math'
 
 Vue.prototype.dictValueToSelectOptions=dictValueToSelectOptions
 Vue.prototype.dictValueTypeToInteger=dictValueTypeToInteger
@@ -262,7 +262,7 @@ import {
     jumpProductionOrderOutSide,
     jumpPurchaseOrder,
     jumpSaleOrderDelivery, jumpSaleOrder, jumpToInventoryReserveHandle, jumpProductionOrderTemplate
-} from '/src/utils/wangbao-jump.js'
+} from '/src/utils/sks-jump.js'
 Vue.prototype.jumpToInventoryReserveHandle=jumpToInventoryReserveHandle
 Vue.prototype.jumpPurchaseOrder=jumpPurchaseOrder
 Vue.prototype.jumpProductionOrderOutSide=jumpProductionOrderOutSide
@@ -275,14 +275,14 @@ Vue.prototype.jumpProductionOrderTemplate= jumpProductionOrderTemplate;
 Vue.prototype.getNowDate=getNowDate
 
 //全局用户信息缓存
-import '/src/utils/wangbao-cache'
+import '/src/utils/sks-cache'
 
 Vue.prototype.formatInventoryBomType=formatInventoryBomType
 
 
 import 'font-awesome/css/font-awesome.min.css'
 
-import * as Constants from '/src/utils/wangbao-constant'
+import * as Constants from '/src/utils/sks-constant'
 
 Vue.prototype.initItemToDomain=initItemToDomain
 

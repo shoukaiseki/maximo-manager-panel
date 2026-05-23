@@ -41,8 +41,8 @@
 </template>
 
 <script>
-import { rowStyleElTable } from '../../utils/wangbao-table'
-import { findRowInListFromAttrName } from '../../utils/wangbao'
+import { rowStyleElTable } from '../../utils/sks-table'
+import { findRowInListFromAttrName } from '../../utils/sks'
 
 export default {
     name: 'autumnTableEl',

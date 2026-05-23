@@ -1,4 +1,4 @@
-import {mergeFromObject} from "./wangbao";
+import {mergeFromObject} from "./sks";
 
 
 /**

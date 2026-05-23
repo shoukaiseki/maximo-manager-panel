@@ -1,2 +1,2 @@
-npm run dev --port=8083 --target=http://localhost:10780
+"D:\usr\nvm\v24.14.1\node.exe" "D:\usr\nvm\v24.14.1\node_modules\npm\bin\npm-cli.js"  run dev
 

@@ -12,7 +12,7 @@ const getters = {
   permissions: state => state.user.permissions,
   permission_routes: state => state.permission.routes,
   envs: state => state.env.envs,
-  selectedEnv: state => state.env.selectedEnv,
+  selectedEnv: (state, getters) => getters['env/selectedEnv'],
   selectedEnvKey: state => state.env.selectedKey
 }
 export default getters

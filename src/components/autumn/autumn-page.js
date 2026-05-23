@@ -1,5 +1,5 @@
 //暴露mixins对象
-import { initListVueVirtualUUID } from '../../utils/wangbao-table'
+import { initListVueVirtualUUID } from '../../utils/sks-table'
 
 export const autumnPageMixin = {
     data(){

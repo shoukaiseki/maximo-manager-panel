@@ -1,7 +1,7 @@
-import { generateUUID } from '@/utils/wangbao'
-import { addNullIsZero, subtractNullIsZero,divideNullIsZero } from '@/utils/wangbao-number-math'
+import { generateUUID } from '@/utils/sks'
+import { addNullIsZero, subtractNullIsZero,divideNullIsZero } from '@/utils/sks-number-math'
 import { updateRole } from '../api/system/role'
-import { CHANGE_BIT_FLAG } from '@/utils/wangbao-constant'
+import { CHANGE_BIT_FLAG } from '@/utils/sks-constant'
 
 export function initListVueVirtualUUID(list){
   if(list == undefined){

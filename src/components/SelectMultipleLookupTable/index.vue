@@ -32,8 +32,8 @@
 //多选数组
 
 
-import { isInArray } from '/src/utils/wangbao-array'
-import { findRowInListFromAttrName } from '/src/utils/wangbao'
+import { isInArray } from '/src/utils/sks-array'
+import { findRowInListFromAttrName } from '/src/utils/sks'
 
 export default {
     name: "SelectMultipleLookupTable",

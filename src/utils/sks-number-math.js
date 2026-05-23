@@ -139,7 +139,7 @@ export function sumFormTableList({list,propName}){
 
 }
 
-// import { sumFormTableList,bignumberToFixed,divideNullIsZero,multiplyNullIsZero,subtractNullIsZero,addNullIsZero } from '@/utils/wangbao-number-math'
+// import { sumFormTableList,bignumberToFixed,divideNullIsZero,multiplyNullIsZero,subtractNullIsZero,addNullIsZero } from '@/utils/sks-number-math'
 
 /**
  *

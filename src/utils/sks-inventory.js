@@ -1,8 +1,8 @@
 /**
  * 订单管理通用方法
  */
-import CHANGE_BIT_FLAG from '/src/utils/wangbao-constant'
-import { findRowInListFromAttrName } from './wangbao'
+import CHANGE_BIT_FLAG from '/src/utils/sks-constant'
+import { findRowInListFromAttrName } from './sks'
 
 /**
  * 格式化 历史变更类型

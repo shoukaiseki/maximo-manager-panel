@@ -15,7 +15,7 @@
 //多选数组
 
 
-import { arrayToBitFlag,bitFlagToArray } from '/src/utils/wangbao'
+import { arrayToBitFlag,bitFlagToArray } from '/src/utils/sks'
 
 export default {
     name: "CheckboxMultipleToBitValue",

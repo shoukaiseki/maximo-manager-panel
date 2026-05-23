@@ -15,7 +15,7 @@
 
 
 import { lookupDemoSelectTarget } from "@/api/test/DemoSelectTarget";
-import { findRowInListFromAttrName } from '@/utils/wangbao'
+import { findRowInListFromAttrName } from '@/utils/sks'
 import { valueEquals } from 'element-ui/src/utils/util'
 
 export default {

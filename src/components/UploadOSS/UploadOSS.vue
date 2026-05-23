@@ -33,8 +33,8 @@
 </template>
 <script>
 import { getStsInfoUnDocument,getStsInfoHasDocument } from '@/api/base/base-ali-oss'
-import { formatFileNameDeletePath } from '@/utils/wangbao'
-import { formatFileSize } from '@/utils/wangbao'
+import { formatFileNameDeletePath } from '@/utils/sks'
+import { formatFileSize } from '@/utils/sks'
 
 import OSS from "ali-oss";
 import { uploadFileToAlmighty } from '../../api/base/base-ali-oss'

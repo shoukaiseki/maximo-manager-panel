@@ -8,10 +8,10 @@ function resolve(dir) {
 
 const name = defaultSettings.title || '' // 标题
 const port = process.env.port || process.env.npm_config_port || 28765 // 端口
-var baseTarget='http://localhost:6969' // 后端地址
-baseTarget= 'http://localhost:6969'
+var baseTarget = process.env.VUE_APP_DEFAULT_TARGET || 'http://localhost:9080'
 
-var target = process.env.npm_config_target||baseTarget;
+var target = process.env.npm_config_target || baseTarget;
+console.log("target="+target)
 
 // vue.config.js 配置说明
 //官方vue.config.js 参考文档 https://cli.vuejs.org/zh/config/#css-loaderoptions
@@ -36,20 +36,22 @@ module.exports = {
     open: true,
     proxy: {
       // detail: https://cli.vuejs.org/config/#devserver-proxy
-      [process.env.VUE_APP_BASE_API]: {
-         target:target,
+      '/maximo': {
+        target: target,
+        // target: 'http://localhost:9080',
+
         changeOrigin: true,
-        pathRewrite: {
-          ['^' + process.env.VUE_APP_BASE_API]: '',
+        logLevel: 'debug',  // 启用调试日志
+        onProxyReq: (proxyReq, req, res) => {
+          console.log('代理请求:', req.url, '→', proxyReq.path)
+        },
+        onProxyRes: (proxyRes, req, res) => {
+          console.log('代理响应:', proxyRes.statusCode, req.url)
+        },
+        onError: (err, req, res) => {
+          console.error('代理错误:', err.message, req.url)
         }
-      },
-        ['/anon/filePreview']: {
-            target:target+'/anon/filePreview',
-            changeOrigin: true,
-            pathRewrite: {
-                ['^/anon/filePreview']: ''
-            }
-        }
+      }
     },
     disableHostCheck: true
   },

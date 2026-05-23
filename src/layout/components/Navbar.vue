@@ -7,15 +7,19 @@
     <div class="right-menu">
       <template v-if="device!=='mobile'">
         <div class="layout-actions">
-          <el-select :value="selectedEnvKey" placeholder="选择环境" size="small" class="env-select" @change="handleEnvChange">
-            <el-option v-for="env in envs" :key="env.key" :label="env.name" :value="env.key" />
-          </el-select>
+          <div class="env-baseurl" :title="currentBaseUrl">{{ currentBaseUrl }}</div>
+          <el-tooltip content="后端配置" effect="dark" placement="bottom">
+            <el-button type="text" class="settings-btn right-menu-item hover-effect" @click.native="showSettings = true">
+              <svg-icon icon-class="system" class="header-link-icon" />
+            </el-button>
+          </el-tooltip>
           <el-tooltip content="源码地址" effect="dark" placement="bottom">
             <el-button type="text" class="repo-link right-menu-item hover-effect" @click.native="openRepo">
               <svg-icon icon-class="github" class="header-link-icon" />
             </el-button>
           </el-tooltip>
         </div>
+        <env-settings v-if="showSettings" :visible.sync="showSettings" @saved="handleSettingsSaved" />
 
         <search id="header-search" class="right-menu-item" />
 
@@ -69,6 +73,7 @@ import Search from '/src/components/HeaderSearch'
 import RuoYiGit from '/src/components/RuoYi/Git'
 import RuoYiDoc from '/src/components/RuoYi/Doc'
 import SvgIcon from '/src/components/SvgIcon'
+import EnvSettings from '/src/components/EnvSettings/EnvSettings'
 // import { getInfo } from "/src/api/login";
 // import TaskWebSocket from '/src/components/TaskWebSocket/TaskWebSocket'
 
@@ -82,20 +87,20 @@ export default {
     RuoYiGit,
     RuoYiDoc,
     SvgIcon,
+    EnvSettings,
       // TaskWebSocket,
   },
   data(){
     return{
-      username:'用户身份'
+      username:'用户身份',
+      showSettings: false
     }
   },
   computed: {
     ...mapGetters([
       'sidebar',
       'avatar',
-      'device',
-      'envs',
-      'selectedEnvKey'
+      'device'
     ]),
     setting: {
       get() {
@@ -107,6 +112,18 @@ export default {
           value: val
         })
       }
+    },
+    currentBaseUrl() {
+      const saved = localStorage.getItem('maximo-env-settings')
+      if (saved) {
+        try {
+          const settings = JSON.parse(saved)
+          return settings.baseUrl || process.env.VUE_APP_DEFAULT_TARGET || '未配置'
+        } catch (e) {
+          return process.env.VUE_APP_DEFAULT_TARGET || '未配置'
+        }
+      }
+      return process.env.VUE_APP_DEFAULT_TARGET || '未配置'
     }
   },
   created(){
@@ -123,8 +140,11 @@ export default {
     openRepo() {
       window.open('https://gitee.com/shoukaiseki/maximo-manager-panel', '_blank')
     },
-    handleEnvChange(key) {
-      this.$store.dispatch('env/setSelectedEnv', key)
+    handleSettingsSaved() {
+      this.$message.info('配置已更新，页面将刷新')
+      setTimeout(() => {
+        location.reload()
+      }, 1000)
     },
     toggleSideBar() {
       this.$store.dispatch('app/toggleSideBar')
@@ -209,6 +229,16 @@ export default {
       display: flex;
       align-items: center;
       gap: 14px;
+    }
+
+    .env-baseurl {
+      font-size: 12px;
+      color: #8f959e;
+      max-width: 200px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      cursor: default;
     }
 
     .env-select {

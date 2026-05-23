@@ -27,11 +27,11 @@
 <script>
 
 import request from '/src/utils/request'
-import { isNullOrUndefined } from '../utils/wangbao'
+import { isNullOrUndefined } from '../utils/sks'
 
 
 export default {
-    name: "WangbaoComponentIndex",
+    name: "sksComponentIndex",
     components: {
     },
     data() {

@@ -13,7 +13,7 @@
 </template>
 
 <script>
-// import { findRowInListFromAttrName } from '/src/utils/wangbao'
+// import { findRowInListFromAttrName } from '/src/utils/sks'
 
 export default {
     name: 'SysUserNickNameInput',

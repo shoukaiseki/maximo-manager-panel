@@ -267,7 +267,7 @@
 
 <script>
 import { lookupTreeDemoSelectTarget,  lookupDemoSelectTarget,  listDemoSelectTarget, getDemoSelectTarget, delDemoSelectTarget, addDemoSelectTarget, updateDemoSelectTarget, exportDemoSelectTarget } from "@/api/test/DemoSelectTarget";
-import { generateUUID } from '@/utils/wangbao';
+import { generateUUID } from '@/utils/sks';
 import SelectDemoSelectSourceSetName from '@/views/test/DemoSelectSource/SelectDemoSelectSourceSetName'
 
 export default {

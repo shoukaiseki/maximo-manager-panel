@@ -8,7 +8,7 @@
 <script>
 
 
-import { findRowInListFromAttrName } from '@/utils/wangbao'
+import { findRowInListFromAttrName } from '@/utils/sks'
 
 export default {
   name: "ProcessStatusLabel",

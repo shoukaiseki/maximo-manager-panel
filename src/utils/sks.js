@@ -1,4 +1,4 @@
-﻿import { parseTime } from './ruoyi'
+import { parseTime } from './ruoyi'
 
 /**
  * 通用js方法封装处理

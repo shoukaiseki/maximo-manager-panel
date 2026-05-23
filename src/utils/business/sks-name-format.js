@@ -1,4 +1,4 @@
-import { BUSINESS_NAME_SUFFIX } from '../wangbao-constant'
+import { BUSINESS_NAME_SUFFIX } from '../sks-constant'
 
 export function formatPurchaseOrderName(domain){
     if (!domain) {

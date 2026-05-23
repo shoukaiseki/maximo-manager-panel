@@ -7,30 +7,35 @@
           <p class="page-summary">支持 msgid / msggroup + msgkey 查询，环境认证信息由配置自动加载。</p>
         </div>
       </div>
+     <el-form :model="formData" ref="queryForm" :inline="true" label-width="68px">
+            <el-form-item label="消息 ID">
+              <el-input v-model="formData.msgid" placeholder="BMXAA6378I" />
+            </el-form-item>
+            <el-form-item label="消息组">
+              <el-input v-model="formData.msggroup" placeholder="system" />
+            </el-form-item>
+            <el-form-item label="消息键">
+              <el-input v-model="formData.msgkey" placeholder="crontaskmanager25" />
+            </el-form-item>
+            <el-form-item>
+                <el-button type="cyan" icon="el-icon-search" size="mini" @click="handleQuery">搜索</el-button>
+                <el-button icon="el-icon-refresh" size="mini" @click="resetForm">重置</el-button>
+            </el-form-item>
+        </el-form>
 
-      <el-form :model="formData" class="query-form" label-width="100px" label-position="top">
+
+      <!-- <el-form :model="formData" class="query-form" label-width="100px" label-position="top">
         <el-divider />
 
         <el-row :gutter="18">
           <el-col :span="12">
-            <el-form-item label="查询方式">
-              <el-radio-group v-model="searchMode">
-                <el-radio label="msgid">msgid</el-radio>
-                <el-radio label="groupKey">msggroup + msgkey</el-radio>
-              </el-radio-group>
-            </el-form-item>
-          </el-col>
-        </el-row>
-
-        <el-row :gutter="18">
-          <el-col :span="12">
             <el-form-item label="消息 ID">
-              <el-input v-model="formData.msgid" :disabled="searchMode !== 'msgid'" placeholder="BMXAA6378I" />
+              <el-input v-model="formData.msgid" placeholder="BMXAA6378I" />
             </el-form-item>
           </el-col>
           <el-col :span="12">
             <el-form-item label="消息组">
-              <el-input v-model="formData.msggroup" :disabled="searchMode !== 'groupKey'" placeholder="system" />
+              <el-input v-model="formData.msggroup" placeholder="system" />
             </el-form-item>
           </el-col>
         </el-row>
@@ -38,7 +43,7 @@
         <el-row :gutter="18">
           <el-col :span="12">
             <el-form-item label="消息键">
-              <el-input v-model="formData.msgkey" :disabled="searchMode !== 'groupKey'" placeholder="crontaskmanager25" />
+              <el-input v-model="formData.msgkey" placeholder="crontaskmanager25" />
             </el-form-item>
           </el-col>
           <el-col :span="12" class="button-column">
@@ -46,18 +51,24 @@
             <el-button @click="resetForm">重置</el-button>
           </el-col>
         </el-row>
-      </el-form>
+      </el-form> -->
 
       <div class="result-panel">
-        <el-alert v-if="error" :title="error" type="error" show-icon closable @close="error = ''" />
-        <el-card v-if="!error && messages.length === 0" class="empty-card">暂无查询结果，请输入条件后点击查询。</el-card>
-        <el-table v-if="messages.length > 0" :data="messages" stripe style="width: 100%" class="result-table">
+        <!-- <el-alert v-if="error" :title="error" type="error" show-icon closable @close="error = ''" />
+        <el-card v-if="!error && messages&&messages.length === 0" class="empty-card">暂无查询结果，请输入条件后点击查询。</el-card> -->
+        <el-table loading="loading" :data="messages" stripe style="width: 100%" class="result-table">
           <el-table-column prop="msgid" label="msgid" />
           <el-table-column prop="msggroup" label="msggroup" />
           <el-table-column prop="msgkey" label="msgkey" />
           <el-table-column prop="value" label="value" />
           <el-table-column prop="displaymethod_description" label="displaymethod" />
         </el-table>
+       <pagination v-show="tablePatam.total > 0"
+            :total="tablePatam.total"
+            :page.sync="tablePatam.pageNum"
+            :limit.sync="tablePatam.pageSize"
+            @pagination="getList"
+        />
       </div>
     </el-card>
   </section>
@@ -71,12 +82,17 @@ export default {
   name: 'MessagesQuery',
   data() {
     return {
-      searchMode: 'msgid',
+      tablePatam:{
+        total: 0,
+        pageNum: 1,
+        pageSize: 10
+      },
       loading: false,
       error: '',
       messages: [],
       formData: {
-        msgid: 'BMXAA6378I',
+        msgid: '',
+        // msgid: 'BMXAA6378I',
         msggroup: '',
         msgkey: ''
       }
@@ -88,32 +104,57 @@ export default {
     ])
   },
   methods: {
+    buildWhere(params) {
+      if (params.msgid) {
+        return `msgid="${params.msgid}"`
+      } else if (params.msggroup && params.msgkey) {
+        return `msggroup="${params.msggroup}" and msgkey="${params.msgkey}"`
+      }
+      return ''
+    },
     async handleQuery() {
+      this.tablePatam.pageNum=1
+      this.getList()
+    },
+    getList() {
       this.loading = true
       this.error = ''
       this.messages = []
 
       try {
-        if (this.searchMode === 'msgid' && !this.formData.msgid) {
-          throw new Error('请先输入 msgid。')
-        }
-        if (this.searchMode === 'groupKey' && (!this.formData.msggroup || !this.formData.msgkey)) {
-          throw new Error('请填写 msggroup 和 msgkey。')
-        }
 
         const env = this.selectedEnv
         const params = {
-          baseUrl: env.baseUrl,
-          maxauth: env.maxauth,
-          apiKey: env.apiKey,
-          useMaxauth: !env.useApiKey,
-          useApiKey: env.useApiKey,
-          msgid: this.searchMode === 'msgid' ? this.formData.msgid : undefined,
-          msggroup: this.searchMode === 'groupKey' ? this.formData.msggroup : undefined,
-          msgkey: this.searchMode === 'groupKey' ? this.formData.msgkey : undefined
+          msgid:  this.formData.msgid ,
+          msggroup:this.formData.msggroup ,
+          msgkey:  this.formData.msgkey 
         }
 
-        this.messages = await queryMessages(params)
+        const whereClause = this.buildWhere(params)
+        console.log("whereClause=", whereClause)
+//         oslc.paging   是否启用分页,是否启用只判断字符串是否为 TRUE (不区分大小写),另外 oslc.pageSize 不为空时,默认启用分页功能
+// oslc.pageSize 每页记录条数,如果参数为空,oslc.paging为TRUE,接口查询结果是默认显示20条
+// pageno   分页页码,默认第一页
+
+        const queryParams={
+          lean: '1',
+          'collectioncount': 1,
+          'oslc.select': '*',
+          'oslc.where': whereClause&&whereClause!==''?whereClause: undefined,
+          'oslc.paging': 'true',
+          'oslc.pageSize': this.tablePatam.pageSize,
+          'pageno': this.tablePatam.pageNum
+        }
+
+        queryMessages(queryParams).then(res => {
+          console.log("查询结果", res)
+          this.messages = res.data.member || []
+          this.tablePatam.total=res.data.responseInfo&&res.data.responseInfo.totalCount||this.messages.length
+          this.loading=false
+        }).catch(err => {
+          this.msgError("查询消息失败：" + err.message)
+          this.loading=false
+        })
       } catch (err) {
         this.error = err instanceof Error ? err.message : String(err)
       } finally {
@@ -128,6 +169,7 @@ export default {
       }
       this.searchMode = 'msgid'
       this.error = ''
+      this.tablePatam.pageNum=1
       this.messages = []
     }
   }

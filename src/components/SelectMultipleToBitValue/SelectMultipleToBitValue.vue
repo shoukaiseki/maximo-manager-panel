@@ -24,7 +24,7 @@
 //多选数组
 
 
-import { arrayToBitFlag,bitFlagToArray } from '@/utils/wangbao'
+import { arrayToBitFlag,bitFlagToArray } from '@/utils/sks'
 
 export default {
   name: "SelectMultipleToBitValue",

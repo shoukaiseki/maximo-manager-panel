@@ -19,7 +19,7 @@
 <script>
 import icons from '@/components/IconSelect/requireIcons'
 export default {
-  name: 'WangbaoComponentIcons',
+  name: 'sksComponentIcons',
   data() {
     return {
       //是否为超管

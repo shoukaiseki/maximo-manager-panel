@@ -18,7 +18,7 @@
 <script>
 
 import request from "../../utils/request";
-import {findRowInListFromAttrName} from "../../utils/wangbao";
+import {findRowInListFromAttrName} from "../../utils/sks";
 
 export async function addData(data) {
     return await request({
