@@ -35,7 +35,7 @@
         <el-button 
           type="primary" 
           icon="el-icon-document" 
-          size="small"
+          size="mini"
           @click="startLogStream"
           :loading="connecting"
           :disabled="isStreaming"
@@ -47,10 +47,20 @@
           v-if="isStreaming"
           type="danger" 
           icon="el-icon-video-pause" 
-          size="small"
+          size="mini"
           @click="stopLogStream"
         >
           停止接收
+        </el-button>
+        
+        <el-button 
+          v-if="logs.length > 0"
+          type="warning" 
+          icon="el-icon-delete" 
+          size="mini"
+          @click="clearLogs"
+        >
+          清空日志
         </el-button>
         
         <el-divider direction="vertical" />
@@ -71,9 +81,6 @@
           @change="handleAutoScrollChange"
         />
         
-        <el-tag v-if="isStreaming" type="info" size="small" style="margin-left: 12px;">
-          已接收: {{ logs.length }} 条
-        </el-tag>
 
         <div class="log-stats">
           <el-tag size="small" type="info">总行数: {{ logs.length }}</el-tag>
@@ -86,18 +93,16 @@
       </div>
       <!-- 日志显示区域 -->
       <div class="log-container">
-        <div v-if="!logs || logs.length === 0" class="empty-log">
+        <log-viewer
+          v-if="logs.length > 0"
+          :log="fullLogText"
+          :key="drawerViewerKey"
+          :has-number="true"
+          style="height: calc(100vh - 280px); min-height: 600px; max-height: 900px;"
+        />
+        <div v-else class="empty-log">
           <i class="el-icon-document-delete" style="font-size: 48px; color: #dcdfe6;"></i>
           <p>暂无日志数据，请点击"查看日志"按钮开始接收</p>
-        </div>
-        
-        <div v-else class="log-content" ref="logContent">
-          <div 
-            v-for="(log, index) in filteredLogs" 
-            :key="index"
-            class="log-line"
-            v-html="formatLogLine(log)"
-          ></div>
         </div>
       </div>
     </el-card>
@@ -107,9 +112,13 @@
 <script>
 import { mapGetters } from 'vuex'
 import request from '@/utils/request'
+import LogViewer from '@femessage/log-viewer'
 
 export default {
   name: 'MasLogViewer',
+  components: {
+    LogViewer
+  },
   data() {
     return {
       connecting: false,
@@ -122,13 +131,16 @@ export default {
       timer: null,
       countdownTimer: null,
       abortController: null, // 用于取消 fetch 请求
-      maxLogs: 300, // 最大保留日志条数（进一步减少以避免卡顿）
+      maxLogs: 600000, // 最大日志行数阈值（达到此值时触发清理）
+      logsToRemove: 200000, // 每次清理时删除的日志行数
       manualStop: false, // 标记是否手动停止
       reconnectTimer: null, // 重连定时器
       autoScroll: true, // 自动滚动开关
       updateTimer: null, // 批量更新定时器
       pendingLogs: [], // 待处理的日志队列
-      scrollDebounceTimer: null // 滚动防抖定时器
+      scrollDebounceTimer: null, // 滚动防抖定时器
+      lastScrollTop: 0, // 记录上次滚动位置
+      drawerViewerKey: 0 // log-viewer 的 key，用于强制刷新
     }
   },
   computed: {
@@ -144,14 +156,11 @@ export default {
         )
       }
       
-      // 限制显示的日志数量，避免 DOM 过多导致卡顿
-      // 只保留最后 100 条用于显示（进一步减少）
-      const maxDisplayLogs = 100
-      if (logs.length > maxDisplayLogs) {
-        return logs.slice(-maxDisplayLogs)
-      }
-      
       return logs
+    },
+    fullLogText() {
+      // 将所有日志合并为一个字符串，每行用换行符分隔，并应用高亮
+      return this.filteredLogs.map(log => this.highlightLogLine(log)).join('\n')
     }
   },
   mounted() {
@@ -176,6 +185,13 @@ export default {
   methods: {
     async startLogStream() {
       if (this.isStreaming) {
+        return
+      }
+
+      // 检查是否配置了 maximo_api_key
+      const apiKey = localStorage.getItem('maximo_api_key')
+      if (!apiKey) {
+        this.msgError('请先配置 Maximo API Key！\n请在浏览器控制台执行：localStorage.setItem("maximo_api_key", "your-key")')
         return
       }
 
@@ -380,12 +396,16 @@ export default {
       this.logs.push(...newLogs)
       
       // 限制日志数量，避免内存溢出
+      // 当日志数超过阈值时，删除最旧的 logsToRemove 行
       if (this.logs.length > this.maxLogs) {
-        this.logs = this.logs.slice(-this.maxLogs)
+        const keepCount = this.logs.length - this.logsToRemove
+        this.logs = this.logs.slice(-keepCount)
+        console.log(`日志数量超过 ${this.maxLogs}，已删除最旧的 ${this.logsToRemove} 行，当前剩余 ${this.logs.length} 行`)
       }
       
       // 根据自动滚动开关决定是否滚动
       if (this.autoScroll) {
+        // 使用 $nextTick 确保 DOM 更新完成后再滚动
         this.$nextTick(() => {
           this.scrollToBottom()
         })
@@ -408,6 +428,28 @@ export default {
           this.scrollToBottom()
         })
       }
+    },
+    
+    handleScroll(e) {
+      // 记录滚动位置
+      this.lastScrollTop = e.target.scrollTop
+    },
+    
+    clearLogs() {
+      // 清空日志
+      this.$confirm('确定要清空所有日志吗？', '提示', {
+        confirmButtonText: '确定',
+        cancelButtonText: '取消',
+        type: 'warning'
+      }).then(() => {
+        this.logs = []
+        this.pendingLogs = []
+        // 强制刷新 log-viewer 组件
+        this.drawerViewerKey++
+        this.$message.success('日志已清空')
+      }).catch(() => {
+        // 用户取消操作
+      })
     },
     
     showHelp() {
@@ -497,18 +539,15 @@ export default {
     },
     
     scrollToBottom() {
-      // 使用防抖，避免频繁滚动
-      if (this.scrollDebounceTimer) {
-        clearTimeout(this.scrollDebounceTimer)
-      }
-      
-      this.scrollDebounceTimer = setTimeout(() => {
-        const container = this.$refs.logContent
-        if (container) {
-          // 强制滚动到底部
+      // 直接滚动到底部，不使用防抖
+      const container = this.$refs.logContainer
+      if (container) {
+        // 使用 requestAnimationFrame 确保在下一帧执行滚动
+        requestAnimationFrame(() => {
           container.scrollTop = container.scrollHeight
-        }
-      }, 50) // 50ms 防抖
+          this.lastScrollTop = container.scrollHeight
+        })
+      }
     },
     
     highlightLog(log) {
@@ -523,11 +562,14 @@ export default {
     },
     
     formatLogLine(log) {
-      // Java 日志高亮方案（性能优化版）
+      // Java 日志高亮方案（极致性能优化版）
       let formatted = this.escapeHtml(log)
       
       // 1. 高亮日志级别（最先执行，避免被其他规则干扰）
-      if (/(DEBUG|INFO|WARN|WARNING|ERROR|FATAL|TRACE)/.test(formatted)) {
+      // 使用更高效的检测方式
+      if (formatted.includes('DEBUG') || formatted.includes('INFO') || 
+          formatted.includes('WARN') || formatted.includes('ERROR') || 
+          formatted.includes('FATAL') || formatted.includes('TRACE')) {
         formatted = formatted.replace(/\b(DEBUG|INFO|WARN|WARNING|ERROR|FATAL|TRACE)\b/g, (match) => {
           const levelClass = this.getLogLevelClass(match)
           return `<span class="log-level ${levelClass}">${match}</span>`
@@ -535,31 +577,21 @@ export default {
       }
       
       // 2. 高亮异常类型（在类名之前，避免冲突）
-      if (/[A-Z][a-zA-Z]*(Exception|Error)\b/.test(formatted)) {
+      if (formatted.includes('Exception') || formatted.includes('Error')) {
         formatted = formatted.replace(/\b([A-Z][a-zA-Z]*Exception|[A-Z][a-zA-Z]*Error)\b/g, '<span class="log-exception">$&</span>')
       }
       
-      // 3. 高亮类名
-      if (/([a-z]+\.)+[A-Z]/.test(formatted)) {
+      // 3. 高亮类名（仅当包含点号和大写字母时）
+      if (formatted.includes('.') && /[A-Z]/.test(formatted)) {
         formatted = formatted.replace(/([a-z]+\.)+[A-Z][a-zA-Z0-9_]*/g, '<span class="log-class">$&</span>')
       }
       
-      // 4. 高亮时间戳
-      if (/\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}/.test(formatted)) {
+      // 4. 高亮时间戳（仅当日志看起来像有时间戳）
+      if (/\d{4}-\d{2}-\d{2}/.test(formatted)) {
         formatted = formatted.replace(/\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}(?:\.\d+)?/g, '<span class="log-timestamp">$&</span>')
       }
       
-      // 5. 高亮关键词
-      if (/\b(null|true|false|undefined)\b/.test(formatted)) {
-        formatted = formatted.replace(/\b(null|true|false|undefined)\b/g, '<span class="log-keyword">$&</span>')
-      }
-      
-      // 6. 高亮数字（最后执行，避免影响其他规则）
-      if (/\b\d+\.?\d*\b/.test(formatted)) {
-        formatted = formatted.replace(/\b\d+\.?\d*\b/g, '<span class="log-number">$&</span>')
-      }
-      
-      // 7. 如果有过滤关键词，额外高亮
+      // 5. 如果有过滤关键词，额外高亮
       if (this.filterKeyword) {
         const keyword = this.escapeHtml(this.filterKeyword)
         const filterRegex = new RegExp(`(${keyword})`, 'gi')
@@ -586,6 +618,90 @@ export default {
       const div = document.createElement('div')
       div.textContent = text
       return div.innerHTML
+    },
+    
+    highlightLogLine(line) {
+      let highlighted = line
+      
+      // ANSI 转义码定义
+      const ANSI = {
+        reset: '\x1b[0m',
+        bold: '\x1b[1m',
+        underline: '\x1b[4m',
+        // 前景色
+        black: '\x1b[30m',
+        red: '\x1b[31m',
+        green: '\x1b[32m',
+        yellow: '\x1b[33m',
+        blue: '\x1b[34m',
+        magenta: '\x1b[35m',
+        cyan: '\x1b[36m',
+        white: '\x1b[37m',
+        // 亮色
+        brightRed: '\x1b[91m',
+        brightGreen: '\x1b[92m',
+        brightYellow: '\x1b[93m',
+        brightBlue: '\x1b[94m',
+        brightMagenta: '\x1b[95m',
+        brightCyan: '\x1b[96m',
+        brightWhite: '\x1b[97m'
+      }
+      
+      // 1. 日志级别高亮（带颜色）
+      // FATAL - 鲜红色 + 粗体
+      highlighted = highlighted.replace(
+        /\b(FATAL)\b/g,
+        `${ANSI.brightRed}${ANSI.bold}$1${ANSI.reset}`
+      )
+      // ERROR - 红色
+      highlighted = highlighted.replace(
+        /\b(ERROR)\b/g,
+        `${ANSI.red}$1${ANSI.reset}`
+      )
+      // WARN/WARNING - 黄色
+      highlighted = highlighted.replace(
+        /\b(WARN|WARNING)\b/g,
+        `${ANSI.yellow}$1${ANSI.reset}`
+      )
+      // INFO - 绿色
+      highlighted = highlighted.replace(
+        /\b(INFO)\b/g,
+        `${ANSI.green}$1${ANSI.reset}`
+      )
+      // DEBUG/TRACE - 蓝色
+      highlighted = highlighted.replace(
+        /\b(DEBUG|TRACE)\b/g,
+        `${ANSI.blue}$1${ANSI.reset}`
+      )
+      
+      // 2. 类名高亮（青色）- 匹配 com.xxx.yyy.ClassName 格式
+      highlighted = highlighted.replace(
+        /\b([a-z]+(?:\.[a-z]+)+\.[A-Z][a-zA-Z0-9]*)\b/g,
+        `${ANSI.cyan}$1${ANSI.reset}`
+      )
+      
+      // 3. 异常类型高亮（粉红色粗体加下划线）
+      highlighted = highlighted.replace(
+        /\b((?:[A-Z][a-zA-Z0-9]*Exception|[A-Z][a-zA-Z0-9]*Error))\b/g,
+        `${ANSI.brightMagenta}${ANSI.bold}${ANSI.underline}$1${ANSI.reset}`
+      )
+      
+      // 4. 数字高亮（紫色）
+      highlighted = highlighted.replace(
+        /\b(\d+)\b/g,
+        `${ANSI.magenta}$1${ANSI.reset}`
+      )
+      
+      // 5. 过滤关键词高亮（黄色粗体）
+      if (this.filterKeyword) {
+        const keyword = this.filterKeyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+        highlighted = highlighted.replace(
+          new RegExp(`(${keyword})`, 'gi'),
+          `${ANSI.brightYellow}${ANSI.bold}$1${ANSI.reset}`
+        )
+      }
+      
+      return highlighted
     }
   }
 }
@@ -626,15 +742,12 @@ export default {
 }
 
 .log-container {
-  min-height: 500px;
-  max-height: 700px;
+  min-height: 600px;
+  max-height: 900px;
   overflow-y: auto;
   border: 1px solid #dcdfe6;
   border-radius: 4px;
   background-color: #1e1e1e;
-  font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
-  font-size: 13px;
-  line-height: 1.6;
 }
 
 .empty-log {
@@ -642,118 +755,14 @@ export default {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  height: 400px;
+  height: calc(100vh - 280px);
+  min-height: 600px;
+  max-height: 900px;
   color: #909399;
   
   p {
     margin-top: 16px;
     font-size: 14px;
-  }
-}
-
-.log-content {
-  padding: 12px;
-  
-  .log-line {
-    padding: 3px 0;
-    color: #d4d4d4;
-    white-space: pre-wrap;
-    word-break: break-all;
-    font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
-    font-size: 13px;
-    line-height: 1.6;
-    border-left: 3px solid transparent;
-    padding-left: 8px;
-    transition: all 0.2s;
-    
-    &:hover {
-      background-color: rgba(255, 255, 255, 0.05);
-      border-left-color: rgba(255, 255, 255, 0.2);
-    }
-    
-    // 日志级别颜色
-    ::v-deep .log-level {
-      font-weight: bold;
-      padding: 1px 4px;
-      border-radius: 2px;
-      margin-right: 4px;
-      
-      &.debug {
-        color: #6a9fb5;
-        background-color: rgba(106, 159, 181, 0.1);
-      }
-      
-      &.info {
-        color: #90a959;
-        background-color: rgba(144, 169, 89, 0.1);
-      }
-      
-      &.warn {
-        color: #d28445;
-        background-color: rgba(210, 132, 69, 0.1);
-      }
-      
-      &.error {
-        color: #ac4142;
-        background-color: rgba(172, 65, 66, 0.15);
-      }
-      
-      &.fatal {
-        color: #f00;
-        background-color: rgba(255, 0, 0, 0.2);
-        animation: pulse 1.5s ease-in-out infinite;
-      }
-    }
-    
-    // 时间戳
-    ::v-deep .log-timestamp {
-      color: #75715e;
-      font-style: italic;
-    }
-    
-    // 类名
-    ::v-deep .log-class {
-      color: #66d9ef;
-      font-weight: 500;
-    }
-    
-    // 异常类型
-    ::v-deep .log-exception {
-      color: #f92672;
-      font-weight: bold;
-      text-decoration: underline;
-      text-decoration-color: rgba(249, 38, 114, 0.3);
-    }
-    
-    // 数字
-    ::v-deep .log-number {
-      color: #ae81ff;
-    }
-    
-    // 关键词
-    ::v-deep .log-keyword {
-      color: #f92672;
-      font-weight: bold;
-    }
-    
-    // 过滤高亮
-    ::v-deep .highlight {
-      background-color: #ffeb3b;
-      color: #000;
-      padding: 1px 3px;
-      border-radius: 2px;
-      font-weight: bold;
-      box-shadow: 0 0 4px rgba(255, 235, 59, 0.5);
-    }
-  }
-}
-
-@keyframes pulse {
-  0%, 100% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0.7;
   }
 }
 
