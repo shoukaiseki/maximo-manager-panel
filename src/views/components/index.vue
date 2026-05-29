@@ -1,6 +1,6 @@
 <template>
   <div class="app-container">
-    <el-button type="cyan" @click="jump('/wb-components/icons')">图标库</el-button>
+    <el-button type="cyan" @click="jump('/sks-components/icons')">图标库</el-button>
     <!--            <div class="icon-list">-->
     <!--                <div v-for="(item, index) in iconList" :key="index" @click="selectedIcon(item)">-->
     <!--                    <svg-icon :icon-class="item" style="height: 30px;width: 16px;" />-->
@@ -11,7 +11,7 @@
     <i class="el-icon-success" />
 
     <h1>Apache Echarts</h1>
-    <el-button type="cyan" @click="jump('/wb-components/echarts/bar')">formatter</el-button>
+    <el-button type="cyan" @click="jump('/sks-components/echarts/bar')">formatter</el-button>
   </div>
 
 </template>

@@ -41,12 +41,25 @@ module.exports = {
         // target: 'http://localhost:9080',
 
         changeOrigin: true,
+        ws: true,  // 支持 WebSocket 和 SSE 长连接
         logLevel: 'debug',  // 启用调试日志
+        // SSE 需要禁用缓冲以实现实时传输
         onProxyReq: (proxyReq, req, res) => {
           console.log('代理请求:', req.url, '→', proxyReq.path)
+          // 对于 SSE 请求，设置不缓冲
+          if (req.headers.accept && req.headers.accept.includes('text/event-stream')) {
+            proxyReq.setHeader('Cache-Control', 'no-cache')
+            proxyReq.setHeader('Connection', 'keep-alive')
+          }
         },
         onProxyRes: (proxyRes, req, res) => {
           console.log('代理响应:', proxyRes.statusCode, req.url)
+          // 对于 SSE 响应，确保不缓冲
+          if (proxyRes.headers['content-type'] && proxyRes.headers['content-type'].includes('text/event-stream')) {
+            res.setHeader('Cache-Control', 'no-cache')
+            res.setHeader('Connection', 'keep-alive')
+            res.setHeader('X-Accel-Buffering', 'no')  // 禁用 Nginx 缓冲
+          }
         },
         onError: (err, req, res) => {
           console.error('代理错误:', err.message, req.url)

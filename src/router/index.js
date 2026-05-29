@@ -66,6 +66,33 @@ export const constantRoutes = [
             },
         ]
     },
+     {
+        path: '/sks-components',
+        component: Layout,
+        name: 'SksComponents',
+        meta: { title: '组件示例', icon: '' ,noCache: false},
+        hidden: false,
+        children: [
+            {
+                path: 'index',
+                component: (resolve) => require(['/src/views/components/index'], resolve),
+                name: 'sksComponentIconsIndex',
+                meta: { title: '组件首页', icon: '' ,noCache: false}
+            },
+            {
+                path: 'icons',
+                component: (resolve) => require(['/src/views/components/icons/index'], resolve),
+                name: 'WangbaoComponentsIndex',
+                meta: { title: '图标', icon: '' ,noCache: false}
+            },
+            {
+                path: 'echarts/bar',
+                component: (resolve) => require(['/src/views/components/echarts/bar/index'], resolve),
+                name: 'WangbaoComponentsEchartsBar',
+                meta: { title: '柱状图', icon: '' ,noCache: false},
+            },
+        ]
+    },
     {
         path: '/maxsys',
         name: "maxsys",
@@ -84,6 +111,27 @@ export const constantRoutes = [
                 component: (resolve) => require(['/src/views/maximo/MessagesQuery'], resolve),
                 name: 'MessagesQuery',
                 meta: { title: '消息查询', icon: 'message', noCache: false }
+            }
+        ]
+    },
+    {
+        path: '/maslog',
+        name: "maslog",
+        component: Layout,
+        hidden: false,
+        redirect: "noRedirect",
+        alwaysShow: true,
+        meta: {
+            "title": "maximo日志",
+            "icon": "log",
+            "noCache": false
+        },
+        children: [
+            {
+                path: 'masLogViewer',
+                component: (resolve) => require(['/src/views/maximo/maslog/MasLogViewer'], resolve),
+                name: 'MasLogViewer',
+                meta: { title: '日志查询', icon: 'log', noCache: false }
             }
         ]
     },

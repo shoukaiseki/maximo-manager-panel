@@ -35,11 +35,13 @@ service.interceptors.request.use(config => {
   
   // 修改后
   let urlPath = config.url
+  console.log('urlPath', urlPath)
   // 如果第一个字符是 /，则删掉
   if (urlPath.startsWith('/')) {
     urlPath = urlPath.slice(1)
   }
-  let url = '/maximo/' + urlPath + '?';
+  let url = '/maximo/' + urlPath+(urlPath.indexOf('?')>-1?'' : '?');
+  console.log('url', url)
   // get请求映射params参数
   if (config.method === 'get' && config.params) {
     for (const propName of Object.keys(config.params)) {
@@ -71,10 +73,12 @@ service.interceptors.request.use(config => {
         }
       }
     }
+    console.log('url', url)
     url = url.slice(0, -1);
+    console.log('url', url)
     config.params = {};
-    config.url = url;
   }
+  config.url = url;
   return config
 }, error => {
   console.log(error)
