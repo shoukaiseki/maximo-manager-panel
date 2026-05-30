@@ -191,7 +191,7 @@ export default {
       // 检查是否配置了 maximo_api_key
       const apiKey = localStorage.getItem('maximo_api_key')
       if (!apiKey) {
-        this.msgError('请先配置 Maximo API Key！\n请在浏览器控制台执行：localStorage.setItem("maximo_api_key", "your-key")')
+        this.msgError('请先配置 Maximo API Key！\n可点击右上角进行设置\n或在浏览器控制台执行：localStorage.setItem("maximo_api_key", "your-key")')
         return
       }
 
