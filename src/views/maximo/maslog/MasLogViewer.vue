@@ -121,6 +121,7 @@ export default {
   },
   data() {
     return {
+      authHeaders: {},
       connecting: false,
       isStreaming: false,
       logs: [],
@@ -187,13 +188,35 @@ export default {
       if (this.isStreaming) {
         return
       }
-
-      // 检查是否配置了 maximo_api_key
-      const apiKey = localStorage.getItem('maximo_api_key')
-      if (!apiKey) {
-        this.msgError('请先配置 Maximo API Key！\n可点击右上角进行设置\n或在浏览器控制台执行：localStorage.setItem("maximo_api_key", "your-key")')
+      this.authHeaders={}
+      const maximoEnvSettings = localStorage.getItem('maximo-env-settings')
+      console.log("maximoEnvSettings=", maximoEnvSettings)
+      var hasAuth=false
+      if (maximoEnvSettings) {
+        try {
+          // 是否需要设置 token
+          const settings = JSON.parse(maximoEnvSettings)
+          if (settings.useApiKey && settings.apiKey) {
+            this.authHeaders['apikey'] = settings.apiKey
+            if (settings.apiKey) {
+              hasAuth = true
+            }
+          } else if (settings.maxauth) {
+            this.authHeaders['maxauth'] = settings.maxauth
+            if (settings.maxauth) {
+              hasAuth = true
+            }
+          }
+        } catch (e) {
+          console.error('解析配置失败', e)
+          hasAuth = false
+        }
+      }
+      if(!hasAuth){
+        this.msgError('请先配置 Maximo API Key！\n可点击右上角进行设置')
         return
       }
+
 
       this.manualStop = false
       this.connecting = true
@@ -221,7 +244,10 @@ export default {
         request({
           url: '/api/script/SHARPTREE.AUTOSCRIPT.LOGGING',
           method: 'get',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            ...this.authHeaders,
+            'Content-Type': 'application/json'
+          },
           params: { initialize: true }
         }).then(response => {
           console.log('Initialization response:', response)
@@ -263,8 +289,8 @@ export default {
         // 使用 fetch API 连接 SSE
         const response = await fetch(url, {
           headers: {
-            'Accept': 'text/event-stream',
-            'apiKey': apiKey
+            ...this.authHeaders,
+            'Accept': 'text/event-stream'
           },
           signal: this.abortController.signal
         })
