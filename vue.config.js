@@ -15,6 +15,9 @@ var baseTarget = process.env.VUE_APP_DEFAULT_TARGET || serurl
 var target = process.env.npm_config_target || baseTarget;
 console.log("target="+target)
 
+// 是否开启 SSE 原始数据日志调试
+const enableSseDebugLog = false
+
 // vue.config.js 配置说明
 //官方vue.config.js 参考文档 https://cli.vuejs.org/zh/config/#css-loaderoptions
 // 这里只列一部分，具体配置参考文档
@@ -56,11 +59,28 @@ module.exports = {
         },
         onProxyRes: (proxyRes, req, res) => {
           console.log('代理响应:', proxyRes.statusCode, req.url)
+          console.log('响应头:', JSON.stringify(proxyRes.headers))
           // 对于 SSE 响应，确保不缓冲
           if (proxyRes.headers['content-type'] && proxyRes.headers['content-type'].includes('text/event-stream')) {
             res.setHeader('Cache-Control', 'no-cache')
             res.setHeader('Connection', 'keep-alive')
             res.setHeader('X-Accel-Buffering', 'no')  // 禁用 Nginx 缓冲
+
+            // 监听原始响应数据，检查是否已乱码
+            if (enableSseDebugLog) {
+              let chunkIndex = 0
+              proxyRes.on('data', (chunk) => {
+                if (chunkIndex < 5) { // 只打印前5个数据块，避免刷屏
+                  const isBuffer = Buffer.isBuffer(chunk)
+                  const rawHex = isBuffer ? chunk.slice(0, 200).toString('hex') : '(非Buffer)'
+                  const rawText = isBuffer ? chunk.slice(0, 200).toString('utf8') : '(非Buffer)'
+                  console.log(`[SSE 原始数据 #${chunkIndex}] hex:`, rawHex)
+                  console.log(`[SSE 原始数据 #${chunkIndex}] utf8:`, rawText)
+                  console.log(`[SSE 原始数据 #${chunkIndex}] 长度:`, chunk.length, 'bytes')
+                  chunkIndex++
+                }
+              })
+            }
           }
         },
         onError: (err, req, res) => {

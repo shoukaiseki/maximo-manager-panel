@@ -20,17 +20,23 @@
           size="small"
           style="width: 120px; margin-right: 12px;"
         >
-          <el-option label="5秒" :value="5" />
+          <template slot="prefix">
+            <span style="color: #909399; font-size: 12px;">sse请求限时:</span>
+          </template>
+          <!-- <el-option label="5秒" :value="5" />
           <el-option label="10秒" :value="10" />
           <el-option label="20秒" :value="20" />
           <el-option label="30秒" :value="30" />
-          <el-option label="50秒" :value="50" />
-          <el-option label="80秒" :value="80" />
-          <el-option label="100秒" :value="100" />
+          <el-option label="50秒" :value="50" /> -->
+          <el-option label="60秒" :value="60" />
+          <!-- <el-option label="100秒" :value="100" /> -->
           <el-option label="200秒" :value="200" />
           <el-option label="500秒" :value="500" />
           <el-option label="1000秒" :value="1000" />
+          <el-option label="3600秒" :value="3600" />
         </el-select>
+
+
         
         <el-button 
           type="primary" 
@@ -82,6 +88,8 @@
         />
         
 
+        
+
         <div class="log-stats">
           <el-tag size="small" type="info">总行数: {{ logs.length }}</el-tag>
           <el-tag size="small" type="success" style="margin-left: 8px;">显示: {{ filteredLogs.length }}</el-tag>
@@ -127,10 +135,7 @@ export default {
       logs: [],
       filterKeyword: '',
       autoRefresh: true,
-      refreshInterval: 10,
-      countdown: 0,
-      timer: null,
-      countdownTimer: null,
+      refreshInterval: 600,
       abortController: null, // 用于取消 fetch 请求
       maxLogs: 600000, // 最大日志行数阈值（达到此值时触发清理）
       logsToRemove: 200000, // 每次清理时删除的日志行数
@@ -169,7 +174,6 @@ export default {
   },
   beforeDestroy() {
     this.stopLogStream(true)
-    this.clearTimers()
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer)
       this.reconnectTimer = null
@@ -303,12 +307,7 @@ export default {
         this.connecting = false
         this.isStreaming = true
         this.$message.success('日志流连接成功')
-        
-        // 如果开启了自动刷新，启动定时器
-        if (this.autoRefresh) {
-          this.startAutoRefresh()
-        }
-        
+
         // 获取可读流
         const reader = response.body.getReader()
         const decoder = new TextDecoder()
@@ -365,8 +364,7 @@ export default {
       
       this.isStreaming = false
       this.connecting = false
-      this.stopAutoRefresh()
-      
+
       if (manual) {
         this.manualStop = true
         // 清除重连定时器
@@ -511,56 +509,12 @@ export default {
     },
     
     handleAutoRefreshChange(value) {
-      if (value && this.isStreaming) {
-        this.startAutoRefresh()
-      } else {
-        this.stopAutoRefresh()
-      }
-    },
-    
-    handleIntervalChange() {
       // 刷新间隔改变时，如果正在流式传输，重新连接以应用新的 timeout
       if (this.isStreaming) {
         this.stopLogStream(true)
         setTimeout(() => {
           this.startLogStream()
         }, 500)
-      }
-    },
-    
-    startAutoRefresh() {
-      this.countdown = this.refreshInterval
-      
-      // 倒计时定时器
-      this.countdownTimer = setInterval(() => {
-        this.countdown--
-        if (this.countdown <= 0) {
-          this.countdown = this.refreshInterval
-        }
-      }, 1000)
-      
-      // 刷新定时器 - 定期重新连接以获取新日志
-      this.timer = setInterval(() => {
-        // SSE 会自动保持连接，这里只是重置倒计时
-        // 如果需要定期重新连接，可以调用:
-        // this.stopLogStream()
-        // setTimeout(() => this.startLogStream(), 500)
-      }, this.refreshInterval * 1000)
-    },
-    
-    stopAutoRefresh() {
-      this.clearTimers()
-      this.countdown = 0
-    },
-    
-    clearTimers() {
-      if (this.timer) {
-        clearInterval(this.timer)
-        this.timer = null
-      }
-      if (this.countdownTimer) {
-        clearInterval(this.countdownTimer)
-        this.countdownTimer = null
       }
     },
     
