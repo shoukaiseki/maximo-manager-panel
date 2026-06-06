@@ -141,10 +141,10 @@ export default {
       window.open('https://gitee.com/shoukaiseki/maximo-manager-panel', '_blank')
     },
     handleSettingsSaved() {
-      this.$message.info('配置已更新，页面将刷新')
-      setTimeout(() => {
-        location.reload()
-      }, 1000)
+      // this.$message.info('配置已更新，页面将刷新')
+      // setTimeout(() => {
+      //   location.reload()
+      // }, 1000)
     },
     toggleSideBar() {
       this.$store.dispatch('app/toggleSideBar')

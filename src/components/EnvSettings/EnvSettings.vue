@@ -1,12 +1,12 @@
 <template>
-  <el-dialog title="后端配置" :visible.sync="visible" width="480px" @close="handleClose">
+  <el-dialog title="后端配置" :visible="dialogVisible" width="480px" @close="handleClose" @update:visible="handleClose">
     <el-form :model="formData" label-width="100px" class="settings-form">
-      <el-form-item label="认证方式">
+      <!-- <el-form-item label="认证方式">
         <el-radio-group v-model="formData.authType">
           <el-radio label="maxauth">MAXAUTH</el-radio>
           <el-radio label="apikey">API Key</el-radio>
         </el-radio-group>
-      </el-form-item>
+      </el-form-item> -->
       <el-form-item v-if="formData.authType === 'maxauth'" label="MAXAUTH">
         <el-input v-model="formData.maxauth" placeholder="base64编码的用户名:密码" />
         <span class="form-tip">格式：base64(username:password)</span>
@@ -14,10 +14,13 @@
       <el-form-item v-if="formData.authType === 'apikey'" label="API Key">
         <el-input v-model="formData.apiKey" placeholder="API Key" />
       </el-form-item>
+      <el-form-item label="管理模式">
+        <el-switch v-model="formData.isManageMode" active-text="开启" inactive-text="关闭" />
+      </el-form-item>
     </el-form>
     <div slot="footer" class="dialog-footer">
-      <el-button @click="handleClose">取消</el-button>
-      <el-button type="primary" @click="handleSave">保存配置</el-button>
+      <el-button native-type="button" @click="handleClose">取消</el-button>
+      <el-button native-type="button" type="primary" @click="handleSave">保存配置</el-button>
     </div>
   </el-dialog>
 </template>
@@ -33,17 +36,23 @@ export default {
   },
   data() {
     return {
+      dialogVisible: false,
       formData: {
-        authType: 'maxauth',
+        authType: 'apikey',
         maxauth: '',
-        apiKey: ''
+        apiKey: '',
+        isManageMode: true
       }
     }
   },
   watch: {
-    visible(val) {
-      if (val) {
-        this.loadSettings()
+    visible: {
+      immediate: true,
+      handler(val) {
+        this.dialogVisible = val
+        if (val) {
+          this.loadSettings()
+        }
       }
     }
   },
@@ -63,7 +72,8 @@ export default {
           this.formData = {
             authType: settings.authType || 'maxauth',
             maxauth: settings.maxauth || '',
-            apiKey: settings.apiKey || ''
+            apiKey: settings.apiKey || '',
+            isManageMode: settings.isManageMode !== undefined ? settings.isManageMode : true
           }
         } catch (e) {
           console.error('加载配置失败', e)
@@ -72,7 +82,8 @@ export default {
         this.formData = {
           authType: 'maxauth',
           maxauth: '',
-          apiKey: ''
+          apiKey: '',
+          isManageMode: true
         }
       }
     },
@@ -90,17 +101,22 @@ export default {
         authType: this.formData.authType,
         maxauth: this.formData.maxauth,
         apiKey: this.formData.apiKey,
-        useApiKey: this.formData.authType === 'apikey'
+        useApiKey: this.formData.authType === 'apikey',
+        isManageMode: this.formData.isManageMode
       }
 
       localStorage.setItem('maximo-env-settings', JSON.stringify(settings))
+
+      this.sksConfig.isManageMode = this.formData.isManageMode
       this.$message.success('配置保存成功')
-      
+
       this.$emit('saved', settings)
       this.handleClose()
     },
     handleClose() {
+      this.dialogVisible = false
       this.$emit('update:visible', false)
+      console.log("EnvSettings handleClose")
     }
   }
 }

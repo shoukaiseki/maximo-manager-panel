@@ -86,6 +86,13 @@ module.exports = {
         onError: (err, req, res) => {
           console.error('代理错误:', err.message, req.url)
         }
+      },
+      '/solonapi': {
+        target: 'http://localhost:8081',
+        changeOrigin: true,
+        pathRewrite: {
+          '^/solonapi': ''
+        }
       }
     },
     disableHostCheck: true

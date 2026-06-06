@@ -17,6 +17,11 @@ export default  {
             isRouterAlive: true                    //控制视图是否显示的变量
         }
     },
+    created() {
+        if(this.sksConfig){
+            this.sksConfig.isDevelopMode = true
+        }
+    },
     methods: {
         reload () {
             this.isRouterAlive = false;            //先关闭，

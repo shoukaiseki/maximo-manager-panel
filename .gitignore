@@ -22,7 +22,13 @@ selenium-debug.log
 package-lock.json
 yarn.lock
 
-# Backend configuration file (contains sensitive data)
-server/backend.config.json
+# Backend (Solon/Java)
+server/target/
+*.class
+*.jar
+*.war
 
 .env.development
+
+javaapi
+javaapi/

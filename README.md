@@ -1,51 +1,94 @@
-### 权限
-```js
-//是否拥有库管员权限
-this.canInventoryAdmin=this.checkPermi(['inventory:InventoryBalance:admin'])||this.isAdmin;
-```
+# Maximo Management Panel
 
-### 获取当前用户
-```
-const userId = this.$store.state.user.userId;
-```
-## 注意
-如果 npm install 安装失败  使用 webstorm 打开,点击提示的 npm install安装即可
+基于 Vue 2 + Element UI 的 Maximo 管理面板，配套 Solon + Java 17 后端。
 
+## 技术栈
 
-执行的命令是
-```
-"C:\Program Files\nodejs\node.exe" "C:\Program Files\nodejs\node_modules\npm\bin\npm-cli.js" install --scripts-prepend-node-path=auto
-```
-## 开发
-npm install xe-utils
-npm install  --save  vxe-table@3.1.8
+**前端**
+- Vue 2.6 + Vue Router + Vuex
+- Element UI 2.14
+- VXE Table 3.x
+- sks-plugin-el-erp (私有组件库)
 
+**后端** (`server/`)
+- Solon 2.9.4
+- Java 17 + Maven
+- DB2 数据库
+- HikariCP 连接池
+- API Key 认证
+
+## 快速开始
+
+### 后端启动
 
 ```bash
-# 克隆项目
-git clone https://gitee.com/y_project/RuoYi-Vue
+cd server
+mvn package -DskipTests
+java -jar target/solon-server-1.0.0.jar
+```
 
-# 进入项目目录
-cd ruoyi-ui
+后端默认启动在 `http://localhost:8081`。
 
+### 前端开发
+
+```bash
 # 安装依赖
 npm install
 
-# 建议不要直接使用 cnpm 安装依赖，会有各种诡异的 bug。可以通过如下操作解决 npm 下载速度慢的问题
-npm install --registry=https://registry.npm.taobao.org
-
-# 启动服务
+# 启动开发服务器
 npm run dev
 ```
 
-浏览器访问 http://localhost:80
+前端默认启动在 `http://localhost:28765`，自动代理 `/maximo` 和 `/solonapi` 到后端。
 
-## 发布
+### 构建
 
 ```bash
-# 构建测试环境
+# 测试环境
 npm run build:stage
 
-# 构建生产环境
+# 生产环境
 npm run build:prod
 ```
+
+构建产物输出到 `dist/` 目录。
+
+## 项目结构
+
+```
+├── bin/                    # 构建/运行脚本
+├── server/                 # Solon Java 后端
+│   ├── src/main/java/
+│   │   ├── controller/     # API 控制器
+│   │   ├── service/        # 业务逻辑
+│   │   └── model/          # 数据模型
+│   └── pom.xml
+├── src/                    # Vue 前端
+│   ├── api/                # API 接口
+│   ├── components/         # 公共组件
+│   ├── views/              # 页面
+│   ├── router/             # 路由
+│   └── store/              # Vuex 状态
+└── vue.config.js           # 前端代理配置
+```
+
+## 后端配置
+
+后端配置文件位于 `server/backend.config.json`，支持配置多个后端环境、API Key 等。
+
+**注意**: `backend.config.json` 已加入 `.gitignore`，提交时不会被包含。
+可参考 `backend.config.example.json` 的格式创建自己的配置。
+
+## API 接口
+
+所有 API 请求需携带 `X-API-Key` 请求头进行认证。
+
+| 接口 | 说明 |
+|------|------|
+| `GET /maxobject/list?keyword=&pageNum=&pageSize=` | 对象列表(分页) |
+| `GET /maxobject/{objectName}/detail` | 对象详情(基本信息+属性+关系+索引) |
+| `GET /maximo/log/{server}` | 读取 Maximo 日志(SSE) |
+
+## 许可证
+
+MIT

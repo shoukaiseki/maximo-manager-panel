@@ -3,11 +3,20 @@ import Vuex from 'vuex'
 
 Vue.use(Vuex)
 
-import envsData from '../../server/backend.config.json'
+// 默认环境配置
+const defaultEnvs = [
+  {
+    key: 'default',
+    name: 'Maximo 环境',
+    backendBaseUrl: 'http://localhost:9080',
+    useApiKey: false,
+    apiKey: ''
+  }
+]
 
 const state = {
-  envs: envsData,
-  selectedKey: envsData[0]?.key || ''
+  envs: defaultEnvs,
+  selectedKey: defaultEnvs[0]?.key || ''
 }
 
 const mutations = {

@@ -127,12 +127,11 @@ Vue.component('UrgentedSwitch', UrgentedSwitch)
 import StatusSelect from '/src/components/DataRowStatus/StatusSelect'
 Vue.component('StatusSelect', StatusSelect)
 
-import SksCheckbox from '/src/components/SksCheckbox/SksCheckbox'
-Vue.component('SksCheckbox', SksCheckbox)
+// import SksCheckbox from '/src/components/SksCheckbox/SksCheckbox'
+// Vue.component('SksCheckbox', SksCheckbox)
 
 import SysUserNickNameInput from '/src/components/SysUserNickName/SysUserNickNameInput'
 Vue.component('SysUserNickNameInput', SysUserNickNameInput)
-
 
 
 // import { isNumberInRuleValidate,isIntegerInRuleValidate,isPositiveIntegerInRuleValidate,isPositiveIntegerAndNotZeroInRuleValidate } from '/src/utils/sks-validate'
@@ -307,6 +306,7 @@ Vue.component('ProTaskWorkStatusLabel',ProTaskWorkStatusLabel)
 // import * as wb780js from './utils/wb780'
 //
 // mergeFromObject(Vue.prototype,wb780js)
+
 
 
 

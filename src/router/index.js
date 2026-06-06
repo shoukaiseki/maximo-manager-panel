@@ -132,6 +132,46 @@ export const constantRoutes = [
                 component: (resolve) => require(['/src/views/maximo/maslog/MasLogViewer'], resolve),
                 name: 'MasLogViewer',
                 meta: { title: '日志查询', icon: 'log', noCache: false }
+            },
+            {
+                path: 'masLogMarker',
+                component: (resolve) => require(['/src/views/maximo/maslog/MasLogMarker'], resolve),
+                name: 'MasLogMarker',
+                meta: { title: '日志标记', icon: 'mark', noCache: false }
+            }
+        ]
+    },
+    {
+        path: '/maxobject',
+        name: "maxobject",
+        component: Layout,
+        hidden: false,
+        redirect: "noRedirect",
+        alwaysShow: true,
+        meta: {
+            "title": "MaxObject",
+            "icon": "table",
+            "noCache": false
+        },
+        children: [
+            {
+                path: 'index',
+                component: (resolve) => require(['/src/views/maximo/maxobject/MaxObjectList'], resolve),
+                name: 'MaxObjectList',
+                meta: { title: '对象列表', icon: 'list', noCache: false }
+            }
+        ]
+    },
+    {
+        path: '/maxobject-detail',
+        component: Layout,
+        hidden: true,
+        children: [
+            {
+                path: 'index/:objectname',
+                component: (resolve) => require(['/src/views/maximo/maxobject/MaxObjectDetail'], resolve),
+                name: 'MaxObjectDetail',
+                meta: { title: '对象详情', activeMenu: '/maxobject', noCache: false }
             }
         ]
     },
