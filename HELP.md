@@ -94,7 +94,9 @@ npm run build:prod
 
 ## 三、后端配置
 
-配置文件：`server/src/main/resources/app.yml`
+配置文件位于 `server/src/main/resources/` 目录，采用多 profile 机制。
+
+### app.yml（主配置，必选）
 
 ```yaml
 server:
@@ -102,7 +104,13 @@ server:
 
 solon:
   apiKey: "your-api-key-here"
+```
 
+### app-{profile}.yml（环境配置，可选）
+
+例如 `app-my.yml` 包含数据库等敏感配置，通过 profile 机制加载：
+
+```yaml
 db2:
   schema: "maximo"
   url: "jdbc:db2://localhost:50000/maximo"
@@ -112,6 +120,30 @@ db2:
   maximumPoolSize: 10
   minimumIdle: 2
 ```
+
+### 激活 profile
+
+启动时通过启动参数指定环境名称（Solon 支持四种方式）：
+
+```bash
+# 方式一：启动参数（推荐）
+java -jar target/solon-server-1.0.0.jar --env=my
+
+# 方式二：系统属性
+java -Dsolon.env=my -jar target/solon-server-1.0.0.jar
+
+# 方式三：在 app.yml 中指定
+solon.env: my
+
+# 方式四：环境变量
+export solon.env=my
+java -jar target/solon-server-1.0.0.jar
+```
+
+Solon 会自动加载 `app.yml` + `app-{env}.yml`（例如 `app-my.yml`）。
+
+> `app-*.yml` 已加入 `.gitignore`，不会提交到 git。
+> 新人部署时，可复制 `app.yml` 为 `app-dev.yml` 并根据实际环境修改。
 
 ### 配置项说明
 
@@ -123,6 +155,8 @@ db2:
 | `db2.url` | DB2 数据库连接地址 |
 | `db2.username` | 数据库用户名 |
 | `db2.password` | 数据库密码 |
+| `db2.maximumPoolSize` | 连接池最大连接数 |
+| `db2.minimumIdle` | 连接池最小空闲连接数 |
 
 > 修改配置后需重新编译打包（`mvn package -DskipTests`）才能生效。
 

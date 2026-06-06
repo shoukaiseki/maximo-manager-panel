@@ -1,0 +1,11 @@
+solon:
+  apiKey: "kufl9t6i501qh2gci7h10ak00prp68gomu2b2r2c"
+
+db2:
+  schema: "maximo"
+  url: "jdbc:db2://localhost:50000/maximo"
+  username: "db2inst1"
+  password: "Maximo123"
+  driverClassName: "com.ibm.db2.jcc.DB2Driver"
+  maximumPoolSize: 10
+  minimumIdle: 2

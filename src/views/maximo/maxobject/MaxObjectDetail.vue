@@ -15,8 +15,8 @@
 
       <el-divider content-position="left">基本信息</el-divider>
       <el-form v-if="Object.keys(mainInfo).length > 0" label-width="130px" class="main-info-form" @submit.native.prevent>
-        <el-row :gutter="20">
-          <el-col :span="4" v-for="field in mainInfoFieldDefs" :key="field.prop">
+        <el-row :span="24">
+          <el-col :span="8" v-for="field in mainInfoFieldDefs" :key="field.prop">
             <el-form-item :label="field.label" v-if="mainInfo[field.prop] !== undefined">
               <el-input
                 :value="formatValue(mainInfo[field.prop])"

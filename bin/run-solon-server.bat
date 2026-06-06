@@ -21,4 +21,4 @@ if %ERRORLEVEL% NEQ 0 (
 )
 
 echo [信息] 启动 Solon 服务...
-java -jar target\solon-server-1.0.0.jar
+java -jar target\solon-server-1.0.0.jar --env=my
