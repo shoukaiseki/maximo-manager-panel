@@ -50,7 +50,7 @@ export default {
                 tableColumnList:
                     this.sksUtils.newTableColumnList([
                         { prop: 'OBJECTNAME', label: '对象名', minWidth: 130 ,visible:false},
-                        { prop: 'ATTRIBUTENAME', label: '属性名', minWidth: 130 },
+                        { prop: 'ATTRIBUTENAME', label: '属性名', minWidth: 230 },
                         { prop: 'L_TITLE', label: '标题', minWidth: 120 },
                         { prop: 'TITLE', label: '英文标题', minWidth: 120 },
                         { prop: 'ALIAS', label: '别名', minWidth: 100 ,visible:false},
@@ -81,8 +81,8 @@ export default {
                         { prop: 'RESTRICTED', label: '限制', width: 60 ,visible:false},
                         { prop: 'LOCALIZABLE', label: '可本地化', width: 80 ,visible:false},
                         { prop: 'ROWSTAMP', label: '行戳', width: 100 ,visible:false},
-                        { prop: 'L_REMARKS', label: '备注', minWidth: 200 },
-                        { prop: 'REMARKS', label: '英文备注', minWidth: 200 },
+                        { prop: 'L_REMARKS', label: '备注', minWidth: 300 },
+                        { prop: 'REMARKS', label: '英文备注', minWidth: 300 },
                     ]),
                 queryParamsColumnListEnable: false,
                 queryParamsColumnList: [],
