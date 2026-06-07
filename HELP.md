@@ -200,9 +200,21 @@ Solon 会自动加载 `app.yml` + `app-{env}.yml`（例如 `app-my.yml`）。
 
 如果 npm install 安装失败，使用 WebStorm 打开项目，点击提示的 npm install 安装即可。
 
+## 六、VSCode 插件（可选）
+
+安装 **Maximo Script Helper** 插件，可辅助开发 Maximo 自动化脚本：
+
+1. 在 VSCode 扩展市场搜索并安装 `Maximo Script Helper`
+2. 按提示初始化到 Maximo 系统中
+3. 或手动将插件对应的自动化脚本添加到 Maximo
+
+插件源码及自动化脚本下载：
+
+> [https://gitee.com/shoukaiseki/maximo-script-vscode-plugin](https://gitee.com/shoukaiseki/maximo-script-vscode-plugin)
+
 ---
 
-## 六、快速启动（总结）
+## 七、快速启动（总结）
 
 ```
 1. 确保 JDK 17 和 Maven 已安装
