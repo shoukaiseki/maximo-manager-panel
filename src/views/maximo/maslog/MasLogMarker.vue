@@ -15,6 +15,15 @@
         />
 
         <el-divider direction="vertical" />
+        <el-select
+          v-model="logfileIndex"
+          size="mini"
+          style="width: 120px; margin-left: 8px;"
+          @change="handleLogfileChange"
+        >
+          <el-option label="message.log" :value="0"></el-option>
+          <el-option label="maximo.log" :value="1"></el-option>
+        </el-select>
 
         <!-- 标记开始 -->
         <el-button
@@ -24,23 +33,14 @@
           @click="handleMarkerStart"
           :disabled="markerStartDisabled"
           :loading="startLoading"
+          v-if="!startUuid"
         >
           标记开始
         </el-button>
-        <el-tag
-          v-if="startUuid"
-          type="success"
-          style="margin-left: 6px; cursor: pointer;"
-          :closable="true"
-          @close="clearStartUuid"
-          @click="copyText(startUuid)"
-          title="点击复制"
-        >
-          {{ startUuidShort }}
-        </el-tag>
 
         <!-- 标记结束 -->
         <el-button
+        v-if="!(startUuid&&endUuid)"
           type="warning"
           icon="el-icon-video-pause"
           size="mini"
@@ -51,19 +51,6 @@
         >
           标记结束
         </el-button>
-        <el-tag
-          v-if="endUuid"
-          type="warning"
-          style="margin-left: 6px; cursor: pointer;"
-          :closable="true"
-          @close="clearEndUuid"
-          @click="copyText(endUuid)"
-          title="点击复制"
-        >
-          {{ endUuidShort }}
-        </el-tag>
-
-        <el-divider direction="vertical" v-if="startUuid && endUuid" />
 
         <!-- 获取日志区间 -->
         <el-button
@@ -77,6 +64,18 @@
           获取标记区间
         </el-button>
 
+        <!-- 清除标记 -->
+        <el-button
+          v-if="startUuid"
+          type="danger"
+          icon="el-icon-refresh"
+          size="mini"
+          style="margin-left: 8px;"
+          @click="clearAllMarkers"
+        >
+          清除标记
+        </el-button>
+
         <el-button
           v-if="logs.length > 0"
           type="warning"
@@ -86,16 +85,6 @@
           @click="clearLogs"
         >
           清空日志
-        </el-button>
-
-        <el-button
-          v-if="startUuid && endUuid"
-          type="warning"
-          icon="el-icon-refresh"
-          size="mini"
-          @click="clearAllMarkers"
-        >
-          清除标记
         </el-button>
 
         <el-button
@@ -154,6 +143,7 @@
 import { mapGetters } from 'vuex'
 import request from '@/utils/request'
 import LogViewer from '@femessage/log-viewer'
+import { isStarted } from 'nprogress';
 
 export default {
   name: 'MasLogMarker',
@@ -172,17 +162,11 @@ export default {
       markerEndDisabled: false,
       logs: [],
       filterKeyword: '',
-      drawerViewerKey: 0
+      logfileIndex: Number(localStorage.getItem('maslog-file-index')) || 1,
     }
   },
   computed: {
     ...mapGetters(['selectedEnv']),
-    startUuidShort() {
-      return this.startUuid ? this.startUuid.substring(0, 8) + '...' : ''
-    },
-    endUuidShort() {
-      return this.endUuid ? this.endUuid.substring(0, 8) + '...' : ''
-    },
     filteredLogs() {
       let logs = this.logs
       if (this.filterKeyword) {
@@ -244,7 +228,7 @@ export default {
             ...headers,
             'Content-Type': 'application/json'
           },
-          params: { marker: 'start', startuuid: uuid }
+          params: { marker: 'start', startuuid: uuid, logfileIndex: this.logfileIndex }
         })
         this.startUuid = uuid
         this.markerStartDisabled = true
@@ -275,7 +259,7 @@ export default {
             ...headers,
             'Content-Type': 'application/json'
           },
-          params: { marker: 'end', enduuid: uuid }
+          params: { marker: 'end', enduuid: uuid, logfileIndex: this.logfileIndex }
         })
         this.endUuid = uuid
         this.markerEndDisabled = true
@@ -305,53 +289,105 @@ export default {
       }
 
       this.getLoading = true
+      this.logs = []
 
       try {
-        const response = await request({
-          url: '/api/script/SKS_LOG_MARKER',
-          method: 'get',
+        // 从缓存中获取环境配置
+        const envStr = localStorage.getItem('maximo-env-settings')
+        let baseUrl = process.env.VUE_APP_BASE_API || ''
+        if (envStr) {
+          try {
+            const env = JSON.parse(envStr)
+            if (env.apiUrl) {
+              baseUrl = env.apiUrl
+            }
+          } catch (e) {}
+        }
+
+        const params = new URLSearchParams({
+          marker: 'get',
+          startuuid: this.startUuid,
+          enduuid: this.endUuid,
+          logfileIndex: this.logfileIndex
+        })
+        const url = `${baseUrl}/maximo/api/script/SKS_LOG_MARKER?${params}`
+
+        const response = await fetch(url, {
           headers: {
             ...headers,
-            'Content-Type': 'application/json'
-          },
-          params: {
-            marker: 'get',
-            startuuid: this.startUuid,
-            enduuid: this.endUuid
+            'Accept': 'text/event-stream'
           }
         })
 
-        // 解析返回的日志内容
-        const content = response?.data?.content || ''
-        if (content) {
-          this.logs = content.split('\n')
-          this.$message.success(`获取成功，共 ${this.logs.length} 行日志`)
-        } else {
-          this.logs = []
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`)
+        }
+
+        const reader = response.body.getReader()
+        const decoder = new TextDecoder()
+        let buffer = ''
+        let lineCount = 0
+
+        while (true) {
+          const { done, value } = await reader.read()
+
+          if (done) {
+            break
+          }
+
+          const chunk = decoder.decode(value, { stream: true })
+          buffer += chunk
+
+          // 按行处理
+          const lines = buffer.split(/\r?\n/)
+          buffer = lines.pop() // 保留不完整的行
+
+          for (const line of lines) {
+            const trimmed = line.trim()
+            if (!trimmed) continue
+
+            // 检查是否是结束事件
+            if (trimmed.startsWith('data: {')) {
+              try {
+                const eventData = JSON.parse(trimmed.substring(6))
+                if (eventData.event === 'end') {
+                  if (eventData.status === 'success') {
+                    this.$message.success(`获取成功，共 ${lineCount} 行日志`)
+                  } else {
+                    this.$message.error(eventData.message || '获取日志失败')
+                  }
+                  break
+                }
+              } catch (e) {
+                // 非 JSON 数据，作为普通日志行
+              }
+            } else if (trimmed.startsWith('data: ')) {
+              // 普通日志行
+              const logLine = trimmed.substring(6)
+              this.logs.push(logLine)
+              lineCount++
+            }
+          }
+
+          // 实时刷新视图
+          this.drawerViewerKey++
+        }
+
+        if (lineCount === 0) {
           this.$message.info('标记区间内无日志内容')
         }
 
-        // 强制刷新 log-viewer
+        // 最终刷新视图
         this.$nextTick(() => {
           this.drawerViewerKey++
         })
       } catch (error) {
-        const errMsg = error?.response?.data?.message || error.message || '未知错误'
+        const errMsg = error.message || '未知错误'
         this.$message.error('获取日志失败: ' + errMsg)
         console.error('Marker get error:', error)
       } finally {
         this.getLoading = false
       }
-    },
-
-    clearStartUuid() {
-      this.startUuid = ''
-      this.markerStartDisabled = false
-    },
-
-    clearEndUuid() {
-      this.endUuid = ''
-      this.markerEndDisabled = false
     },
 
     clearAllMarkers() {
@@ -385,6 +421,15 @@ export default {
       document.execCommand('copy')
       document.body.removeChild(textarea)
       this.$message.success('已复制到剪贴板')
+    },
+
+    handleLogfileChange(val) {
+      // 日志文件切换时，清除已有标记和日志
+      localStorage.setItem('maslog-file-index', val)
+      this.clearAllMarkers()
+      this.logs = []
+      this.drawerViewerKey++
+      this.$message.info(`已切换到 ${val === 1 ? 'maximo.log' : 'message.log'}`)
     },
 
     handleFilterChange() {
