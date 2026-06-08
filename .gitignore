@@ -36,3 +36,5 @@ javaapi/
 # Profile-specific backend config (e.g. app-dev.yml)
 server/src/main/resources/app-dev.yml
 !server/src/main/resources/app.yml
+
+!src/filter-config/logs/*.txt

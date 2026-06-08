@@ -1,0 +1,1 @@
+MAXMESSAGECACHE successfully fetched from maximo cache

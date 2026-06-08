@@ -170,16 +170,30 @@ export default {
       markerStartDisabled: false,
       markerEndDisabled: false,
       logs: [],
+      filteredLogData: [],
       filterKeyword: '',
-      logfileIndex: Number(localStorage.getItem('maslog-file-index')) || 1,
+      logfileIndex:  1,
       enableCustomFilter: true,
+    }
+  },
+  created() {
+    if(localStorage){
+      console.log("maslog-file-index", localStorage.getItem('maslog-file-index'))
+      var logfileIndex = Number(localStorage.getItem('maslog-file-index'))
+      this.logfileIndex = (logfileIndex === undefined || logfileIndex === null) ? 1 : logfileIndex
+    }
+  },
+  watch: {
+    enableCustomFilter(val) {
+      if (val && this.logs.length > 0) {
+        this.filteredLogData = filterLogs(this.logs)
+      }
     }
   },
   computed: {
     ...mapGetters(['selectedEnv']),
     filteredLogs() {
-      let logs = this.logs
-      logs = this.enableCustomFilter ? filterLogs(logs) : logs
+      let logs = this.enableCustomFilter ? this.filteredLogData : this.logs
       if (this.filterKeyword) {
         const keyword = this.filterKeyword.toLowerCase()
         logs = logs.filter(log => 
@@ -364,7 +378,7 @@ export default {
                 if (eventData.event === 'end') {
                   if (eventData.status === 'success') {
                     this.$message.success(`获取成功，共 ${lineCount} 行日志`)
-                    this.filterLogs()
+                    this.filteredLogData = filterLogs(this.logs)
                   } else {
                     this.$message.error(eventData.message || '获取日志失败')
                   }
@@ -382,6 +396,9 @@ export default {
           }
 
           // 实时刷新视图
+          if (this.enableCustomFilter) {
+            this.filteredLogData = filterLogs(this.logs)
+          }
           this.drawerViewerKey++
         }
 
@@ -417,6 +434,7 @@ export default {
         type: 'warning'
       }).then(() => {
         this.logs = []
+        this.filteredLogData = []
         this.drawerViewerKey++
         this.$message.success('日志已清空')
       }).catch(() => {})

@@ -51,3 +51,6 @@ src\filter-config\filterConfig.js 放过滤的函数,vue页面只需要调用这
 
 # 5
 c:/Users/jiang/Downloads/ttt.log 这是页面显示的日志,没有过滤掉配置的信息啊
+
+# 6
+c:/Users/jiang/Downloads/ttt.log 这是最新页面显示的日志,没有过滤掉配置的信息啊
