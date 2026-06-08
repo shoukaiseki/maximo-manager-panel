@@ -24,3 +24,14 @@ export function getMaxObjectDetail(objectname) {
     method: 'get'
   })
 }
+
+/**
+ * 查询 MAXOBJECT 域信息
+ * @param {string} objectname 对象名
+ */
+export function getMaxObjectDomains(objectname) {
+  return solonRequest({
+    url: `/maxobject/${objectname}/domains`,
+    method: 'get'
+  })
+}

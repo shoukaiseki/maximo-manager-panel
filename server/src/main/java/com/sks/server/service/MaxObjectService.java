@@ -223,6 +223,119 @@ public class MaxObjectService {
         return result;
     }
 
+    /**
+     * 查询对象的所有域及域值
+     */
+    public List<Map<String, Object>> queryDomains(String objectName) {
+        // 1. 获取该对象所有属性中唯一的 DOMAINID
+        String domainIdSql = "SELECT DISTINCT DOMAINID FROM MAXATTRIBUTE WHERE OBJECTNAME = ? AND DOMAINID IS NOT NULL";
+
+        List<String> domainIds = new ArrayList<>();
+        try (Connection conn = dataSource.getConnection();
+             PreparedStatement ps = conn.prepareStatement(domainIdSql)) {
+            ps.setString(1, objectName.trim().toUpperCase());
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    domainIds.add(rs.getString("DOMAINID"));
+                }
+            }
+        } catch (SQLException e) {
+            throw new RuntimeException("查询 DOMAINID 列表失败: " + e.getMessage(), e);
+        }
+
+        if (domainIds.isEmpty()) {
+            return Collections.emptyList();
+        }
+
+        // 2. 构建 IN 子句查询 MAXDOMAIN
+        List<Map<String, Object>> result = new ArrayList<>();
+        String placeholders = String.join(",", Collections.nCopies(domainIds.size(), "?"));
+        String domainSql = "SELECT mo.*, l.DESCRIPTION AS L_DESCRIPTION " +
+                           "FROM MAXDOMAIN mo " +
+                           "LEFT JOIN L_MAXDOMAIN AS l ON (mo.MAXDOMAINID = l.OWNERID AND l.LANGCODE = 'ZH') " +
+                           "WHERE mo.DOMAINID IN (" + placeholders + ") " +
+                           "ORDER BY mo.DOMAINID";
+
+        try (Connection conn = dataSource.getConnection();
+             PreparedStatement ps = conn.prepareStatement(domainSql)) {
+            for (int i = 0; i < domainIds.size(); i++) {
+                ps.setString(i + 1, domainIds.get(i));
+            }
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    result.add(rowToMap(rs));
+                }
+            }
+        } catch (SQLException e) {
+            throw new RuntimeException("查询 MAXDOMAIN 失败: " + e.getMessage(), e);
+        }
+
+        // 3. 查询域值
+        for (Map<String, Object> domain : result) {
+            String domainId = (String) domain.get("DOMAINID");
+            String domainType = (String) domain.get("DOMAINTYPE");
+            if (domainId == null || domainType == null) continue;
+
+            List<Map<String, Object>> values = new ArrayList<>();
+            String valueSql;
+            String tableName;
+
+            if ("NUMERIC".equalsIgnoreCase(domainType)) {
+                tableName = "NUMERICDOMAIN";
+                valueSql = "SELECT nd.VALUE, nd.DESCRIPTION, l.DESCRIPTION AS L_DESCRIPTION " +
+                           "FROM " + tableName + " nd " +
+                           "LEFT JOIN L_" + tableName + " AS l ON (nd." + tableName + "ID = l.OWNERID AND l.LANGCODE = 'ZH') " +
+                           "WHERE nd.DOMAINID = ? ORDER BY nd.VALUE";
+            } else if ("ALN".equalsIgnoreCase(domainType)) {
+                tableName = "ALNDOMAIN";
+                valueSql = "SELECT nd.VALUE, nd.SITEID, nd.ORGID, nd.DESCRIPTION, l.DESCRIPTION AS L_DESCRIPTION " +
+                           "FROM " + tableName + " nd " +
+                           "LEFT JOIN L_" + tableName + " AS l ON (nd." + tableName + "ID = l.OWNERID AND l.LANGCODE = 'ZH') " +
+                           "WHERE nd.DOMAINID = ? ORDER BY nd.VALUE";
+            } else if ("SYNONYM".equalsIgnoreCase(domainType)) {
+                tableName = "SYNONYMDOMAIN";
+                valueSql = "SELECT nd.VALUE, nd.MAXVALUE, nd.SITEID, nd.ORGID, nd.DEFAULTS, nd.DESCRIPTION, l.DESCRIPTION AS L_DESCRIPTION " +
+                           "FROM " + tableName + " nd " +
+                           "LEFT JOIN L_" + tableName + " AS l ON (nd." + tableName + "ID = l.OWNERID AND l.LANGCODE = 'ZH') " +
+                           "WHERE nd.DOMAINID = ? ORDER BY nd.VALUE";
+            } else {
+                continue;
+            }
+
+            try (Connection conn = dataSource.getConnection();
+                 PreparedStatement ps = conn.prepareStatement(valueSql)) {
+                ps.setString(1, domainId);
+                try (ResultSet rs = ps.executeQuery()) {
+                    while (rs.next()) {
+                        values.add(rowToMap(rs));
+                    }
+                }
+            } catch (SQLException e) {
+                throw new RuntimeException("查询域值失败: " + e.getMessage(), e);
+            }
+
+            // 将域值合并到域对象中
+            StringBuilder valueSummary = new StringBuilder();
+            for (Map<String, Object> v : values) {
+                Object val = v.get("VALUE");
+                Object desc = v.get("L_DESCRIPTION");
+                if (desc == null || String.valueOf(desc).trim().isEmpty()) {
+                    desc = v.get("DESCRIPTION");
+                }
+                if (valueSummary.length() > 0) valueSummary.append(", ");
+                valueSummary.append(val != null ? val : "");
+                if (desc != null && !String.valueOf(desc).trim().isEmpty()) {
+                    valueSummary.append("(").append(desc).append(")");
+                }
+            }
+            domain.put("_VALUES_SUMMARY", valueSummary.toString());
+            domain.put("_VALUES", values);
+            domain.put("_VALUES_COUNT", values.size());
+        }
+
+        return result;
+    }
+
     // ========== 工具方法 ==========
 
     private Integer getInt(ResultSet rs, String column) throws SQLException {

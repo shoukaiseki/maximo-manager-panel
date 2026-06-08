@@ -43,22 +43,28 @@
       <el-divider content-position="left">索引列表 ({{ indexes.length }})</el-divider>
       <max-object-detail-idx :data="indexes"></max-object-detail-idx>
       <el-empty v-if="indexes.length === 0 && !loading" description="暂无索引数据" />
+
+      <el-divider content-position="left">域信息 ({{ domains.length }})</el-divider>
+      <max-object-detail-domain :data="domains"></max-object-detail-domain>
+      <el-empty v-if="domains.length === 0 && !loading" description="暂无域数据" />
     </el-card>
   </section>
 </template>
 
 <script>
-import { getMaxObjectDetail } from '@/api/maxobject'
+import { getMaxObjectDetail, getMaxObjectDomains } from '@/api/maxobject'
 import MaxObjectDetailColumn from './MaxObjectDetailColumn.vue';
 import MaxObjectDetailRel from './MaxObjectDetailRel.vue';
 import MaxObjectDetailIdx from './MaxObjectDetailIdx.vue';
+import MaxObjectDetailDomain from './MaxObjectDetailDomain.vue';
 
 export default {
   name: 'MaxObjectDetail',
   components: {
     'max-object-detail-column': MaxObjectDetailColumn,
     'max-object-detail-rel': MaxObjectDetailRel,
-    'max-object-detail-idx': MaxObjectDetailIdx
+    'max-object-detail-idx': MaxObjectDetailIdx,
+    'max-object-detail-domain': MaxObjectDetailDomain
   },
   data() {
     return {
@@ -68,8 +74,7 @@ export default {
       attributes: [],
       relationships: [],
       indexes: [],
-
-
+      domains: [],
     }
   },
   computed: {
@@ -97,11 +102,11 @@ export default {
         { prop: 'HASLD', label: '长文本' },
         { prop: 'LANGCODE', label: '语言代码' },
         { prop: 'L_LANGCODE', label: '本地化语言代码' },
-        { prop: 'L_OWNERID', label: '本地化所有者 ID' },
-        { prop: 'L_MAXOBJECTID', label: '本地化 ID' },
-        { prop: 'L_ROWSTAMP', label: '本地化行戳' },
-        { prop: 'MAXOBJECTID', label: '对象 ID' },
-        { prop: 'ROWSTAMP', label: '行戳' },
+        // { prop: 'L_OWNERID', label: '本地化所有者 ID' },
+        // { prop: 'L_MAXOBJECTID', label: '本地化 ID' },
+        // { prop: 'L_ROWSTAMP', label: '本地化行戳' },
+        // { prop: 'MAXOBJECTID', label: '对象 ID' },
+        // { prop: 'ROWSTAMP', label: '行戳' },
       ]
     }
   },
@@ -135,6 +140,17 @@ export default {
         })
         .finally(() => {
           this.loading = false
+        })
+
+      // 查询域信息
+      getMaxObjectDomains(this.objectName)
+        .then(res => {
+          if (res.code === 200 && res.data) {
+            this.domains = res.data
+          }
+        })
+        .catch(() => {
+          // 域信息非关键，失败不提示
         })
     },
     handleKeyDown(event, field) {

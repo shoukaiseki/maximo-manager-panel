@@ -63,4 +63,17 @@ public class MaxObjectController {
         MaxObjectDetail data = maxObjectService.queryFullDetail(objectname);
         return RestResult.ok(data);
     }
+
+    /**
+     * 对象域信息
+     * GET /solonapi/maxobject/{objectname}/domains
+     */
+    @Mapping(value = "/maxobject/{objectname}/domains", method = MethodType.GET)
+    public RestResult<List<Map<String, Object>>> domains(@Path("objectname") String objectname) {
+        if (objectname == null || objectname.trim().isEmpty()) {
+            return RestResult.error("objectname 不能为空");
+        }
+        List<Map<String, Object>> data = maxObjectService.queryDomains(objectname);
+        return RestResult.ok(data);
+    }
 }
