@@ -97,6 +97,14 @@
           复制日志
         </el-button>
 
+        <el-switch
+          v-model="enableCustomFilter"
+          active-text="自定义过滤"
+          inactive-text="不过滤"
+          style="margin-left: 12px;"
+          size="small"
+        ></el-switch>
+
         <div class="log-stats">
           <el-tag size="small" type="info">总行数: {{ logs.length }}</el-tag>
           <el-tag size="small" type="success" style="margin-left: 8px;">显示: {{ filteredLogs.length }}</el-tag>
@@ -144,6 +152,7 @@ import { mapGetters } from 'vuex'
 import request from '@/utils/request'
 import LogViewer from '@femessage/log-viewer'
 import { isStarted } from 'nprogress';
+import { filterLogs } from '@/filter-config/filterConfig'
 
 export default {
   name: 'MasLogMarker',
@@ -163,12 +172,14 @@ export default {
       logs: [],
       filterKeyword: '',
       logfileIndex: Number(localStorage.getItem('maslog-file-index')) || 1,
+      enableCustomFilter: true,
     }
   },
   computed: {
     ...mapGetters(['selectedEnv']),
     filteredLogs() {
       let logs = this.logs
+      logs = this.enableCustomFilter ? filterLogs(logs) : logs
       if (this.filterKeyword) {
         const keyword = this.filterKeyword.toLowerCase()
         logs = logs.filter(log => 
@@ -353,6 +364,7 @@ export default {
                 if (eventData.event === 'end') {
                   if (eventData.status === 'success') {
                     this.$message.success(`获取成功，共 ${lineCount} 行日志`)
+                    this.filterLogs()
                   } else {
                     this.$message.error(eventData.message || '获取日志失败')
                   }
@@ -389,7 +401,7 @@ export default {
         this.getLoading = false
       }
     },
-
+    // 过滤函数已移至 filterConfig.js 的 filterLogs 导出
     clearAllMarkers() {
       this.startUuid = ''
       this.endUuid = ''

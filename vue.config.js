@@ -111,7 +111,7 @@ module.exports = {
                   test: /\.js$/,    //打包规则应用到以css结尾的文件上
                   loader: 'babel-loader',
                   include: [resolve('src'),resolve('node_modules/sks-plugin-el-erp/lib')]
-              }
+              },
               //加上这段 end
           ]
       }

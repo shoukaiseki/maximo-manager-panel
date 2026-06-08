@@ -1,0 +1,1 @@
+MAXPROP successfully fetched from maximo cache
