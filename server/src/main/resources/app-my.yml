@@ -1,5 +1,6 @@
 solon:
-  apiKey: "quq2k18uviv6hpaql6kvllver1l6be47vfksin4l"
+  #apiKey: "quq2k18uviv6hpaql6kvllver1l6be47vfksin4l"
+  apiKey: "kufl9t6i501qh2gci7h10ak00prp68gomu2b2r2c"
 
 db2:
   schema: "maximo"
