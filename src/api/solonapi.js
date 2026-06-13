@@ -12,11 +12,13 @@ const solonRequest = axios.create({
 solonRequest.interceptors.request.use(config => {
   // 从 localStorage 获取 apiKey
   const saved = localStorage.getItem('maximo-env-settings')
+  console.log("request interceptors saved=",saved)
   if (saved) {
     try {
       const settings = JSON.parse(saved)
       if (settings.useApiKey && settings.apiKey) {
         config.headers['X-API-Key'] = settings.apiKey
+        console.log("set apikey")
       }
     } catch (e) {
       console.error('解析配置失败', e)

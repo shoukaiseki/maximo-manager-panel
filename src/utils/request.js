@@ -16,6 +16,7 @@ service.interceptors.request.use(config => {
   
   // 从 localStorage 获取认证信息
   const saved = localStorage.getItem('maximo-env-settings')
+  console.log("request interceptors saved=",saved)
   if (saved) {
     try {
       // 是否需要设置 token
@@ -24,6 +25,7 @@ service.interceptors.request.use(config => {
         const settings = JSON.parse(saved)
         if (settings.useApiKey && settings.apiKey) {
           config.headers['apikey'] = settings.apiKey
+          console.log("set apikey")
         } else if (settings.maxauth) {
           config.headers['maxauth'] = settings.maxauth
         }

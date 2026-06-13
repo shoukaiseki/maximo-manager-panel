@@ -1,12 +1,12 @@
 <template>
   <el-dialog title="后端配置" :visible="dialogVisible" width="480px" @close="handleClose" @update:visible="handleClose">
     <el-form :model="formData" label-width="100px" class="settings-form">
-      <!-- <el-form-item label="认证方式">
+      <el-form-item label="认证方式">
         <el-radio-group v-model="formData.authType">
           <el-radio label="maxauth">MAXAUTH</el-radio>
           <el-radio label="apikey">API Key</el-radio>
         </el-radio-group>
-      </el-form-item> -->
+      </el-form-item>
       <el-form-item v-if="formData.authType === 'maxauth'" label="MAXAUTH">
         <el-input v-model="formData.maxauth" placeholder="base64编码的用户名:密码" />
         <span class="form-tip">格式：base64(username:password)</span>

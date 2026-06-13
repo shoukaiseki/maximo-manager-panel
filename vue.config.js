@@ -9,7 +9,6 @@ function resolve(dir) {
 const name = defaultSettings.title || '' // 标题
 const port = process.env.port || process.env.npm_config_port || 28765 // 端口
 var serurl="http://localhost:9080"
-serurl="https://main.manage.dev.apps.dev.isuzu-china.cn"
 var baseTarget = process.env.VUE_APP_DEFAULT_TARGET || serurl
 
 var target = process.env.npm_config_target || baseTarget;

@@ -1,6 +1,6 @@
 @echo off
 echo.
-echo [信息] 启动 Solon 后端服务
+echo [信息] 启动 Solon 后端服务 loc
 echo.
 
 %~d0
