@@ -7,15 +7,18 @@
           <p class="page-summary">支持 msgid / msggroup + msgkey 查询，环境认证信息由配置自动加载。</p>
         </div>
       </div>
-     <el-form :model="formData" ref="queryForm" :inline="true" label-width="68px">
+     <el-form :model="formData" ref="queryForm" :inline="true" label-width="68px" @submit.native.prevent>
             <el-form-item label="消息 ID">
-              <el-input v-model="formData.msgid" placeholder="BMXAA6378I" />
+              <el-input v-model="formData.msgid" placeholder="BMXAA6378I"  @keyup.enter.native="handleQuery" />
             </el-form-item>
             <el-form-item label="消息组">
-              <el-input v-model="formData.msggroup" placeholder="system" />
+              <el-input v-model="formData.msggroup" placeholder="system"  @keyup.enter.native="handleQuery" />
             </el-form-item>
             <el-form-item label="消息键">
-              <el-input v-model="formData.msgkey" placeholder="crontaskmanager25" />
+              <el-input v-model="formData.msgkey" placeholder="crontaskmanager25"  @keyup.enter.native="handleQuery" />
+            </el-form-item>
+            <el-form-item label="消息内容">
+              <el-input v-model="formData.value" placeholder="模糊搜索 value 内容"  @keyup.enter.native="handleQuery" />
             </el-form-item>
             <el-form-item>
                 <el-button type="cyan" icon="el-icon-search" size="mini" @click="handleQuery">搜索</el-button>
@@ -94,7 +97,8 @@ export default {
         msgid: '',
         // msgid: 'BMXAA6378I',
         msggroup: '',
-        msgkey: ''
+        msgkey: '',
+        value: ''
       }
     }
   },
@@ -105,12 +109,20 @@ export default {
   },
   methods: {
     buildWhere(params) {
+      let clauses = []
       if (params.msgid) {
-        return `msgid="${params.msgid}"`
-      } else if (params.msggroup && params.msgkey) {
-        return `msggroup="${params.msggroup}" and msgkey="${params.msgkey}"`
+        clauses.push(`msgid="${params.msgid}"`)
       }
-      return ''
+      if (params.msggroup) {
+        clauses.push(`msggroup="${params.msggroup}"`)
+      }
+      if (params.msgkey) {
+        clauses.push(`msgkey="${params.msgkey}"`)
+      }
+      if (params.value) {
+        clauses.push(`value="%${params.value}%"`)
+      }
+      return clauses.join(' and ')
     },
     async handleQuery() {
       this.tablePatam.pageNum=1
@@ -127,7 +139,8 @@ export default {
         const params = {
           msgid:  this.formData.msgid ,
           msggroup:this.formData.msggroup ,
-          msgkey:  this.formData.msgkey 
+          msgkey:  this.formData.msgkey ,
+          value:   this.formData.value 
         }
 
         const whereClause = this.buildWhere(params)
@@ -165,7 +178,8 @@ export default {
       this.formData = {
         msgid: '',
         msggroup: '',
-        msgkey: ''
+        msgkey: '',
+        value: ''
       }
       this.searchMode = 'msgid'
       this.error = ''

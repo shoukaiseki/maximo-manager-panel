@@ -348,7 +348,7 @@ public class MaxObjectService {
         var meta = rs.getMetaData();
         int count = meta.getColumnCount();
         for (int i = 1; i <= count; i++) {
-            String name = meta.getColumnLabel(i);
+            String name = meta.getColumnLabel(i).toUpperCase();
             Object value = rs.getObject(i);
             map.put(name, value);
         }

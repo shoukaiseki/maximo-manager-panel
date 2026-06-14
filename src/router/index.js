@@ -111,6 +111,18 @@ export const constantRoutes = [
                 component: (resolve) => require(['/src/views/maximo/MessagesQuery'], resolve),
                 name: 'MessagesQuery',
                 meta: { title: '消息查询', icon: 'message', noCache: false }
+            },
+            {
+                path: 'maxscript',
+                component: (resolve) => require(['/src/views/maximo/maxscript/AutoScriptQuery'], resolve),
+                name: 'AutoScriptQuery',
+                meta: { title: '脚本查询', icon: 'code', noCache: false }
+            },
+            {
+                path: 'maxmenu',
+                component: (resolve) => require(['/src/views/maximo/maxmenu/MaxMenuTree'], resolve),
+                name: 'MaxMenuTree',
+                meta: { title: '菜单管理', icon: 'tree', noCache: false }
             }
         ]
     },
