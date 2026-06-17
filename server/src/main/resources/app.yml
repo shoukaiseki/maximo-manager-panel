@@ -1,3 +1,20 @@
+solon.app.name: maximo-management-panel
 server:
   port: 8081
 
+# log
+solon.logging.appender:
+  console:
+    level: DEBUG
+    enable: true #是否启用
+    pattern: "%d{yyyy-MM-dd HH:mm:ss.SSS} %highlight(%-5level) %magenta(${PID:-}) --- %-15([%15.15thread]) %-56(%cyan(%-40.40logger{39}%L)) : %msg%n"
+  file:
+    name: "${user.home}/logs/${solon.app.name}"
+    level: INFO
+    enable: true #是否启用
+    extension: ".log"   #v2.2.18 后支持（例：.log, .log.gz, .log.zip）
+    maxFileSize: "10 MB"
+    maxHistory: "7"
+  cloud:
+    level: INFO
+    enable: false #是否启用
