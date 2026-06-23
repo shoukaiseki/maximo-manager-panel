@@ -83,8 +83,8 @@ export default {
                         { prop: 'RESTRICTED', label: '限制', width: 60 ,visible:false},
                         { prop: 'LOCALIZABLE', label: '可本地化', width: 80 ,visible:false},
                         { prop: 'ROWSTAMP', label: '行戳', width: 100 ,visible:false},
-                        { prop: 'L_REMARKS', label: '备注', minWidth: 300 },
-                        { prop: 'REMARKS', label: '英文备注', minWidth: 300 },
+                        { prop: 'L_REMARKS', label: '备注', minWidth: 500 ,className:'wrap-cell'},
+                        { prop: 'REMARKS', label: '英文备注', minWidth: 500 ,className:'wrap-cell'},
                     ]),
                 queryParamsColumnListEnable: false,
                 queryParamsColumnList: [],
@@ -99,7 +99,7 @@ export default {
 };
 </script>
 
-<style>
+<style lang="scss">
 /*//高亮点击的行*/
 .el-table__body tr.current-row>td {
     //background: rgb(77, 195, 255, 0.5) !important;
@@ -128,5 +128,19 @@ export default {
     margin: 0px;
     display: block;
     overflow-x: auto;
+}
+.wrap-cell {
+    white-space: normal;
+    word-break: break-word;
+}
+
+.wrap-cell .cell {
+    white-space: normal;
+    word-break: break-word;
+}
+
+.el-table .cell.el-tooltip {
+    white-space: normal !important;
+    word-break: break-word !important;
 }
 </style>

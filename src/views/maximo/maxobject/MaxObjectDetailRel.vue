@@ -48,7 +48,7 @@ export default {
                         { prop: 'PARENT', label: '父对象', minWidth: 120, visible: false },
                         { prop: 'CHILD', label: '子对象', minWidth: 120 },
                         { prop: 'WHERECLAUSE', label: '条件', minWidth: 200 },
-                        { prop: 'REMARKS', label: '备注', minWidth: 200 },
+                        { prop: 'REMARKS', label: '备注', minWidth: 400 ,className:'wrap-cell'},
                         { prop: 'CARDINALITY', label: '基数', width: 80 },
                         { prop: 'DBJOINREQUIRED', label: '需要 DB 连接', width: 110 },
                         { prop: 'ISDEFAULT', label: '默认', width: 70 },
