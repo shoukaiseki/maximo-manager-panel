@@ -123,6 +123,12 @@ export const constantRoutes = [
                 component: (resolve) => require(['/src/views/maximo/maxmenu/MaxMenuTree'], resolve),
                 name: 'MaxMenuTree',
                 meta: { title: '菜单管理', icon: 'tree', noCache: false }
+            },
+            {
+                path: 'maxsession',
+                component: (resolve) => require(['/src/views/maximo/maxsession/MaxSession'], resolve),
+                name: 'MaxSession',
+                meta: { title: '在线用户', icon: 'user', noCache: false }
             }
         ]
     },
