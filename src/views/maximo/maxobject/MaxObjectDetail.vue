@@ -33,7 +33,7 @@
       <el-divider content-position="left">属性列表 ({{ attributes.length }})</el-divider>
       <!-- <SksTable :showRefreshButton="false" :mainTable="mainTable" :highlight-current-row="false" @refresh="handleAttrRefresh">
       </SksTable> -->
-      <max-object-detail-column :data="attributes"></max-object-detail-column>
+      <max-object-detail-column :data="attributes" :domains="domains" :relationships="relationships"></max-object-detail-column>
       <el-empty v-if="attributes.length === 0 && !loading" description="暂无属性数据" />
 
       <el-divider content-position="left">关系列表 ({{ relationships.length }})</el-divider>

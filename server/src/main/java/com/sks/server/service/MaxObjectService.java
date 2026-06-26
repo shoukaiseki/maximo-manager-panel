@@ -338,6 +338,146 @@ public class MaxObjectService {
 
     // ========== 工具方法 ==========
 
+    /**
+     * 查询 MAXATTRIBUTE 列表（支持分页 + 多条件搜索）
+     * 支持精确匹配（以=开头）和通配符（%）搜索
+     */
+    public Map<String, Object> queryMaxAttributeList(String objectname, String attributename, String description,
+                                                      int pageNum, int pageSize) {
+        List<Object> params = new ArrayList<>();
+        StringBuilder whereSql = new StringBuilder("WHERE 1=1 ");
+
+        // 对象名条件
+        LikeCondition objCond = buildLikeCondition(objectname, "ma.OBJECTNAME");
+        if (objCond != null) {
+            whereSql.append("AND ").append(objCond.getSql());
+            params.add(objCond.getValue());
+        }
+
+        // 属性名条件
+        LikeCondition attrCond = buildLikeCondition(attributename, "ma.ATTRIBUTENAME");
+        if (attrCond != null) {
+            whereSql.append("AND ").append(attrCond.getSql());
+            params.add(attrCond.getValue());
+        }
+
+        // 描述条件（搜索 L_TITLE 和 TITLE）
+        String desc = description != null ? description.trim() : "";
+        if (!desc.isEmpty()) {
+            if (desc.startsWith("=")) {
+                String exactVal = desc.substring(1).trim();
+                whereSql.append("AND (l.TITLE = ? OR ma.TITLE = ?) ");
+                params.add(exactVal);
+                params.add(exactVal);
+            } else if (desc.contains("%")) {
+                whereSql.append("AND (l.TITLE LIKE ? OR ma.TITLE LIKE ?) ");
+                params.add(desc.toUpperCase());
+                params.add(desc.toUpperCase());
+            } else {
+                String pattern = "%" + desc.toUpperCase() + "%";
+                whereSql.append("AND (l.TITLE LIKE ? OR ma.TITLE LIKE ?) ");
+                params.add(pattern);
+                params.add(pattern);
+            }
+        }
+
+        // 1. 总数查询
+        String countSql = "SELECT COUNT(*) AS total FROM MAXATTRIBUTE ma " +
+                          "LEFT JOIN L_MAXATTRIBUTE AS l ON (ma.MAXATTRIBUTEID = l.OWNERID AND l.LANGCODE = 'ZH') " +
+                          whereSql;
+
+        int total = 0;
+        try (Connection conn = dataSource.getConnection();
+             PreparedStatement ps = conn.prepareStatement(countSql)) {
+            for (int i = 0; i < params.size(); i++) {
+                ps.setObject(i + 1, params.get(i));
+            }
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) {
+                    total = rs.getInt("total");
+                }
+            }
+        } catch (SQLException e) {
+            throw new RuntimeException("查询 MAXATTRIBUTE 总数失败: " + e.getMessage(), e);
+        }
+
+        // 2. 分页数据查询（DB2 分页语法）
+        String dataSql = "SELECT ma.*, l.TITLE AS L_TITLE, l.REMARKS AS L_REMARKS " +
+                         "FROM MAXATTRIBUTE ma " +
+                         "LEFT JOIN L_MAXATTRIBUTE AS l ON (ma.MAXATTRIBUTEID = l.OWNERID AND l.LANGCODE = 'ZH') " +
+                         whereSql +
+                         "ORDER BY ma.OBJECTNAME, ma.ATTRIBUTENAME " +
+                         "OFFSET ? ROWS FETCH NEXT ? ROWS ONLY";
+
+        int offset = (pageNum - 1) * pageSize;
+        List<Map<String, Object>> rows = new ArrayList<>();
+
+        try (Connection conn = dataSource.getConnection();
+             PreparedStatement ps = conn.prepareStatement(dataSql)) {
+            int paramIdx = 1;
+            for (int i = 0; i < params.size(); i++) {
+                ps.setObject(paramIdx++, params.get(i));
+            }
+            ps.setInt(paramIdx++, offset);
+            ps.setInt(paramIdx++, pageSize);
+
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    rows.add(rowToMap(rs));
+                }
+            }
+        } catch (SQLException e) {
+            throw new RuntimeException("查询 MAXATTRIBUTE 列表失败: " + e.getMessage(), e);
+        }
+
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("rows", rows);
+        result.put("total", total);
+        result.put("pageNum", pageNum);
+        result.put("pageSize", pageSize);
+        return result;
+    }
+
+    /**
+     * 构建 LIKE 条件，支持精确匹配（=开头）和通配符（%）
+     */
+    private LikeCondition buildLikeCondition(String input, String columnName) {
+        if (input == null || input.trim().isEmpty()) {
+            return null;
+        }
+        String val = input.trim();
+        if (val.startsWith("=")) {
+            String exactVal = val.substring(1).trim().toUpperCase();
+            return new LikeCondition(columnName + " = ?", exactVal);
+        } else if (val.contains("%")) {
+            return new LikeCondition(columnName + " LIKE ?", val.toUpperCase());
+        } else {
+            String pattern = "%" + val.toUpperCase() + "%";
+            return new LikeCondition(columnName + " LIKE ?", pattern);
+        }
+    }
+
+    /**
+     * LIKE 条件辅助类
+     */
+    private static class LikeCondition {
+        private final String sql;
+        private final String value;
+
+        LikeCondition(String sql, String value) {
+            this.sql = sql;
+            this.value = value;
+        }
+
+        String getSql() {
+            return sql;
+        }
+
+        String getValue() {
+            return value;
+        }
+    }
+
     private Integer getInt(ResultSet rs, String column) throws SQLException {
         int val = rs.getInt(column);
         return rs.wasNull() ? null : val;

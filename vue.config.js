@@ -1,6 +1,7 @@
 'use strict'
 const path = require('path')
 const defaultSettings = require('./src/settings.js')
+const MonacoWebpackPlugin = require('monaco-editor-webpack-plugin')
 
 function resolve(dir) {
   return path.join(__dirname, dir)
@@ -103,6 +104,11 @@ module.exports = {
         '@': resolve('src')
       }
     },
+    plugins: [
+      new MonacoWebpackPlugin({
+        languages: ['json', 'javascript', 'typescript','python']
+      })
+    ],
       module: {
           rules: [
               //加上这段 start

@@ -76,4 +76,19 @@ public class MaxObjectController {
         List<Map<String, Object>> data = maxObjectService.queryDomains(objectname);
         return RestResult.ok(data);
     }
+
+    /**
+     * MAXATTRIBUTE 列表查询（支持分页 + 多条件搜索）
+     * 支持精确匹配（以=开头）和通配符（%）搜索
+     * GET /solonapi/maxattribute/list?objectname=&attributename=&description=&pageNum=1&pageSize=20
+     */
+    @Mapping(value = "/maxattribute/list", method = MethodType.GET)
+    public RestResult<Map<String, Object>> attributeList(String objectname,
+                                                         String attributename,
+                                                         String description,
+                                                         @Param(defaultValue = "1") int pageNum,
+                                                         @Param(defaultValue = "20") int pageSize) {
+        Map<String, Object> data = maxObjectService.queryMaxAttributeList(objectname, attributename, description, pageNum, pageSize);
+        return RestResult.ok(data);
+    }
 }

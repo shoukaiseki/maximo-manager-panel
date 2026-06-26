@@ -177,6 +177,12 @@ export const constantRoutes = [
                 component: (resolve) => require(['/src/views/maximo/maxobject/MaxObjectList'], resolve),
                 name: 'MaxObjectList',
                 meta: { title: '对象列表', icon: 'list', noCache: false }
+            },
+            {
+                path: 'attr',
+                component: (resolve) => require(['/src/views/maximo/maxattr/index'], resolve),
+                name: 'MaxAttrList',
+                meta: { title: '字段查询', icon: 'tickets', noCache: false }
             }
         ]
     },
