@@ -460,6 +460,8 @@ export default {
         this.objFullEditor.dispose()
         this.objFullEditor = null
       }
+      this.monacoLoaded = false
+      this._monaco = null
     },
     copyFieldSimpleJson() {
       const json = this.simpleAttrData
