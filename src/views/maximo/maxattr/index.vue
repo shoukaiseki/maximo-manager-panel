@@ -32,7 +32,8 @@
           :mainTable="mainTable"
           :visibleTop="true"
           :highlight-current-row="true"
-          @rowClickAfter="handleRowClick">
+          @rowClickAfter="handleRowClick"
+          @refresh="fetchList">
           <template slot="tableColumnBefore">
             <el-table-column label="操作" width="160" fixed="left" align="center">
               <template slot-scope="{row}">
@@ -203,8 +204,10 @@ export default {
         showTablePropName: false,
         serverPagination: true,
         total: 0,
-        pageSize: 20,
-        currentPage: 1,
+        queryParams: {
+          pageNum: 1,
+          pageSize: 20
+        },
         tableColumnList:
           this.sksUtils.newTableColumnList([
             { prop: 'OBJECTNAME', label: '对象名', minWidth: 150 },
@@ -249,7 +252,7 @@ export default {
     },
     handleQuery() {
       this.hasSearched = true
-      this.mainTable.currentPage = 1
+      this.mainTable.queryParams.pageNum = 1
       this.fetchList()
     },
     fetchList() {
@@ -258,8 +261,8 @@ export default {
         objectname: this.formData.objectname,
         attributename: this.formData.attributename,
         description: this.formData.description,
-        pageNum: this.mainTable.currentPage,
-        pageSize: this.mainTable.pageSize
+        pageNum: this.mainTable.queryParams.pageNum,
+        pageSize: this.mainTable.queryParams.pageSize
       }
       getMaxAttributeList(params)
         .then(res => {
@@ -282,8 +285,8 @@ export default {
         })
     },
     handlePageChange(page, limit) {
-      this.mainTable.currentPage = page
-      this.mainTable.pageSize = limit
+      this.mainTable.queryParams.pageNum = page
+      this.mainTable.queryParams.pageSize = limit
       this.fetchList()
     },
     resetForm() {

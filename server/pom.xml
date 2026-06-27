@@ -45,6 +45,13 @@
             <artifactId>jcc</artifactId>
             <version>11.5.9.0</version>
         </dependency>
+
+        <!-- p6spy SQL 日志打印 -->
+        <dependency>
+            <groupId>p6spy</groupId>
+            <artifactId>p6spy</artifactId>
+            <version>3.9.1</version>
+        </dependency>
     </dependencies>
 
     <build>

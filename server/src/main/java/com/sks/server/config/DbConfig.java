@@ -2,6 +2,7 @@ package com.sks.server.config;
 
 import com.zaxxer.hikari.HikariConfig;
 import com.zaxxer.hikari.HikariDataSource;
+import com.p6spy.engine.spy.P6DataSource;
 import org.noear.solon.Solon;
 import org.noear.solon.annotation.Bean;
 import org.noear.solon.annotation.Configuration;
@@ -33,6 +34,8 @@ public class DbConfig {
 
         HikariDataSource ds = new HikariDataSource(config);
         System.out.println("[DB2] DataSource initialized: " + Solon.cfg().get("db2.url", ""));
-        return ds;
+
+        // 用 P6DataSource 包装，开启 SQL 日志打印
+        return new P6DataSource(ds);
     }
 }
