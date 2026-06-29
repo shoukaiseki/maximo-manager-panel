@@ -28,13 +28,14 @@ public class MaxObjectController {
 
     /**
      * MAXOBJECT 列表查询（支持分页）
-     * GET /solonapi/maxobject/list?keyword=ITEM&pageNum=1&pageSize=20
+     * GET /solonapi/maxobject/list?objectname=ITEM&keyword=&pageNum=1&pageSize=20
      */
     @Mapping(value = "/maxobject/list", method = MethodType.GET)
-    public RestResult<Map<String, Object>> list(String keyword,
-                                                @Param(defaultValue = "1") int pageNum,
-                                                @Param(defaultValue = "20") int pageSize) {
-        Map<String, Object> data = maxObjectService.queryMaxObjectList(keyword, pageNum, pageSize);
+    public RestResult<Map<String, Object>> list(String objectname,
+                                                 String keyword,
+                                                 @Param(defaultValue = "1") int pageNum,
+                                                 @Param(defaultValue = "20") int pageSize) {
+        Map<String, Object> data = maxObjectService.queryMaxObjectList(objectname, keyword, pageNum, pageSize);
         return RestResult.ok(data);
     }
 

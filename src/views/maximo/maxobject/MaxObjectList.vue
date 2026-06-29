@@ -4,13 +4,16 @@
       <div class="page-header-row">
         <div>
           <h2>MaxObject 查询</h2>
-          <p class="page-summary">支持 objectname 或 description 模糊搜索，查询结果点击跳转详情。</p>
+          <p class="page-summary">对象名支持精确匹配(=开头)和通配符(%模糊)，关键词搜索描述。点击行跳转详情。</p>
         </div>
       </div>
 
       <el-form :model="formData" ref="queryForm" :inline="true" label-width="90px" @submit.native.prevent>
-        <el-form-item label="搜索关键词" >
-          <el-input v-model="formData.keyword" placeholder="输入对象名或描述..." clearable style="width: 300px;" @keyup.enter.native="handleQuery" />
+        <el-form-item label="对象名">
+          <el-input v-model="formData.objectname" placeholder="如 =ASSET 或 %ITEM%" clearable style="width: 220px;" @keyup.enter.native="handleQuery" />
+        </el-form-item>
+        <el-form-item label="关键词">
+          <el-input v-model="formData.keyword" placeholder="描述模糊搜索..." clearable style="width: 300px;" @keyup.enter.native="handleQuery" />
         </el-form-item>
         <el-form-item>
           <el-button type="cyan" icon="el-icon-search" size="mini" :loading="loading" @click="handleQuery">搜索</el-button>
@@ -61,6 +64,7 @@ export default {
       pageSize: 20,
       total: 0,
       formData: {
+        objectname: '',
         keyword: ''
       }
     }
@@ -70,7 +74,7 @@ export default {
       this.hasSearched = true
       this.loading = true
       this.pageNum = 1
-      getMaxObjectList(this.formData.keyword, this.pageNum, this.pageSize)
+      getMaxObjectList(this.formData.objectname, this.formData.keyword, this.pageNum, this.pageSize)
         .then(res => {
           if (res.code === 200 && res.data) {
             this.objectList = res.data.rows || []
@@ -92,7 +96,7 @@ export default {
       this.pageNum = page
       this.pageSize = limit
       this.loading = true
-      getMaxObjectList(this.formData.keyword, page, limit)
+      getMaxObjectList(this.formData.objectname, this.formData.keyword, page, limit)
         .then(res => {
           if (res.code === 200 && res.data) {
             this.objectList = res.data.rows || []
@@ -110,6 +114,7 @@ export default {
         })
     },
     resetForm() {
+      this.formData.objectname = ''
       this.formData.keyword = ''
       this.hasSearched = false
       this.objectList = []

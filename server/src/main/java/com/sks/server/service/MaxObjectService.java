@@ -15,20 +15,42 @@ public class MaxObjectService {
     private DataSource dataSource;
 
     /**
-     * 查询 MAXOBJECT 列表（支持分页 + objectname/description 模糊搜索）
+     * 查询 MAXOBJECT 列表（支持分页 + objectname 精确/模糊搜索 + keyword 描述模糊搜索）
      */
-    public Map<String, Object> queryMaxObjectList(String keyword, int pageNum, int pageSize) {
-        String pattern = "%" + (keyword != null ? keyword.trim().toUpperCase() : "") + "%";
+    public Map<String, Object> queryMaxObjectList(String objectname, String keyword, int pageNum, int pageSize) {
+        // 构建 objectname 搜索条件（支持 =精确 和 %模糊）
+        LikeCondition objCond = buildLikeCondition(objectname, "OBJECTNAME");
+
+        // 构建 keyword 描述模糊搜索
+        String keywordPattern = "%" + (keyword != null ? keyword.trim().toUpperCase() : "") + "%";
 
         // 1. 总数查询
-        String countSql = "SELECT COUNT(*) AS total FROM MAXOBJECT " +
-                          "WHERE OBJECTNAME LIKE ? OR MAXOBJECT.DESCRIPTION LIKE ?";
+        StringBuilder countSqlBuilder = new StringBuilder("SELECT COUNT(*) AS total FROM MAXOBJECT WHERE ");
+        List<String> conditions = new ArrayList<>();
+        List<String> params = new ArrayList<>();
+
+        if (objCond != null) {
+            conditions.add(objCond.getSql());
+            params.add(objCond.getValue());
+        }
+        if (keyword != null && !keyword.trim().isEmpty()) {
+            conditions.add("MAXOBJECT.DESCRIPTION LIKE ?");
+            params.add(keywordPattern);
+        }
+
+        // 如果没有任何条件，查询所有
+        if (conditions.isEmpty()) {
+            countSqlBuilder = new StringBuilder("SELECT COUNT(*) AS total FROM MAXOBJECT");
+        } else {
+            countSqlBuilder.append(String.join(" OR ", conditions));
+        }
 
         int total = 0;
         try (Connection conn = dataSource.getConnection();
-             PreparedStatement ps = conn.prepareStatement(countSql)) {
-            ps.setString(1, pattern);
-            ps.setString(2, pattern);
+             PreparedStatement ps = conn.prepareStatement(countSqlBuilder.toString())) {
+            for (int i = 0; i < params.size(); i++) {
+                ps.setString(i + 1, params.get(i));
+            }
             try (ResultSet rs = ps.executeQuery()) {
                 if (rs.next()) {
                     total = rs.getInt("total");
@@ -39,22 +61,28 @@ public class MaxObjectService {
         }
 
         // 2. 分页数据查询（DB2 分页语法）
-        String dataSql = "SELECT l.DESCRIPTION AS l_description, OBJECTNAME, MAXOBJECT.DESCRIPTION " +
-                         "FROM MAXOBJECT " +
-                         "LEFT JOIN L_MAXOBJECT AS l ON (MAXOBJECTID = l.OWNERID AND l.LANGCODE = 'ZH') " +
-                         "WHERE OBJECTNAME LIKE ? OR MAXOBJECT.DESCRIPTION LIKE ? " +
-                         "ORDER BY OBJECTNAME " +
-                         "OFFSET ? ROWS FETCH NEXT ? ROWS ONLY";
+        StringBuilder dataSqlBuilder = new StringBuilder(
+            "SELECT l.DESCRIPTION AS l_description, OBJECTNAME, MAXOBJECT.DESCRIPTION " +
+            "FROM MAXOBJECT " +
+            "LEFT JOIN L_MAXOBJECT AS l ON (MAXOBJECTID = l.OWNERID AND l.LANGCODE = 'ZH') ");
+
+        if (conditions.isEmpty()) {
+            dataSqlBuilder.append("ORDER BY OBJECTNAME OFFSET ? ROWS FETCH NEXT ? ROWS ONLY");
+        } else {
+            dataSqlBuilder.append("WHERE ").append(String.join(" OR ", conditions))
+                .append(" ORDER BY OBJECTNAME OFFSET ? ROWS FETCH NEXT ? ROWS ONLY");
+        }
 
         int offset = (pageNum - 1) * pageSize;
         List<MaxObjectInfo> rows = new ArrayList<>();
 
         try (Connection conn = dataSource.getConnection();
-             PreparedStatement ps = conn.prepareStatement(dataSql)) {
-            ps.setString(1, pattern);
-            ps.setString(2, pattern);
-            ps.setInt(3, offset);
-            ps.setInt(4, pageSize);
+             PreparedStatement ps = conn.prepareStatement(dataSqlBuilder.toString())) {
+            for (int i = 0; i < params.size(); i++) {
+                ps.setString(i + 1, params.get(i));
+            }
+            ps.setInt(params.size() + 1, offset);
+            ps.setInt(params.size() + 2, pageSize);
             try (ResultSet rs = ps.executeQuery()) {
                 while (rs.next()) {
                     MaxObjectInfo obj = new MaxObjectInfo();

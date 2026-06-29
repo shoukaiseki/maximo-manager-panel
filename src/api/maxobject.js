@@ -3,15 +3,16 @@ import request from '@/utils/request'
 
 /**
  * 查询 MAXOBJECT 列表
- * @param {string} keyword 搜索关键词
+ * @param {string} objectname 对象名搜索（=开头精确，%模糊）
+ * @param {string} keyword 关键词搜索（描述模糊）
  * @param {number} pageNum 页码
  * @param {number} pageSize 每页条数
  */
-export function getMaxObjectList(keyword, pageNum = 1, pageSize = 20) {
+export function getMaxObjectList(objectname, keyword, pageNum = 1, pageSize = 20) {
   return solonRequest({
     url: '/maxobject/list',
     method: 'get',
-    params: { keyword, pageNum, pageSize }
+    params: { objectname, keyword, pageNum, pageSize }
   })
 }
 
