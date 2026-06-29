@@ -17,21 +17,21 @@
           type="primary" 
           icon="el-icon-document" 
           size="mini"
-          @click="startLogStream"
-          :loading="connecting"
-          :disabled="isStreaming"
+          @click="fetchLogs"
+          :loading="loading"
         >
-          {{ isStreaming ? '正在接收...' : '查看日志' }}
+          查看日志
         </el-button>
         
         <el-button 
-          v-if="isStreaming"
-          type="danger" 
-          icon="el-icon-video-pause" 
+          type="success" 
+          icon="el-icon-refresh" 
           size="mini"
-          @click="stopLogStream"
+          @click="fetchLogs"
+          :loading="loading"
+          :disabled="logs.length === 0"
         >
-          停止接收
+          刷新日志
         </el-button>
         
         <el-button 
@@ -47,14 +47,6 @@
         <el-divider direction="vertical" />
         
         <el-switch
-          v-model="autoRefresh"
-          active-text="实时刷新"
-          inactive-text="手动刷新"
-          @change="handleAutoRefreshChange"
-          :disabled="!isStreaming"
-        />
-        
-        <el-switch
           v-model="autoScroll"
           active-text="自动滚动"
           inactive-text="手动滚动"
@@ -66,9 +58,6 @@
           <el-tag size="small" type="info">总行数: {{ logs.length }}</el-tag>
           <el-tag size="small" type="success" style="margin-left: 8px;">显示: {{ filteredLogs.length }}</el-tag>
           <el-tag size="small" type="warning" style="margin-left: 8px;" v-if="filterKeyword">过滤: "{{ filterKeyword }}"</el-tag>
-          <el-tag size="small" :type="isStreaming ? 'success' : 'info'" style="margin-left: 8px;">
-            {{ isStreaming ? '● 连接中' : '○ 已断开' }}
-          </el-tag>
         </div>
       </div>
       <div class="log-container">
@@ -90,6 +79,7 @@
 
 <script>
 import LogViewer from '@femessage/log-viewer'
+import { getMaxObjectList } from '@/api/maxobject'
 
 export default {
   name: 'MaximoLogViewer',
@@ -99,19 +89,10 @@ export default {
   data() {
     return {
       authHeaders: {},
-      connecting: false,
-      isStreaming: false,
+      loading: false,
       logs: [],
       filterKeyword: '',
-      autoRefresh: true,
-      abortController: null,
-      maxLogs: 600000,
-      logsToRemove: 200000,
-      manualStop: false,
-      reconnectTimer: null,
       autoScroll: true,
-      updateTimer: null,
-      pendingLogs: [],
       scrollDebounceTimer: null,
       lastScrollTop: 0,
       drawerViewerKey: 0
@@ -135,28 +116,16 @@ export default {
   mounted() {
   },
   beforeDestroy() {
-    this.stopLogStream(true)
-    if (this.reconnectTimer) {
-      clearTimeout(this.reconnectTimer)
-      this.reconnectTimer = null
-    }
-    if (this.updateTimer) {
-      cancelAnimationFrame(this.updateTimer)
-      this.updateTimer = null
-    }
     if (this.scrollDebounceTimer) {
       clearTimeout(this.scrollDebounceTimer)
       this.scrollDebounceTimer = null
     }
   },
   methods: {
-    async startLogStream() {
-      if (this.isStreaming) {
-        return
-      }
-      this.authHeaders={}
+    async fetchLogs() {
+      this.authHeaders = {}
       const maximoEnvSettings = localStorage.getItem('maximo-env-settings')
-      var hasAuth=false
+      var hasAuth = false
       if (maximoEnvSettings) {
         try {
           const settings = JSON.parse(maximoEnvSettings)
@@ -176,169 +145,63 @@ export default {
           hasAuth = false
         }
       }
-      if(!hasAuth){
+      if (!hasAuth) {
         this.$message.error('请先配置 Maximo API Key！')
         return
       }
 
-      this.manualStop = false
-      this.connecting = true
-      
-      try {
-        await this.connectToLogStream()
-      } catch (error) {
-        this.connecting = false
-        this.$message.error('启动日志流失败: ' + error.message)
-        console.error('Start log stream error:', error)
-        
-        if (!this.manualStop) {
-          this.scheduleReconnect()
-        }
-      }
-    },
-    
-    async connectToLogStream() {
-      if (this.isStreaming) {
-        return
-      }
-
-      this.connecting = true
+      this.loading = true
       
       try {
         const baseUrl = process.env.VUE_APP_BASE_API || ''
         const url = `${baseUrl}/maximo/oslc/service/logging?action=wsmethod:streamLog`
         
-        console.log('Connecting to Maximo logging stream:', url)
-        
-        this.abortController = new AbortController()
+        console.log('Fetching Maximo messages.log:', url)
         
         const response = await fetch(url, {
           headers: {
             ...this.authHeaders,
-            'Accept': 'text/event-stream'
-          },
-          signal: this.abortController.signal
+            'Accept': 'text/plain'
+          }
         })
         
         if (!response.ok) {
           throw new Error(`HTTP error! status: ${response.status}`)
         }
         
-        console.log('Maximo logging connection opened')
-        this.connecting = false
-        this.isStreaming = true
-        this.$message.success('日志流连接成功')
-
-        const reader = response.body.getReader()
-        const decoder = new TextDecoder()
-        let buffer = ''
+        const text = await response.text()
+        const lines = text.split(/\r?\n/).filter(line => line.trim())
         
-        while (true) {
-          const { done, value } = await reader.read()
-          
-          if (done) {
-            console.log('\nMaximo logging connection closed')
-            this.stopLogStream()
-            this.$message.warning('日志流已断开')
-            break
-          }
-          
-          const chunk = decoder.decode(value, { stream: true })
-          buffer += chunk
-          
-          const lines = buffer.split(/\r?\n/)
-          buffer = lines.pop()
-          
-          for (const line of lines) {
-            const trimmedLine = line.trim()
-            
-            if (!trimmedLine) {
-              continue
-            }
-            
-            this.addLog(trimmedLine)
-          }
+        this.logs = lines
+        this.drawerViewerKey++
+        
+        console.log(`获取日志成功，共 ${lines.length} 行`)
+        
+        if (this.autoScroll) {
+          this.$nextTick(() => {
+            this.scrollToBottom()
+          })
         }
       } catch (error) {
-        if (error.name === 'AbortError') {
-          console.log('Maximo logging connection aborted by user')
-        } else {
-          console.error('Maximo logging connection error:', error)
-          this.$message.error('连接错误: ' + error.message)
-        }
-        this.stopLogStream()
+        console.error('获取日志失败:', error)
+        this.$message.error('获取日志失败: ' + error.message)
+      } finally {
+        this.loading = false
+        this.touchNodeService()
       }
     },
     
-    stopLogStream(manual = false) {
-      if (this.abortController) {
-        this.abortController.abort()
-        this.abortController = null
-      }
-      
-      this.isStreaming = false
-      this.connecting = false
-
-      if (manual) {
-        this.manualStop = true
-        if (this.reconnectTimer) {
-          clearTimeout(this.reconnectTimer)
-          this.reconnectTimer = null
-        }
-        this.$message.info('已停止接收日志')
-      } else {
-        this.scheduleReconnect()
-      }
-    },
-    
-    scheduleReconnect() {
-      if (this.reconnectTimer) {
-        clearTimeout(this.reconnectTimer)
-      }
-      
-      this.reconnectTimer = setTimeout(() => {
-        if (!this.manualStop) {
-          console.log('Attempting to reconnect...')
-          this.startLogStream()
-        }
-      }, 2000)
-    },
-    
-    addLog(message) {
-      if (!message || !message.trim()) {
-        return
-      }
-      
-      this.pendingLogs.push(message)
-      
-      if (!this.updateTimer) {
-        this.updateTimer = requestAnimationFrame(() => {
-          this.flushPendingLogs()
-          this.updateTimer = null
-        })
-      }
-    },
-    
-    flushPendingLogs() {
-      if (this.pendingLogs.length === 0) return
-      
-      const newLogs = this.pendingLogs.splice(0)
-      this.logs.push(...newLogs)
-      
-      if (this.logs.length > this.maxLogs) {
-        const keepCount = this.logs.length - this.logsToRemove
-        this.logs = this.logs.slice(-keepCount)
-        console.log(`日志数量超过 ${this.maxLogs}，已删除最旧的 ${this.logsToRemove} 行，当前剩余 ${this.logs.length} 行`)
-      }
-      
-      if (this.autoScroll) {
-        this.$nextTick(() => {
-          this.scrollToBottom()
-        })
+    async touchNodeService() {
+      try {
+        await getMaxObjectList('', 1, 1)
+        console.log('Node service touched')
+      } catch (e) {
+        console.log('Touch node service failed (ignored):', e.message)
       }
     },
     
     handleFilterChange() {
+      this.drawerViewerKey++
       this.$nextTick(() => {
         if (this.autoScroll) {
           this.scrollToBottom()
@@ -365,7 +228,6 @@ export default {
         type: 'warning'
       }).then(() => {
         this.logs = []
-        this.pendingLogs = []
         this.drawerViewerKey++
         this.$message.success('日志已清空')
       }).catch(() => {
@@ -377,12 +239,16 @@ export default {
         <div style="text-align: left; line-height: 1.8;">
           <h3>📋 使用说明</h3>
           <ul style="padding-left: 20px;">
-            <li><strong>查看日志</strong>：连接到 Maximo 自带日志流接口</li>
-            <li><strong>停止接收</strong>：手动断开连接</li>
-            <li><strong>实时刷新</strong>：断开后自动重连（2秒间隔）</li>
-            <li><strong>自动滚动</strong>：新日志到达时自动滚动到底部</li>
+            <li><strong>查看日志</strong>：一次性获取 Maximo 服务器的 messages.log 文件内容</li>
+            <li><strong>刷新日志</strong>：重新获取最新的日志文件内容</li>
+            <li><strong>清空日志</strong>：清空当前显示的日志</li>
+            <li><strong>自动滚动</strong>：日志加载后自动滚动到底部</li>
             <li><strong>过滤器</strong>：输入关键词实时过滤日志</li>
           </ul>
+          
+          <h3>📝 日志来源</h3>
+          <p>日志文件：<code style="background:#f5f5f5;padding:2px 6px;border-radius:3px;">/logs/messages.log</code></p>
+          <p>这是 Liberty 服务器的主日志文件，包含 Maximo 应用运行时的所有日志信息。</p>
           
           <h3>🎨 日志高亮</h3>
           <ul style="padding-left: 20px;">
@@ -393,23 +259,13 @@ export default {
           </ul>
           
           <h3>⚙️ API Key 配置</h3>
-          <p>在浏览器控制台执行：<br>
-          <code style="background:#f5f5f5;padding:2px 6px;border-radius:3px;">localStorage.setItem('maximo_api_key', 'your-key')</code></p>
+          <p>通过"Maximo 环境配置"页面设置 API Key。</p>
         </div>
       `, '帮助', {
         dangerouslyUseHTMLString: true,
         confirmButtonText: '知道了',
         customClass: 'help-dialog'
       })
-    },
-    
-    handleAutoRefreshChange(value) {
-      if (this.isStreaming) {
-        this.stopLogStream(true)
-        setTimeout(() => {
-          this.startLogStream()
-        }, 500)
-      }
     },
     
     scrollToBottom() {
