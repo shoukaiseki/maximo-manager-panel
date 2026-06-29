@@ -152,6 +152,12 @@ export const constantRoutes = [
                 meta: { title: '日志查询', icon: 'log', noCache: false }
             },
             {
+                path: 'maximoLogViewer',
+                component: (resolve) => require(['/src/views/maximo/maslog/MaximoLogViewer'], resolve),
+                name: 'MaximoLogViewer',
+                meta: { title: 'Maximo日志', icon: 'log', noCache: false }
+            },
+            {
                 path: 'masLogMarker',
                 component: (resolve) => require(['/src/views/maximo/maslog/MasLogMarker'], resolve),
                 name: 'MasLogMarker',
