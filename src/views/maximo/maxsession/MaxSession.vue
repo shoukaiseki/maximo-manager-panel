@@ -10,6 +10,10 @@
 
       <el-form :inline="true" @submit.native.prevent>
         <el-form-item>
+          <el-radio-group v-model="sessionManager" size="mini">
+            <el-radio label="full">full</el-radio>
+            <el-radio label="security">security</el-radio>
+          </el-radio-group>
           <el-button type="cyan" icon="el-icon-search" size="mini" :loading="loading" @click="handleQuery">查询</el-button>
           <el-button type="danger" icon="el-icon-delete" size="mini" :disabled="selectedUsers.length === 0" :loading="kicking" @click="handleKick">踢出用户 ({{ selectedUsers.length }})</el-button>
         </el-form-item>
@@ -66,7 +70,8 @@ export default {
       onlineUsers: [],
       selectedUsers: [],
       logs: [],
-      editor: null
+      editor: null,
+      sessionManager: 'full'
     }
   },
   computed: {
@@ -143,7 +148,7 @@ export default {
           url: SCRIPT_API,
           method: 'post',
           params: {
-            sessionManager: 'full',
+            sessionManager: this.sessionManager,
               action: 'query',
             _langcode: 'ZH'
           }
