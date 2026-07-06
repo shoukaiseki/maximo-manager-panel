@@ -32,7 +32,39 @@
                     </el-tooltip>
                 </div>
             </el-tab-pane>
+            <el-tab-pane label="MAS Images">
+                <div v-for="img of masImages" :key="img.path" class="mas-img-item">
+                    <el-tooltip placement="top">
+                        <div slot="content">
+                            <span>点击复制: {{ img.name }}</span>
+                            <br>
+                            <span style="font-size:12px;color:#999">点击查看按钮预览</span>
+                        </div>
+                        <div class="mas-img-wrapper" @click="handleClipboard(img.name, $event)">
+                            <img :src="img.src" :alt="img.name" class="mas-img-preview" />
+                            <span class="mas-img-name">{{ img.name }}</span>
+                            <el-button size="mini" icon="el-icon-view" @click.stop="viewImage(img)" type="text">查看</el-button>
+                        </div>
+                    </el-tooltip>
+                </div>
+            </el-tab-pane>
         </el-tabs>
+
+        <el-dialog title="图片预览" :visible.sync="imagePreviewVisible" width="70%" append-to-body>
+            <div class="image-preview-container">
+                <div class="image-preview-controls">
+                    <el-button @click="zoomOut" size="small" icon="el-icon-zoom-out">缩小</el-button>
+                    <span style="margin:0 10px">{{ Math.round(imageScale * 100) }}%</span>
+                    <el-button @click="zoomIn" size="small" icon="el-icon-zoom-in">放大</el-button>
+                    <el-button @click="resetScale" size="small" icon="el-icon-refresh">重置</el-button>
+                </div>
+                <div class="image-preview-wrapper">
+                    <img :src="currentImage?.src" :alt="currentImage?.name" 
+                         class="preview-image" 
+                         :style="{ transform: `scale(${imageScale})` }" />
+                </div>
+            </div>
+        </el-dialog>
     </div>
 </template>
 

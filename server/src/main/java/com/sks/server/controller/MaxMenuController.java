@@ -85,4 +85,30 @@ public class MaxMenuController {
         List<Map<String, Object>> data = maxMenuService.searchMenu(keyword, menuType, elementType);
         return RestResult.ok(data);
     }
+
+    /**
+     * 查询菜单列表（按 MENUTYPE 分组）
+     * GET /maxmenu/list?moduleApp=PR&menuType=APPMENU
+     */
+    @Mapping(value = "/maxmenu/list", method = MethodType.GET)
+    public RestResult<List<Map<String, Object>>> list(String moduleApp, String menuType) {
+        if (moduleApp == null || moduleApp.trim().isEmpty()) {
+            return RestResult.error("模块或应用名称不能为空");
+        }
+        List<Map<String, Object>> data = maxMenuService.queryMenuList(moduleApp, menuType);
+        return RestResult.ok(data);
+    }
+
+    /**
+     * 查询签名选项（SIGOPTION）
+     * GET /maxmenu/sigoption?app=PR
+     */
+    @Mapping(value = "/maxmenu/sigoption", method = MethodType.GET)
+    public RestResult<List<Map<String, Object>>> sigoption(String app) {
+        if (app == null || app.trim().isEmpty()) {
+            return RestResult.error("应用名称不能为空");
+        }
+        List<Map<String, Object>> data = maxMenuService.querySigOption(app);
+        return RestResult.ok(data);
+    }
 }

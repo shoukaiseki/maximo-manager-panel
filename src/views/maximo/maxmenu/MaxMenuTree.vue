@@ -114,71 +114,148 @@
     </el-card>
 
     <!-- 详情弹窗 -->
-    <el-dialog title="菜单项详情" :visible.sync="detailVisible" width="750px" :close-on-click-modal="true">
-      <template v-if="selectedNode">
-        <!-- 非模块节点: 显示 MAXMENU 字段 -->
-        <el-descriptions title="MAXMENU" :column="2" border size="small" v-if="!selectedNode._isModule">
-          <el-descriptions-item v-for="f in menuFields" :key="f.attr" :label="f.title" :span="f.span || 1">
-            <template v-if="f.maxtype === 'YORN'">
-              <el-tag size="mini" :type="selectedNode[f.attr] === 1 ? 'success' : 'info'">{{ selectedNode[f.attr] === 1 ? f.yes || '是' : f.no || '否' }}</el-tag>
+    <el-dialog title="菜单项详情" :visible.sync="detailVisible" width="90%" :close-on-click-modal="true">
+      <div v-if="selectedNode">
+        <el-tabs v-model="activeTab" type="card" @tab-click="handleTabClick">
+          <el-tab-pane label="详细信息" name="detail">
+            <!-- 非模块节点: 显示 MAXMENU 字段 -->
+            <el-descriptions title="MAXMENU" :column="2" border size="small" v-if="!selectedNode._isModule">
+              <el-descriptions-item v-for="f in menuFields" :key="f.attr" :label="f.title" :span="f.span || 1">
+                <template v-if="f.maxtype === 'YORN'">
+                  <el-tag size="mini" :type="selectedNode[f.attr] === 1 ? 'success' : 'info'">{{ selectedNode[f.attr] === 1 ? f.yes || '是' : f.no || '否' }}</el-tag>
+                </template>
+                <template v-else-if="f.attr === 'L_HEADERDESCRIPTION'">
+                  <span style="color:#409eff">{{ selectedNode[f.attr] || '-' }}</span>
+                </template>
+                <template v-else-if="f.attr === 'HEADERDESCRIPTION'">
+                  <span style="color:#909399;font-style:italic">{{ selectedNode[f.attr] || '-' }}</span>
+                </template>
+                <template v-else-if="f.domain">
+                  <el-tag size="mini">{{ selectedNode[f.attr] || '-' }}</el-tag>
+                </template>
+                <template v-else>
+                  {{ selectedNode[f.attr] != null ? selectedNode[f.attr] : '-' }}
+                </template>
+              </el-descriptions-item>
+            </el-descriptions>
+            <!-- 模块节点: 同时显示 MAXMODULES + MAXMENU(MODULE) -->
+            <template v-if="selectedNode._isModule">
+              <el-descriptions title="MAXMODULES" :column="2" border size="small">
+                <el-descriptions-item v-for="f in moduleFields" :key="f.attr" :label="f.title" :span="f.span || 1">
+                  <template v-if="f.maxtype === 'YORN'">
+                    <el-tag size="mini" :type="selectedNode[f.attr] === 1 ? 'success' : 'info'">{{ selectedNode[f.attr] === 1 ? f.yes || '是' : f.no || '否' }}</el-tag>
+                  </template>
+                  <template v-else-if="f.attr === 'L_DESCRIPTION'">
+                    <span style="color:#409eff">{{ selectedNode[f.attr] || '-' }}</span>
+                  </template>
+                  <template v-else-if="f.attr === 'DESCRIPTION'">
+                    <span style="color:#909399;font-style:italic">{{ selectedNode[f.attr] || '-' }}</span>
+                  </template>
+                  <template v-else>
+                    {{ selectedNode[f.attr] != null ? selectedNode[f.attr] : '-' }}
+                  </template>
+                </el-descriptions-item>
+                <el-descriptions-item label="菜单项数量" :span="2">{{ selectedNode._menuCount || 0 }}</el-descriptions-item>
+              </el-descriptions>
+              <el-descriptions title="MAXMENU (MODULE)" :column="2" border size="small" style="margin-top: 12px">
+                <el-descriptions-item v-for="f in moduleMenuFields" :key="f.attr" :label="f.title" :span="f.span || 1">
+                  <template v-if="f.maxtype === 'YORN'">
+                    <el-tag size="mini" :type="selectedNode[f.source] === 1 ? 'success' : 'info'">{{ selectedNode[f.source] === 1 ? f.yes || '是' : f.no || '否' }}</el-tag>
+                  </template>
+                  <template v-else-if="f.attr === 'L_HEADERDESCRIPTION'">
+                    <span style="color:#409eff">{{ selectedNode[f.source] || '-' }}</span>
+                  </template>
+                  <template v-else-if="f.attr === 'HEADERDESCRIPTION'">
+                    <span style="color:#909399;font-style:italic">{{ selectedNode[f.source] || '-' }}</span>
+                  </template>
+                  <template v-else>
+                    {{ selectedNode[f.source] != null ? selectedNode[f.source] : '-' }}
+                  </template>
+                </el-descriptions-item>
+              </el-descriptions>
             </template>
-            <template v-else-if="f.attr === 'L_HEADERDESCRIPTION'">
-              <span style="color:#409eff">{{ selectedNode[f.attr] || '-' }}</span>
-            </template>
-            <template v-else-if="f.attr === 'HEADERDESCRIPTION'">
-              <span style="color:#909399;font-style:italic">{{ selectedNode[f.attr] || '-' }}</span>
-            </template>
-            <template v-else-if="f.domain">
-              <el-tag size="mini">{{ selectedNode[f.attr] || '-' }}</el-tag>
-            </template>
-            <template v-else>
-              {{ selectedNode[f.attr] != null ? selectedNode[f.attr] : '-' }}
-            </template>
-          </el-descriptions-item>
-        </el-descriptions>
-        <!-- 模块节点: 同时显示 MAXMODULES + MAXMENU(MODULE) -->
-        <template v-if="selectedNode._isModule">
-          <el-descriptions title="MAXMODULES" :column="2" border size="small">
-            <el-descriptions-item v-for="f in moduleFields" :key="f.attr" :label="f.title" :span="f.span || 1">
-              <template v-if="f.maxtype === 'YORN'">
-                <el-tag size="mini" :type="selectedNode[f.attr] === 1 ? 'success' : 'info'">{{ selectedNode[f.attr] === 1 ? f.yes || '是' : f.no || '否' }}</el-tag>
-              </template>
-              <template v-else-if="f.attr === 'L_DESCRIPTION'">
-                <span style="color:#409eff">{{ selectedNode[f.attr] || '-' }}</span>
-              </template>
-              <template v-else-if="f.attr === 'DESCRIPTION'">
-                <span style="color:#909399;font-style:italic">{{ selectedNode[f.attr] || '-' }}</span>
-              </template>
-              <template v-else>
-                {{ selectedNode[f.attr] != null ? selectedNode[f.attr] : '-' }}
-              </template>
-            </el-descriptions-item>
-            <el-descriptions-item label="菜单项数量" :span="2">{{ selectedNode._menuCount || 0 }}</el-descriptions-item>
-          </el-descriptions>
-          <el-descriptions title="MAXMENU (MODULE)" :column="2" border size="small" style="margin-top: 12px">
-            <el-descriptions-item v-for="f in moduleMenuFields" :key="f.attr" :label="f.title" :span="f.span || 1">
-              <template v-if="f.maxtype === 'YORN'">
-                <el-tag size="mini" :type="selectedNode[f.source] === 1 ? 'success' : 'info'">{{ selectedNode[f.source] === 1 ? f.yes || '是' : f.no || '否' }}</el-tag>
-              </template>
-              <template v-else-if="f.attr === 'L_HEADERDESCRIPTION'">
-                <span style="color:#409eff">{{ selectedNode[f.source] || '-' }}</span>
-              </template>
-              <template v-else-if="f.attr === 'HEADERDESCRIPTION'">
-                <span style="color:#909399;font-style:italic">{{ selectedNode[f.source] || '-' }}</span>
-              </template>
-              <template v-else>
-                {{ selectedNode[f.source] != null ? selectedNode[f.source] : '-' }}
-              </template>
-            </el-descriptions-item>
-          </el-descriptions>
-        </template>
-      </template>
+          </el-tab-pane>
+          <el-tab-pane label="APPMENU" name="appmenu">
+            <div class="menu-list-tab">
+              <el-input v-model="menuFilterText" placeholder="搜索" clearable style="width:250px; margin-bottom: 10px" @keyup.enter.native="filterMenuList" />
+              <el-table :data="filteredAppMenu" border size="small" v-loading="menuLoading" highlight-current-row @row-click="handleMenuRowClick">
+                <el-table-column label="图标" width="60" align="center">
+                  <template slot-scope="scope">
+                    <img v-if="scope.row.IMAGE" :src="require('@/assets/mas/images/' + scope.row.IMAGE)" alt="" style="width:24px;height:24px;" />
+                  </template>
+                </el-table-column>
+                <el-table-column prop="KEYVALUE" label="键值" min-width="150" show-overflow-tooltip />
+                <el-table-column prop="DESCRIPTIONZH" label="中文描述" min-width="180" show-overflow-tooltip />
+                <el-table-column prop="DESCRIPTIONEN" label="英文描述" min-width="180" show-overflow-tooltip />
+                <el-table-column prop="MENUTYPE" label="菜单类型" width="100" align="center" />
+                <el-table-column prop="POSITION" label="位置" width="80" align="center" />
+                <el-table-column prop="SUBPOSITION" label="子位置" width="80" align="center" />
+                <el-table-column prop="ELEMENTTYPE" label="元素类型" width="100" align="center" />
+              </el-table>
+              <el-empty v-if="!menuLoading && appMenuList.length === 0" description="暂无数据" />
+            </div>
+          </el-tab-pane>
+          <el-tab-pane label="SEARCHMENU" name="searchmenu">
+            <div class="menu-list-tab">
+              <el-input v-model="menuFilterText" placeholder="搜索" clearable style="width:250px; margin-bottom: 10px" @keyup.enter.native="filterMenuList" />
+              <el-table :data="filteredSearchMenu" border size="small" v-loading="menuLoading" highlight-current-row @row-click="handleMenuRowClick">
+                <el-table-column label="图标" width="60" align="center">
+                  <template slot-scope="scope">
+                    <img v-if="scope.row.IMAGE" :src="require('@/assets/mas/images/' + scope.row.IMAGE)" alt="" style="width:24px;height:24px;" />
+                  </template>
+                </el-table-column>
+                <el-table-column prop="DESCRIPTIONEN" label="英文描述" min-width="180" show-overflow-tooltip />
+                <el-table-column prop="DESCRIPTIONZH" label="中文描述" min-width="180" show-overflow-tooltip />
+                <el-table-column prop="MENUTYPE" label="菜单类型" width="100" align="center" />
+                <el-table-column prop="POSITION" label="位置" width="80" align="center" />
+                <el-table-column prop="SUBPOSITION" label="子位置" width="80" align="center" />
+                <el-table-column prop="ELEMENTTYPE" label="元素类型" width="100" align="center" />
+                <el-table-column prop="KEYVALUE" label="键值" min-width="150" show-overflow-tooltip />
+              </el-table>
+              <el-empty v-if="!menuLoading && searchMenuList.length === 0" description="暂无数据" />
+            </div>
+          </el-tab-pane>
+          <el-tab-pane label="APPTOOL" name="apptool">
+            <div class="menu-list-tab">
+              <el-input v-model="menuFilterText" placeholder="搜索" clearable style="width:250px; margin-bottom: 10px" @keyup.enter.native="filterMenuList" />
+              <el-table :data="filteredAppTool" border size="small" v-loading="menuLoading" highlight-current-row @row-click="handleMenuRowClick">
+                <el-table-column label="图标" width="60" align="center">
+                  <template slot-scope="scope">
+                    <img v-if="scope.row.IMAGE" :src="require('@/assets/mas/images/' + scope.row.IMAGE)" alt="" style="width:24px;height:24px;" />
+                  </template>
+                </el-table-column>
+                <el-table-column prop="DESCRIPTIONEN" label="英文描述" min-width="180" show-overflow-tooltip />
+                <el-table-column prop="DESCRIPTIONZH" label="中文描述" min-width="180" show-overflow-tooltip />
+                <el-table-column prop="MENUTYPE" label="菜单类型" width="100" align="center" />
+                <el-table-column prop="POSITION" label="位置" width="80" align="center" />
+                <el-table-column prop="SUBPOSITION" label="子位置" width="80" align="center" />
+                <el-table-column prop="ELEMENTTYPE" label="元素类型" width="100" align="center" />
+                <el-table-column prop="KEYVALUE" label="键值" min-width="150" show-overflow-tooltip />
+              </el-table>
+              <el-empty v-if="!menuLoading && appToolList.length === 0" description="暂无数据" />
+            </div>
+          </el-tab-pane>
+          <el-tab-pane label="签名" name="sigoption">
+            <div class="menu-list-tab">
+              <el-input v-model="menuFilterText" placeholder="搜索" clearable style="width:250px; margin-bottom: 10px" @keyup.enter.native="filterMenuList" />
+              <el-table :data="filteredSigOption" border size="small" v-loading="menuLoading" highlight-current-row @row-click="handleSigOptionRowClick">
+                <el-table-column prop="DESCRIPTION" label="描述" min-width="200" show-overflow-tooltip />
+                <el-table-column prop="OPTIONNAME" label="选项名称" min-width="150" show-overflow-tooltip />
+                <el-table-column prop="APP" label="应用" width="80" align="center" />
+                <el-table-column prop="VALUE" label="值" min-width="120" show-overflow-tooltip />
+                <el-table-column prop="DEFAULTVALUE" label="默认值" min-width="120" show-overflow-tooltip />
+              </el-table>
+              <el-empty v-if="!menuLoading && sigOptionList.length === 0" description="暂无数据" />
+            </div>
+          </el-tab-pane>
+        </el-tabs>
+      </div>
     </el-dialog>
   </section>
 </template>
 
 <script>
-import { getMaxMenuFullTree } from '@/api/maxmenu'
+import { getMaxMenuFullTree, getMaxMenuList, getSigOption } from '@/api/maxmenu'
 
 export default {
   name: 'MaxMenuTree',
@@ -196,6 +273,13 @@ export default {
       expandAll: false,
       refreshTable: true,
       sortBy: 'zh',
+      activeTab: 'detail',
+      menuLoading: false,
+      menuFilterText: '',
+      appMenuList: [],
+      searchMenuList: [],
+      appToolList: [],
+      sigOptionList: [],
       // MAXMENU 全字段定义（来自 MAXATTRIBUTE）
       menuFields: [
         { attr: 'MENUTYPE', title: '菜单类型', maxtype: 'UPPER' },
@@ -247,8 +331,41 @@ export default {
       ]
     }
   },
-  computed: {},
-  watch: {},
+  computed: {
+    filteredAppMenu() {
+      return this.filterMenuListByText(this.appMenuList)
+    },
+    filteredSearchMenu() {
+      return this.filterMenuListByText(this.searchMenuList)
+    },
+    filteredAppTool() {
+      return this.filterMenuListByText(this.appToolList)
+    },
+    filteredSigOption() {
+      return this.filterSigOptionByText(this.sigOptionList)
+    }
+  },
+  watch: {
+    detailVisible(val) {
+      console.log('detailVisible changed:', val)
+    },
+    selectedNode(val) {
+      console.log('selectedNode changed:', val ? val.MODULEAPP : null)
+    },
+    activeTab(val) {
+      console.log('activeTab changed:', val)
+      if (!this.selectedNode) return
+      if (val === 'appmenu' && this.appMenuList.length === 0) {
+        this.loadMenuList('APPMENU')
+      } else if (val === 'searchmenu' && this.searchMenuList.length === 0) {
+        this.loadMenuList('SEARCHMENU')
+      } else if (val === 'apptool' && this.appToolList.length === 0) {
+        this.loadMenuList('APPTOOL')
+      } else if (val === 'sigoption' && this.sigOptionList.length === 0) {
+        this.loadSigOption()
+      }
+    }
+  },
   created() {
     this.loadFullTree()
   },
@@ -423,13 +540,6 @@ export default {
       })
     },
 
-    handleRowClick(row) {
-      if (row._isModule || row.ELEMENTTYPE) {
-        this.selectedNode = row
-        this.detailVisible = true
-      }
-    },
-
     getRowLabel(row) {
       if (row._isModule) return row.MODULE
       if (row._isGroup) return row.MENUTYPE + ' - ' + row.MODULEAPP
@@ -469,6 +579,135 @@ export default {
     },
     getPinned(row) {
       return row._isModule ? row.MENU_PINNED : row.PINNED
+    },
+
+    handleRowClick(row) {
+      console.log('handleRowClick:', row,row._isModule, row.ELEMENTTYPE, row.MODULEAPP, row.MODULE)
+      if (row._isModule || row.ELEMENTTYPE) {
+        this.selectedNode = row
+        this.detailVisible = true
+        this.activeTab = 'detail'
+        this.menuFilterText = ''
+        this.appMenuList = []
+        this.searchMenuList = []
+        this.appToolList = []
+        this.sigOptionList = []
+        console.log('selectedNode set:', this.selectedNode.MODULEAPP, this.selectedNode.ELEMENTTYPE)
+      }
+    },
+
+    handleTabClick(tab) {
+      console.log('handleTabClick:', tab.name)
+      this.activeTab = tab.name
+    },
+
+    loadMenuList(menuType) {
+      const moduleApp = this.selectedNode._isModule ? this.selectedNode.MODULE : this.selectedNode.KEYVALUE
+      console.log('loadMenuList:', menuType, 'moduleApp:', moduleApp, '_isModule:', this.selectedNode._isModule)
+      if (!moduleApp) {
+        this.$message.warning('无法获取模块或应用信息')
+        return
+      }
+      this.menuLoading = true
+      getMaxMenuList(moduleApp, menuType).then(res => {
+        console.log('getMaxMenuList response:', res)
+        if (res.code === 200 && res.data) {
+          if (menuType === 'APPMENU') {
+            this.appMenuList = res.data
+          } else if (menuType === 'SEARCHMENU') {
+            this.searchMenuList = res.data
+          } else if (menuType === 'APPTOOL') {
+            this.appToolList = res.data
+          }
+          console.log('loaded ' + menuType + ': ', res.data.length, 'items')
+        } else {
+          this.$message.error(res.message || '加载失败')
+        }
+      }).catch(err => {
+        console.error('loadMenuList error:', err)
+        this.$message.error('加载菜单列表失败: ' + (err.message || String(err)))
+      }).finally(() => {
+        this.menuLoading = false
+      })
+    },
+
+    loadSigOption() {
+      const moduleApp = this.selectedNode._isModule ? this.selectedNode.MODULE : this.selectedNode.KEYVALUE
+      if (!moduleApp) {
+        this.$message.warning('无法获取模块或应用信息')
+        return
+      }
+      this.menuLoading = true
+      getSigOption(moduleApp).then(res => {
+        if (res.code === 200 && res.data) {
+          this.sigOptionList = res.data
+        } else {
+          this.$message.error(res.message || '加载失败')
+        }
+      }).catch(err => {
+        this.$message.error('加载签名列表失败: ' + (err.message || String(err)))
+      }).finally(() => {
+        this.menuLoading = false
+      })
+    },
+
+    handleMenuRowClick(row) {
+      const fields = Object.keys(row)
+      let html = '<div style="max-height:400px;overflow-y:auto;padding:10px;">'
+      html += '<table style="width:100%;border-collapse:collapse;font-size:12px;">'
+      fields.forEach(field => {
+        const value = row[field] != null ? String(row[field]) : '-'
+        html += `<tr><td style="border:1px solid #ebeef5;padding:6px 10px;width:30%;background:#fafafa;font-weight:bold;">${field}</td><td style="border:1px solid #ebeef5;padding:6px 10px;word-break:break-all;">${value}</td></tr>`
+      })
+      html += '</table></div>'
+      this.$alert(html, '行详情', {
+        dangerouslyUseHTMLString: true,
+        width: '700px'
+      })
+    },
+
+    handleSigOptionRowClick(row) {
+      const fields = Object.keys(row)
+      let html = '<div style="max-height:400px;overflow-y:auto;padding:10px;">'
+      html += '<table style="width:100%;border-collapse:collapse;font-size:12px;">'
+      fields.forEach(field => {
+        const value = row[field] != null ? String(row[field]) : '-'
+        html += `<tr><td style="border:1px solid #ebeef5;padding:6px 10px;width:30%;background:#fafafa;font-weight:bold;">${field}</td><td style="border:1px solid #ebeef5;padding:6px 10px;word-break:break-all;">${value}</td></tr>`
+      })
+      html += '</table></div>'
+      this.$alert(html, '签名详情', {
+        dangerouslyUseHTMLString: true,
+        width: '700px'
+      })
+    },
+
+    filterMenuListByText(list) {
+      if (!this.menuFilterText.trim()) {
+        return list
+      }
+      const text = this.menuFilterText.toLowerCase()
+      return list.filter(item => {
+        return (item.DESCRIPTIONEN && item.DESCRIPTIONEN.toLowerCase().includes(text)) ||
+               (item.DESCRIPTIONZH && item.DESCRIPTIONZH.toLowerCase().includes(text)) ||
+               (item.KEYVALUE && item.KEYVALUE.toLowerCase().includes(text)) ||
+               (item.ELEMENTTYPE && item.ELEMENTTYPE.toLowerCase().includes(text))
+      })
+    },
+
+    filterSigOptionByText(list) {
+      if (!this.menuFilterText.trim()) {
+        return list
+      }
+      const text = this.menuFilterText.toLowerCase()
+      return list.filter(item => {
+        return (item.DESCRIPTION && item.DESCRIPTION.toLowerCase().includes(text)) ||
+               (item.OPTIONNAME && item.OPTIONNAME.toLowerCase().includes(text)) ||
+               (item.VALUE && item.VALUE.toLowerCase().includes(text)) ||
+               (item.APP && item.APP.toLowerCase().includes(text))
+      })
+    },
+
+    filterMenuList() {
     }
   }
 }
@@ -511,5 +750,10 @@ export default {
   border-radius: 3px;
   font-size: 11px;
   font-family: monospace;
+}
+.menu-list-tab {
+  ::v-deep .el-table {
+    font-size: 12px;
+  }
 }
 </style>

@@ -315,4 +315,75 @@ public class MaxMenuService {
         }
         return map;
     }
+
+    /**
+     * 查询菜单列表（按 MENUTYPE 分组）
+     * 根据 TASK06 需求，SQL 需要包含 SIGOPTION 的描述信息
+     */
+    public List<Map<String, Object>> queryMenuList(String moduleApp, String menuType) {
+        String sql = "SELECT DISTINCT " +
+                "SIGOPTION.DESCRIPTION AS DESCRIPTIONEN, " +
+                "l.DESCRIPTION AS DESCRIPTIONZH, " +
+                "mm.MAXMENUID, mm.MENUTYPE, mm.MODULEAPP, mm.ELEMENTTYPE, mm.POSITION, mm.SUBPOSITION, " +
+                "mm.KEYVALUE, mm.URL, mm.VISIBLE, mm.IMAGE, mm.ACCESSKEY, mm.TABDISPLAY, mm.PINNED, mm.ROWSTAMP, " +
+                "mm.HEADERDESCRIPTION, LMM.HEADERDESCRIPTION AS L_HEADERDESCRIPTION " +
+                "FROM MAXMENU mm " +
+                "LEFT JOIN SIGOPTION ON mm.KEYVALUE = SIGOPTION.OPTIONNAME AND SIGOPTION.APP = mm.MODULEAPP " +
+                "LEFT JOIN L_SIGOPTION l ON l.OWNERID = SIGOPTION.SIGOPTIONID AND l.LANGCODE = 'ZH' " +
+                "LEFT JOIN L_MAXMENU LMM ON LMM.OWNERID = mm.MAXMENUID AND LMM.LANGCODE = 'ZH' " +
+                "WHERE mm.MODULEAPP = ? AND mm.MENUTYPE != 'MODULE' ";
+
+        if (menuType != null && !menuType.trim().isEmpty()) {
+            sql += "AND mm.MENUTYPE = ? ";
+        }
+
+        sql += "ORDER BY mm.MENUTYPE, mm.POSITION, mm.SUBPOSITION";
+
+        List<Map<String, Object>> result = new ArrayList<>();
+        try (Connection conn = dataSource.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setString(1, moduleApp.trim().toUpperCase());
+            if (menuType != null && !menuType.trim().isEmpty()) {
+                ps.setString(2, menuType.trim().toUpperCase());
+            }
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    result.add(rowToMap(rs));
+                }
+            }
+        } catch (SQLException e) {
+            throw new RuntimeException("查询菜单列表失败: " + e.getMessage(), e);
+        }
+        return result;
+    }
+
+    /**
+     * 查询签名选项（SIGOPTION）
+     * 根据 TASK06 需求，SQL 需要包含 L_SIGOPTION 的中文描述
+     */
+    public List<Map<String, Object>> querySigOption(String app) {
+        String sql = "SELECT " +
+                "l.DESCRIPTION, " +
+                "SIGOPTION.SIGOPTIONID, SIGOPTION.APP, SIGOPTION.OPTIONNAME, SIGOPTION.VALUE, " +
+                "SIGOPTION.DEFAULTVALUE, SIGOPTION.DESCRIPTION AS EN_DESCRIPTION, " +
+                "SIGOPTION.UPPERLIMIT, SIGOPTION.LOWERLIMIT, SIGOPTION.ROWSTAMP " +
+                "FROM SIGOPTION " +
+                "LEFT JOIN L_SIGOPTION l ON l.OWNERID = SIGOPTION.SIGOPTIONID AND l.LANGCODE = 'ZH' " +
+                "WHERE SIGOPTION.APP = ? " +
+                "ORDER BY SIGOPTION.OPTIONNAME";
+
+        List<Map<String, Object>> result = new ArrayList<>();
+        try (Connection conn = dataSource.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setString(1, app.trim().toUpperCase());
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    result.add(rowToMap(rs));
+                }
+            }
+        } catch (SQLException e) {
+            throw new RuntimeException("查询签名选项失败: " + e.getMessage(), e);
+        }
+        return result;
+    }
 }

@@ -1,0 +1,33 @@
+# 1
+src\views\maximo\maxmenu\MaxMenuTree.vue el-dialog title="菜单项详情" 使用tab页切换
+
+当前为详细信息页
+
+其他标签页根据sql查询,根据 MENUTYPE 进行分组 APPMENU, SEARCHMENU, APPTOOL
+
+```
+select distinct SIGOPTION.DESCRIPTION as DESCRIPTIONEN,l.DESCRIPTION DESCRIPTIONZH,MAXMENU.*
+from MAXMENU
+left join SIGOPTION on MAXMENU.KEYVALUE=SIGOPTION.OPTIONNAME and APP=MAXMENU.MODULEAPP
+left join L_SIGOPTION as l  on l.OWNERID=SIGOPTION.SIGOPTIONID and l.LANGCODE='ZH'
+where MODULEAPP='PR' and MENUTYPE !='MODULE'
+order by MENUTYPE,POSITION,SUBPOSITION;
+
+```
+其它标签页显示列表,列表列显示 DESCRIPTIONEN,DESCRIPTIONZH,MENUTYPE,POSITION,SUBPOSITION,ELEMENTTYPE,KEYVALUE
+
+可进行过滤,模糊查询
+
+点击行显示详细的所有信息
+
+再增加个签名标签页
+
+```
+select l.DESCRIPTION,SIGOPTION.*
+from SIGOPTION
+         left join L_SIGOPTION as l  on l.OWNERID=SIGOPTION.SIGOPTIONID and l.LANGCODE='ZH'
+where app='PR'
+```
+
+两个sql中的 PR 是树结构行中的 MODULEAPP字段的值
+

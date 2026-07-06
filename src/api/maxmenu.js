@@ -64,3 +64,25 @@ export function searchMaxMenu(keyword, menuType, elementType) {
     params: { keyword, menuType, elementType }
   })
 }
+
+/**
+ * 查询菜单列表（按 MENUTYPE 分组）
+ */
+export function getMaxMenuList(moduleApp, menuType) {
+  return solonRequest({
+    url: '/maxmenu/list',
+    method: 'get',
+    params: { moduleApp, menuType }
+  })
+}
+
+/**
+ * 查询签名选项（SIGOPTION）
+ */
+export function getSigOption(app) {
+  return solonRequest({
+    url: '/maxmenu/sigoption',
+    method: 'get',
+    params: { app }
+  })
+}
