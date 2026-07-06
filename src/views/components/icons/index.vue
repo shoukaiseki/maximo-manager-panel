@@ -33,7 +33,8 @@
                 </div>
             </el-tab-pane>
             <el-tab-pane label="MAS Images">
-                <div v-for="img of masImages" :key="img.path" class="mas-img-item">
+                <el-input v-model="imageFilter" placeholder="搜索图片名称" clearable class="mas-img-filter" />
+                <div v-for="img of filteredImages" :key="img.path" class="mas-img-item">
                     <el-tooltip placement="top">
                         <div slot="content">
                             <span>点击复制: {{ img.name }}</span>
@@ -50,21 +51,7 @@
             </el-tab-pane>
         </el-tabs>
 
-        <el-dialog title="图片预览" :visible.sync="imagePreviewVisible" width="70%" append-to-body>
-            <div class="image-preview-container">
-                <div class="image-preview-controls">
-                    <el-button @click="zoomOut" size="small" icon="el-icon-zoom-out">缩小</el-button>
-                    <span style="margin:0 10px">{{ Math.round(imageScale * 100) }}%</span>
-                    <el-button @click="zoomIn" size="small" icon="el-icon-zoom-in">放大</el-button>
-                    <el-button @click="resetScale" size="small" icon="el-icon-refresh">重置</el-button>
-                </div>
-                <div class="image-preview-wrapper">
-                    <img :src="currentImage?.src" :alt="currentImage?.name" 
-                         class="preview-image" 
-                         :style="{ transform: `scale(${imageScale})` }" />
-                </div>
-            </div>
-        </el-dialog>
+        <SksElImageViewer v-if="currentImage" :visible.sync="showViewer" :url="currentImage.src" :title="currentImage.name || '图片预览'" :scale="3" />
     </div>
 </template>
 
@@ -72,14 +59,37 @@
 import svgIcons from './svg-icons'
 import elementIcons from './element-icons'
 import clipboard from '@/utils/clipboard'
+import SksElImageViewer from '@/components/sks-el-image-viewer'
 
 export default {
     name: 'Icons',
+    components: { SksElImageViewer },
+
     data() {
         return {
             svgIcons,
-            elementIcons
+            elementIcons,
+            masImages: [],
+            imageFilter: '',
+            showViewer: false,
+            previewSrcList: [],
+            currentImage: null
         }
+    },
+    computed: {
+        filteredImages() {
+            if (!this.imageFilter) {
+                return this.masImages
+            }
+            const keywords = this.imageFilter.toLowerCase().split(/\s+/).filter(k => k)
+            return this.masImages.filter(img => {
+                const name = img.name.toLowerCase()
+                return keywords.every(keyword => name.includes(keyword))
+            })
+        }
+    },
+    created() {
+        this.loadMasImages()
     },
     methods: {
         generateIconCode(symbol) {
@@ -90,6 +100,43 @@ export default {
         },
         handleClipboard(text, event) {
             clipboard(text, event)
+        },
+        loadMasImages() {
+            console.log('---------loadMasImages')
+            const images = []
+            try {
+                const context = require.context('../../../assets/mas/images', true, /\.(png|jpg|jpeg|gif|svg)$/i)
+                console.log('require.context keys:', context.keys())
+                context.keys().forEach(path => {
+                    try {
+                        const name = path.replace('./', '')
+                        const src = context(path)
+                        const imgSrc = typeof src === 'string' ? src : (src.default || src)
+                        images.push({
+                            path: path,
+                            name: name,
+                            src: imgSrc
+                        })
+                    } catch (e) {
+                        console.warn('Failed to load image:', path, e.message)
+                    }
+                })
+                images.sort((a, b) => a.name.localeCompare(b.name))
+                this.masImages = images
+                console.log('Loaded masImages:', images.length)
+            } catch (e) {
+                console.error('loadMasImages error:', e)
+            }
+        },
+        viewImage(img) {
+            console.log('viewImage:', img.name, img.src)
+            this.currentImage = img
+            this.previewSrcList = [img.src]
+            this.showViewer = true
+        },
+        handleCloseViewer() {
+            this.showViewer = false
+            this.previewSrcList = []
         }
     }
 }
@@ -119,6 +166,52 @@ export default {
 
     .disabled {
         pointer-events: none;
+    }
+
+    .mas-img-filter {
+        width: 300px;
+        margin: 15px;
+        float: right;
+    }
+
+    .mas-img-item {
+        margin: 15px;
+        text-align: center;
+        float: left;
+        cursor: pointer;
+    }
+
+    .mas-img-wrapper {
+        padding: 8px;
+        border: 1px solid #ebeef5;
+        border-radius: 4px;
+        transition: all 0.2s;
+
+        &:hover {
+            border-color: #409eff;
+            box-shadow: 0 0 4px rgba(64, 158, 255, 0.3);
+        }
+    }
+
+    .mas-img-preview {
+        width: 64px;
+        height: 64px;
+        object-fit: contain;
+        display: block;
+        margin: 0 auto 8px;
+        background: #fafafa;
+        border-radius: 2px;
+    }
+
+    .mas-img-name {
+        font-size: 12px;
+        color: #606266;
+        max-width: 80px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        display: block;
+        margin-bottom: 4px;
     }
 }
 </style>
