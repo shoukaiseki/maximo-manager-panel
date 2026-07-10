@@ -189,6 +189,12 @@ export const constantRoutes = [
                 component: (resolve) => require(['/src/views/maximo/maxattr/index'], resolve),
                 name: 'MaxAttrList',
                 meta: { title: '字段查询', icon: 'tickets', noCache: false }
+            },
+            {
+                path: 'querydb',
+                component: (resolve) => require(['/src/views/maximo/querydb/querydb'], resolve),
+                name: 'QueryDb',
+                meta: { title: '数据库搜索', icon: 'search', noCache: false }
             }
         ]
     },

@@ -31,3 +31,25 @@ where app='PR'
 
 两个sql中的 PR 是树结构行中的 MODULEAPP字段的值
 
+
+# 2
+增加一个数据库搜索页面 src\views\maximo\querydb\querydb.vue
+
+功能如下:
+定义 模糊搜索/精确搜索 下拉框,搜索的字符
+
+点击查询之后,后端根据要搜索的信息,查询所表的字段
+
+获取要搜索的表和字段名,ENTITYNAME是实体表名
+```
+select distinct ENTITYNAME,COLUMNNAME from MAXATTRIBUTE as ma where MAXTYPE in ('ALN','UPPER') and not exists(select 1 from MAXVIEW where ma.OBJECTNAME=VIEWNAME)
+order by ENTITYNAME,COLUMNNAME 
+```
+
+返回行数据类型
+```
+ENTITYNAME,COLUMNNAME,MAXTYPE,符合的结果条数,查询时的语句,耗时
+```
+还需返回总耗时
+
+返回使用sse流方式返回,前端显示进度条和最后一次接收到的行信息

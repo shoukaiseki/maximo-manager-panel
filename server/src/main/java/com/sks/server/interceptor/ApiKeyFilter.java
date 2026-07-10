@@ -23,8 +23,11 @@ public class ApiKeyFilter implements Filter {
             return;
         }
 
-        // 验证 apiKey
+        // 验证 apiKey（支持从请求头或 URL 参数获取）
         String apiKey = ctx.header("X-API-Key");
+        if (apiKey == null || apiKey.isEmpty()) {
+            apiKey = ctx.param("apiKey");
+        }
         String expectedApiKey = appConfig.getApiKey();
 
         if (expectedApiKey.isEmpty()) {

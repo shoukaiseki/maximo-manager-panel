@@ -117,6 +117,9 @@
           </el-table-column>
           <el-table-column prop="SCRIPTLANGUAGE" label="语言" width="100" />
           <el-table-column prop="VERSION" label="版本" width="80" />
+          <el-table-column prop="CHANGEDATE" label="修改日期" width="160">
+            <template slot-scope="scope">{{ parseTime(scope.row.CHANGEDATE) }}</template>
+          </el-table-column>
           <el-table-column label="活动" width="60">
             <template slot-scope="scope">
               <el-tag :type="scope.row.ACTIVE === 1 ? 'success' : 'info'" size="mini">{{ scope.row.ACTIVE === 1 ? '是' : '否' }}</el-tag>
@@ -238,6 +241,7 @@
 
 <script>
 import { getAutoScriptList, getAutoScriptDetail, getAutoScriptSource } from '@/api/autoscript'
+import { parseTime } from '@/utils/ruoyi'
 
 // OBJECTEVENT 位标志 - OBJECT 类型
 const OBJECT_EVENT_BITS = [
@@ -556,6 +560,9 @@ export default {
     },
     formatVal(val) {
       if (val === null || val === undefined) return ''
+      if (typeof val === 'number' && val > 1000000000000 && val < 10000000000000) {
+        return parseTime(val)
+      }
       return String(val)
     },
     matchTypeTag(tag) {
