@@ -29,19 +29,23 @@ server/target/
 *.war
 
 .env.development
+.env.hd
 
 javaapi
 javaapi/
 
 # Profile-specific backend config (e.g. app-dev.yml)
 server/src/main/resources/app-dev.yml
+server/src/main/resources/app-hd.yml
 !server/src/main/resources/app.yml
 
 !src/filter-config/logs/*.txt
 maximo-manager-panel.zip
 
 bin/run-solon-server-dev.bat
+bin/run-solon-server-hd.bat
 bin/run-web-dev.bat
+bin/run-web-hd.bat
 
 *.swp
 

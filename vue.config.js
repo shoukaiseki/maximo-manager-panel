@@ -9,11 +9,31 @@ function resolve(dir) {
 
 const name = defaultSettings.title || '' // 标题
 const port = process.env.port || process.env.npm_config_port || 28765 // 端口
-var serurl="http://localhost:9080"
-var baseTarget = process.env.VUE_APP_DEFAULT_TARGET || serurl
 
-var target = process.env.npm_config_target || baseTarget;
-console.log("target="+target)
+// 直接读取 .env 文件获取目标地址
+const fs = require('fs')
+const envPath = path.resolve(__dirname, `.env.${process.env.NODE_ENV || 'development'}`)
+let MAXIMO_TARGET = 'http://localhost:9080'
+
+try {
+  const envContent = fs.readFileSync(envPath, 'utf8')
+  const lines = envContent.split('\n')
+  for (const line of lines) {
+    if (line.trim().startsWith('VUE_APP_DEFAULT_TARGET')) {
+      const parts = line.split('=')
+      if (parts.length >= 2) {
+        MAXIMO_TARGET = parts.slice(1).join('=').replace(/['"]/g, '').trim()
+        break
+      }
+    }
+  }
+} catch (e) {
+  console.warn('读取环境变量失败:', e.message)
+}
+
+console.log('=== 代理配置 ===')
+console.log('环境文件:', envPath)
+console.log('MAXIMO_TARGET:', MAXIMO_TARGET)
 
 // 是否开启 SSE 原始数据日志调试
 const enableSseDebugLog = false
@@ -41,51 +61,18 @@ module.exports = {
     open: true,
     historyApiFallback: true,
     proxy: {
-      // detail: https://cli.vuejs.org/config/#devserver-proxy
-      '^/maximo': {
-        target: target,
-        // target: 'http://localhost:9080',
-
+      '/maximo': {
+        target: MAXIMO_TARGET,
         changeOrigin: true,
-        ws: true,  // 支持 WebSocket 和 SSE 长连接
-        logLevel: 'debug',  // 启用调试日志
-        // SSE 需要禁用缓冲以实现实时传输
-        onProxyReq: (proxyReq, req, res) => {
-          console.log('代理请求:', req.url, '→', proxyReq.path)
-          // 对于 SSE 请求，设置不缓冲
-          if (req.headers.accept && req.headers.accept.includes('text/event-stream')) {
-            proxyReq.setHeader('Cache-Control', 'no-cache')
-            proxyReq.setHeader('Connection', 'keep-alive')
-          }
+        logLevel: 'debug',
+        onProxyReq: function(proxyReq, req, res) {
+          console.log('[代理请求]', req.method, req.url, '→', proxyReq.host + ':' + proxyReq.port + proxyReq.path)
         },
-        onProxyRes: (proxyRes, req, res) => {
-          console.log('代理响应:', proxyRes.statusCode, req.url)
-          console.log('响应头:', JSON.stringify(proxyRes.headers))
-          // 对于 SSE 响应，确保不缓冲
-          if (proxyRes.headers['content-type'] && proxyRes.headers['content-type'].includes('text/event-stream')) {
-            res.setHeader('Cache-Control', 'no-cache')
-            res.setHeader('Connection', 'keep-alive')
-            res.setHeader('X-Accel-Buffering', 'no')  // 禁用 Nginx 缓冲
-
-            // 监听原始响应数据，检查是否已乱码
-            if (enableSseDebugLog) {
-              let chunkIndex = 0
-              proxyRes.on('data', (chunk) => {
-                if (chunkIndex < 5) { // 只打印前5个数据块，避免刷屏
-                  const isBuffer = Buffer.isBuffer(chunk)
-                  const rawHex = isBuffer ? chunk.slice(0, 200).toString('hex') : '(非Buffer)'
-                  const rawText = isBuffer ? chunk.slice(0, 200).toString('utf8') : '(非Buffer)'
-                  console.log(`[SSE 原始数据 #${chunkIndex}] hex:`, rawHex)
-                  console.log(`[SSE 原始数据 #${chunkIndex}] utf8:`, rawText)
-                  console.log(`[SSE 原始数据 #${chunkIndex}] 长度:`, chunk.length, 'bytes')
-                  chunkIndex++
-                }
-              })
-            }
-          }
+        onProxyRes: function(proxyRes, req, res) {
+          console.log('[代理响应]', proxyRes.statusCode, req.url)
         },
-        onError: (err, req, res) => {
-          console.error('代理错误:', err.message, req.url)
+        onError: function(err, req, res) {
+          console.error('[代理错误]', err.message, req.url)
         }
       },
       '/solonapi': {
@@ -93,6 +80,16 @@ module.exports = {
         changeOrigin: true,
         pathRewrite: {
           '^/solonapi': ''
+        },
+        logLevel: 'debug',
+        onProxyReq: function(proxyReq, req, res) {
+          console.log('[代理请求]', req.method, req.url, '→', proxyReq.host + ':' + proxyReq.port + proxyReq.path)
+        },
+        onProxyRes: function(proxyRes, req, res) {
+          console.log('[代理响应]', proxyRes.statusCode, req.url)
+        },
+        onError: function(err, req, res) {
+          console.error('[代理错误]', err.message, req.url)
         }
       }
     },
