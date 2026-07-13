@@ -136,9 +136,10 @@
               <el-tag v-for="tag in (scope.row._matchType || '').split(', ')" :key="tag" size="mini" :type="matchTypeTag(tag)" style="margin-right:4px">{{ tag }}</el-tag>
             </template>
           </el-table-column>
-          <el-table-column label="操作" width="200" fixed="right">
+          <el-table-column label="操作" width="240" fixed="right">
             <template slot-scope="scope">
               <el-button type="text" size="small" @click="showDetail(scope.row)">详情</el-button>
+              <el-button type="text" size="small" @click="showHistory(scope.row)">历史记录</el-button>
               <el-button type="text" size="small" @click="showSource(scope.row)">源码</el-button>
             </template>
           </el-table-column>
@@ -164,6 +165,36 @@
       </template>
       <div v-if="sourceDialog.loading" style="text-align:center;padding:40px">加载中...</div>
       <div v-else ref="monacoContainer" :style="{ height: sourceDialog.fullscreen ? 'calc(100vh - 100px)' : '70vh', border: '1px solid #dcdfe6' }"></div>
+    </el-dialog>
+
+    <!-- 历史记录弹窗 -->
+    <el-dialog :title="'历史记录: ' + historyDialog.name" :visible.sync="historyDialog.visible" width="80%" top="5vh">
+      <div v-loading="historyDialog.loading">
+        <el-table :data="historyDialog.list" border style="width:100%" v-if="historyDialog.list.length > 0">
+          <el-table-column prop="VERSION" label="版本" width="100" />
+          <el-table-column prop="DESCRIPTION" label="描述" min-width="150" />
+          <el-table-column prop="ALIASNAME" label="推送人别名" width="120" />
+          <el-table-column prop="HOSTNAME" label="主机名" width="120" />
+          <el-table-column prop="CREATEPERSON" label="创建人" width="120" />
+          <el-table-column prop="CREATETIME" label="创建时间" width="160">
+            <template slot-scope="scope">{{ parseTime(scope.row.CREATETIME) }}</template>
+          </el-table-column>
+          <el-table-column label="操作" width="100">
+            <template slot-scope="scope">
+              <el-button type="text" size="small" @click="showHistoryDetail(scope.row)">查看源码</el-button>
+            </template>
+          </el-table-column>
+        </el-table>
+        <el-empty v-else description="暂无历史记录" />
+      </div>
+    </el-dialog>
+
+    <!-- 历史记录源码弹窗 -->
+    <el-dialog :title="'历史源码: ' + historySourceDialog.name" :visible.sync="historySourceDialog.visible" width="75%" top="5vh">
+      <div v-loading="historySourceDialog.loading">
+        <div v-if="!historySourceDialog.loading && historySourceDialog.source" ref="historyMonacoContainer" style="height:60vh;border:1px solid #dcdfe6"></div>
+        <el-empty v-else-if="!historySourceDialog.loading" description="暂无源码" />
+      </div>
     </el-dialog>
 
     <!-- 详情弹窗 -->
@@ -240,7 +271,7 @@
 </template>
 
 <script>
-import { getAutoScriptList, getAutoScriptDetail, getAutoScriptSource } from '@/api/autoscript'
+import { getAutoScriptList, getAutoScriptDetail, getAutoScriptSource, getAutoScriptHistory, getAutoScriptHistoryDetail } from '@/api/autoscript'
 import { parseTime } from '@/utils/ruoyi'
 
 // OBJECTEVENT 位标志 - OBJECT 类型
@@ -332,6 +363,8 @@ export default {
         source: ''
       },
       sourceDialog: { visible: false, name: '', loading: false, editor: null, fullscreen: false },
+      historyDialog: { visible: false, name: '', loading: false, list: [] },
+      historySourceDialog: { visible: false, name: '', loading: false, source: '', editor: null },
       detailDialog: {
         visible: false, name: '', loading: false,
         mainInfo: {}, launchPoints: [], vars: []
@@ -497,14 +530,62 @@ export default {
         this.$message.error('获取源码失败: ' + (err.message || String(err)))
       })
     },
-    initMonaco(code, language) {
-      if (!this.$refs.monacoContainer) return
+    showHistory(row) {
+      this.historyDialog.visible = true
+      this.historyDialog.name = row.AUTOSCRIPT
+      this.historyDialog.loading = true
+      this.historyDialog.list = []
+
+      getAutoScriptHistory(row.AUTOSCRIPT).then(res => {
+        if (res.code === 200) {
+          this.historyDialog.list = res.data || []
+        } else {
+          this.$message.error(res.message || '获取历史记录失败')
+        }
+      }).catch(err => {
+        this.$message.error('获取历史记录失败: ' + (err.message || String(err)))
+      }).finally(() => {
+        this.historyDialog.loading = false
+      })
+    },
+    showHistoryDetail(row) {
+      this.historySourceDialog.visible = true
+      this.historySourceDialog.name = row.AUTOSCRIPT + ' (Version: ' + row.VERSION + ')'
+      this.historySourceDialog.loading = true
+      this.historySourceDialog.source = ''
+      this.$nextTick(() => {
+        if (this.historySourceDialog.editor) {
+          this.historySourceDialog.editor.dispose()
+          this.historySourceDialog.editor = null
+        }
+      })
+
+      getAutoScriptHistoryDetail(row.IBM_AUTOSCRIPT_HISTORYID).then(res => {
+        this.historySourceDialog.loading = false
+        if (res.code === 200 && res.data) {
+          const source = res.data.SOURCE || ''
+          this.historySourceDialog.source = source
+          this.$nextTick(() => {
+            this.initMonaco(source, 'javascript', 'historyMonacoContainer')
+          })
+        } else {
+          this.$message.error('获取历史源码失败')
+        }
+      }).catch(err => {
+        this.historySourceDialog.loading = false
+        this.$message.error('获取历史源码失败: ' + (err.message || String(err)))
+      })
+    },
+    initMonaco(code, language, containerName = 'monacoContainer', editorKey = 'editor') {
+      const container = this.$refs[containerName]
+      if (!container) return
       // 动态加载 monaco
       import(/* webpackChunkName: "monaco" */ 'monaco-editor').then(monaco => {
-        if (this.sourceDialog.editor) {
-          this.sourceDialog.editor.dispose()
+        const dialog = containerName === 'monacoContainer' ? this.sourceDialog : this.historySourceDialog
+        if (dialog[editorKey]) {
+          dialog[editorKey].dispose()
         }
-        this.sourceDialog.editor = monaco.editor.create(this.$refs.monacoContainer, {
+        dialog[editorKey] = monaco.editor.create(container, {
           value: code,
           language: language,
           readOnly: true,
@@ -518,7 +599,7 @@ export default {
       }).catch(err => {
         console.error('Monaco Editor 加载失败:', err)
         // 回退到 textarea
-        this.$refs.monacoContainer.innerHTML = '<textarea readonly style="width:100%;height:100%;font-family:monospace">' + this.escapeHtml(code) + '</textarea>'
+        container.innerHTML = '<textarea readonly style="width:100%;height:100%;font-family:monospace">' + this.escapeHtml(code) + '</textarea>'
       })
     },
     escapeHtml(str) {

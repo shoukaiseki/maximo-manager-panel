@@ -43,3 +43,25 @@ export function getAutoScriptLaunchPoints(name) {
     params: { name: name }
   })
 }
+
+/**
+ * 查询脚本历史记录列表
+ */
+export function getAutoScriptHistory(name) {
+  return solonRequest({
+    url: '/autoscript/history',
+    method: 'get',
+    params: { name: name }
+  })
+}
+
+/**
+ * 查询脚本历史记录详情（含 SOURCE）
+ */
+export function getAutoScriptHistoryDetail(id) {
+  return solonRequest({
+    url: '/autoscript/historyDetail',
+    method: 'get',
+    params: { id: id }
+  })
+}

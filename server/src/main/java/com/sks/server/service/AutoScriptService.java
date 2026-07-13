@@ -301,6 +301,50 @@ public class AutoScriptService {
     }
 
     /**
+     * 查询脚本历史记录
+     */
+    public List<Map<String, Object>> queryAutoScriptHistory(String autoscript) {
+        String sql = "SELECT H.IBM_AUTOSCRIPT_HISTORYID, H.AUTOSCRIPT, H.VERSION, H.DESCRIPTION, " +
+                "H.ALIASNAME, H.HOSTNAME, H.CREATEPERSON, H.CREATETIME, H.HASLD " +
+                "FROM IBM_AUTOSCRIPT_HISTORY H " +
+                "WHERE H.AUTOSCRIPT = ? " +
+                "ORDER BY H.CREATETIME DESC";
+
+        List<Map<String, Object>> result = new ArrayList<>();
+        try (Connection conn = dataSource.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setString(1, autoscript.trim().toUpperCase());
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    result.add(rowToMap(rs));
+                }
+            }
+        } catch (SQLException e) {
+            throw new RuntimeException("查询脚本历史记录失败: " + e.getMessage(), e);
+        }
+        return result;
+    }
+
+    /**
+     * 查询脚本历史记录详情（含 SOURCE）
+     */
+    public Map<String, Object> queryAutoScriptHistoryDetail(Long historyId) {
+        String sql = "SELECT H.* FROM IBM_AUTOSCRIPT_HISTORY H WHERE H.IBM_AUTOSCRIPT_HISTORYID = ?";
+        try (Connection conn = dataSource.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setLong(1, historyId);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) {
+                    return rowToMap(rs);
+                }
+            }
+        } catch (SQLException e) {
+            throw new RuntimeException("查询脚本历史详情失败: " + e.getMessage(), e);
+        }
+        return Collections.emptyMap();
+    }
+
+    /**
      * 查询脚本变量
      */
     public List<Map<String, Object>> queryAutoScriptVars(String autoscript) {

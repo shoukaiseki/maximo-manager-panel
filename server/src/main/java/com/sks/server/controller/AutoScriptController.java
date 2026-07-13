@@ -87,4 +87,30 @@ public class AutoScriptController {
         List<Map<String, Object>> data = autoScriptService.queryLaunchPoints(name);
         return RestResult.ok(data);
     }
+
+    /**
+     * 脚本历史记录列表
+     * GET /autoscript/history?name=xxx
+     */
+    @Mapping(value = "/autoscript/history", method = MethodType.GET)
+    public RestResult<List<Map<String, Object>>> history(String name) {
+        if (name == null || name.trim().isEmpty()) {
+            return RestResult.error("脚本名称不能为空");
+        }
+        List<Map<String, Object>> data = autoScriptService.queryAutoScriptHistory(name);
+        return RestResult.ok(data);
+    }
+
+    /**
+     * 脚本历史记录详情（含 SOURCE）
+     * GET /autoscript/historyDetail?id=xxx
+     */
+    @Mapping(value = "/autoscript/historyDetail", method = MethodType.GET)
+    public RestResult<Map<String, Object>> historyDetail(Long id) {
+        if (id == null) {
+            return RestResult.error("历史记录ID不能为空");
+        }
+        Map<String, Object> data = autoScriptService.queryAutoScriptHistoryDetail(id);
+        return RestResult.ok(data);
+    }
 }
