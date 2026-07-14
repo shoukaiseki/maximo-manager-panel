@@ -195,6 +195,12 @@ export const constantRoutes = [
                 component: (resolve) => require(['/src/views/maximo/querydb/querydb'], resolve),
                 name: 'QueryDb',
                 meta: { title: '数据库搜索', icon: 'search', noCache: false }
+            },
+            {
+                path: 'apicaller',
+                component: (resolve) => require(['/src/views/maximo/apicaller/ApiCaller'], resolve),
+                name: 'ApiCaller',
+                meta: { title: 'API调用', icon: 'link', noCache: false }
             }
         ]
     },

@@ -25,7 +25,6 @@ public class DbConfig {
         config.setIdleTimeout(600000);
         config.setMaxLifetime(1800000);
 
-        // 设置 DB2 schema（Maximo 表通常在 maximo schema 下）
         String schema = Solon.cfg().get("db2.schema", "");
         if (!schema.isEmpty()) {
             config.setConnectionInitSql("SET SCHEMA " + schema);
@@ -35,7 +34,6 @@ public class DbConfig {
         HikariDataSource ds = new HikariDataSource(config);
         System.out.println("[DB2] DataSource initialized: " + Solon.cfg().get("db2.url", ""));
 
-        // 用 P6DataSource 包装，开启 SQL 日志打印
         return new P6DataSource(ds);
     }
 }
