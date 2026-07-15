@@ -79,6 +79,19 @@ public class MaxObjectController {
     }
 
     /**
+     * 对象被关联的关系（该表作为子表）
+     * GET /solonapi/maxobject/{objectname}/child-relationships
+     */
+    @Mapping(value = "/maxobject/{objectname}/child-relationships", method = MethodType.GET)
+    public RestResult<List<Map<String, Object>>> childRelationships(@Path("objectname") String objectname) {
+        if (objectname == null || objectname.trim().isEmpty()) {
+            return RestResult.error("objectname 不能为空");
+        }
+        List<Map<String, Object>> data = maxObjectService.queryChildRelationships(objectname);
+        return RestResult.ok(data);
+    }
+
+    /**
      * MAXATTRIBUTE 列表查询（支持分页 + 多条件搜索）
      * 支持精确匹配（以=开头）和通配符（%）搜索
      * GET /solonapi/maxattribute/list?objectname=&attributename=&description=&pageNum=1&pageSize=20

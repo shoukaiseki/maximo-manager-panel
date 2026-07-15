@@ -157,7 +157,7 @@ public class MaxObjectService {
     }
 
     /**
-     * 查询对象的所有关系（返回所有字段）
+     * 查询对象的所有关系（返回所有字段）- 该表作为父表
      */
     public List<Map<String, Object>> queryRelationships(String parentObject) {
         String sql = "SELECT * FROM MAXRELATIONSHIP " +
@@ -175,6 +175,29 @@ public class MaxObjectService {
             }
         } catch (SQLException e) {
             throw new RuntimeException("查询对象关系失败: " + e.getMessage(), e);
+        }
+        return result;
+    }
+
+    /**
+     * 查询对象被关联的关系（返回所有字段）- 该表作为子表
+     */
+    public List<Map<String, Object>> queryChildRelationships(String childObject) {
+        String sql = "SELECT * FROM MAXRELATIONSHIP " +
+                     "WHERE CHILD = ? " +
+                     "ORDER BY PARENT, NAME";
+
+        List<Map<String, Object>> result = new ArrayList<>();
+        try (Connection conn = dataSource.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setString(1, childObject.trim().toUpperCase());
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    result.add(rowToMap(rs));
+                }
+            }
+        } catch (SQLException e) {
+            throw new RuntimeException("查询子表关系失败: " + e.getMessage(), e);
         }
         return result;
     }

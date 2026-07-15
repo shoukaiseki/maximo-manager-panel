@@ -39,6 +39,17 @@ export function getMaxObjectDomains(objectname) {
 }
 
 /**
+ * 查询对象被关联的关系（该表作为子表）
+ * @param {string} objectname 对象名
+ */
+export function getMaxObjectChildRelationships(objectname) {
+  return solonRequest({
+    url: `/maxobject/${objectname}/child-relationships`,
+    method: 'get'
+  })
+}
+
+/**
  * 查询 MAXATTRIBUTE 列表
  * @param {Object} params 查询参数
  * @param {string} params.objectname 对象名

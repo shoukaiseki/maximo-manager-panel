@@ -30,31 +30,140 @@
       </el-form>
       <el-empty v-else-if="!loading" description="暂无基本信息" />
 
-      <el-divider content-position="left">属性列表 ({{ attributes.length }})</el-divider>
-      <!-- <SksTable :showRefreshButton="false" :mainTable="mainTable" :highlight-current-row="false" @refresh="handleAttrRefresh">
-      </SksTable> -->
-      <max-object-detail-column :data="attributes" :domains="domains" :relationships="relationships"></max-object-detail-column>
-      <el-empty v-if="attributes.length === 0 && !loading" description="暂无属性数据" />
+      <el-divider content-position="left">
+        <div class="divider-title">
+          <el-button
+            type="text"
+            :icon="attributeCollapsed ? 'el-icon-arrow-right' : 'el-icon-arrow-down'"
+            size="small"
+            @click="attributeCollapsed = !attributeCollapsed"
+          >
+            {{ attributeCollapsed ? '展开' : '折叠' }}
+          </el-button>
+          <span>属性列表 ({{ attributes.length }})</span>
+        </div>
+      </el-divider>
+      <div v-show="!attributeCollapsed" class="section-body">
+        <div class="section-header">
+          <div class="section-search-group">
+            <el-input
+              v-model="attributeSearch"
+              placeholder="通用搜索(属性名/标题/别名/列名)"
+              size="small"
+              class="section-search"
+              clearable
+            />
+            <el-input
+              v-model="attributeNameSearch"
+              placeholder="属性名搜索(=精确/%模糊)"
+              size="small"
+              class="section-search-name"
+              clearable
+            />
+          </div>
+        </div>
+        <max-object-detail-column :data="filteredAttributes" :domains="domains" :relationships="relationships"></max-object-detail-column>
+        <el-empty v-if="filteredAttributes.length === 0 && !loading" description="暂无匹配的属性数据" />
+      </div>
 
-      <el-divider content-position="left">关系列表 ({{ relationships.length }})</el-divider>
-      <max-object-detail-rel :data="relationships"></max-object-detail-rel>
-      <el-empty v-if="relationships.length === 0 && !loading" description="暂无关系数据" />
+      <el-divider content-position="left">
+        <div class="divider-title">
+          <el-button
+            type="text"
+            :icon="relationshipCollapsed ? 'el-icon-arrow-right' : 'el-icon-arrow-down'"
+            size="small"
+            @click="relationshipCollapsed = !relationshipCollapsed"
+          >
+            {{ relationshipCollapsed ? '展开' : '折叠' }}
+          </el-button>
+          <span>关系列表 ({{ relationships.length }})</span>
+        </div>
+      </el-divider>
+      <div v-show="!relationshipCollapsed" class="section-body">
+        <div class="section-header">
+          <el-input
+            v-model="relationshipSearch"
+            placeholder="搜索关系名/父对象/子对象"
+            size="small"
+            class="section-search"
+            clearable
+          />
+        </div>
+        <max-object-detail-rel :data="filteredRelationships"></max-object-detail-rel>
+        <el-empty v-if="filteredRelationships.length === 0 && !loading" description="暂无匹配的关系数据" />
+      </div>
 
-      <el-divider content-position="left">索引列表 ({{ indexes.length }})</el-divider>
-      <max-object-detail-idx :data="indexes"></max-object-detail-idx>
-      <el-empty v-if="indexes.length === 0 && !loading" description="暂无索引数据" />
+      <el-divider content-position="left">
+        <div class="divider-title">
+          <el-button
+            type="text"
+            :icon="indexCollapsed ? 'el-icon-arrow-right' : 'el-icon-arrow-down'"
+            size="small"
+            @click="indexCollapsed = !indexCollapsed"
+          >
+            {{ indexCollapsed ? '展开' : '折叠' }}
+          </el-button>
+          <span>索引列表 ({{ indexes.length }})</span>
+        </div>
+      </el-divider>
+      <div v-show="!indexCollapsed" class="section-body">
+        <max-object-detail-idx :data="indexes"></max-object-detail-idx>
+        <el-empty v-if="indexes.length === 0 && !loading" description="暂无索引数据" />
+      </div>
 
-      <el-divider content-position="left">域信息 ({{ domains.length }})</el-divider>
-      <max-object-detail-domain :data="domains"></max-object-detail-domain>
-      <el-empty v-if="domains.length === 0 && !loading" description="暂无域数据" />
+      <el-divider content-position="left">
+        <div class="divider-title">
+          <el-button
+            type="text"
+            :icon="domainCollapsed ? 'el-icon-arrow-right' : 'el-icon-arrow-down'"
+            size="small"
+            @click="domainCollapsed = !domainCollapsed"
+          >
+            {{ domainCollapsed ? '展开' : '折叠' }}
+          </el-button>
+          <span>域信息 ({{ domains.length }})</span>
+        </div>
+      </el-divider>
+      <div v-show="!domainCollapsed" class="section-body">
+        <max-object-detail-domain :data="domains"></max-object-detail-domain>
+        <el-empty v-if="domains.length === 0 && !loading" description="暂无域数据" />
+      </div>
+
+      <el-divider content-position="left">
+        <div class="divider-title">
+          <el-button
+            type="text"
+            :icon="childRelationshipCollapsed ? 'el-icon-arrow-right' : 'el-icon-arrow-down'"
+            size="small"
+            @click="childRelationshipCollapsed = !childRelationshipCollapsed"
+          >
+            {{ childRelationshipCollapsed ? '展开' : '折叠' }}
+          </el-button>
+          <span>子表关系 ({{ childRelationships.length }})</span>
+        </div>
+      </el-divider>
+      <div v-show="!childRelationshipCollapsed" class="section-body">
+        <div class="section-header">
+          <el-input
+            v-model="childRelationshipSearch"
+            placeholder="搜索关系名/父对象/子对象"
+            size="small"
+            class="section-search"
+            clearable
+          />
+        </div>
+        <max-object-detail-child-rel :data="filteredChildRelationships"></max-object-detail-child-rel>
+        <el-empty v-if="filteredChildRelationships.length === 0 && !loading" description="暂无匹配的子表关系数据" />
+      </div>
     </el-card>
   </section>
 </template>
 
 <script>
-import { getMaxObjectDetail, getMaxObjectDomains } from '@/api/maxobject'
+import { getMaxObjectDetail, getMaxObjectDomains, getMaxObjectChildRelationships } from '@/api/maxobject'
 import MaxObjectDetailColumn from './MaxObjectDetailColumn.vue';
 import MaxObjectDetailRel from './MaxObjectDetailRel.vue';
+import MaxObjectDetailChildRel from './MaxObjectDetailChildRel.vue';
 import MaxObjectDetailIdx from './MaxObjectDetailIdx.vue';
 import MaxObjectDetailDomain from './MaxObjectDetailDomain.vue';
 
@@ -63,6 +172,7 @@ export default {
   components: {
     'max-object-detail-column': MaxObjectDetailColumn,
     'max-object-detail-rel': MaxObjectDetailRel,
+    'max-object-detail-child-rel': MaxObjectDetailChildRel,
     'max-object-detail-idx': MaxObjectDetailIdx,
     'max-object-detail-domain': MaxObjectDetailDomain
   },
@@ -73,11 +183,83 @@ export default {
       mainInfo: {},
       attributes: [],
       relationships: [],
+      childRelationships: [],
       indexes: [],
       domains: [],
+      attributeSearch: '',
+      attributeNameSearch: '',
+      attributeCollapsed: false,
+      relationshipSearch: '',
+      relationshipCollapsed: false,
+      indexCollapsed: true,
+      domainCollapsed: false,
+      childRelationshipSearch: '',
+      childRelationshipCollapsed: false,
     }
   },
   computed: {
+    filteredAttributes() {
+      let result = this.attributes
+
+      // 属性名搜索：支持 =精确 和 %模糊
+      if (this.attributeNameSearch.trim()) {
+        const search = this.attributeNameSearch.trim()
+        if (search.startsWith('=')) {
+          const exactVal = search.substring(1).toUpperCase()
+          result = result.filter(item =>
+            item.ATTRIBUTENAME && item.ATTRIBUTENAME.toUpperCase() === exactVal
+          )
+        } else if (search.includes('%')) {
+          const upperSearch = search.toUpperCase()
+          result = result.filter(item =>
+            item.ATTRIBUTENAME && item.ATTRIBUTENAME.toUpperCase().includes(
+              upperSearch.replace(/%/g, '')
+            )
+          )
+        } else {
+          const upperSearch = search.toUpperCase()
+          result = result.filter(item =>
+            item.ATTRIBUTENAME && item.ATTRIBUTENAME.toUpperCase().includes(upperSearch)
+          )
+        }
+      }
+
+      // 通用搜索：属性名/标题/别名/列名
+      if (this.attributeSearch.trim()) {
+        const search = this.attributeSearch.toLowerCase()
+        result = result.filter(item => {
+          return (item.ATTRIBUTENAME && String(item.ATTRIBUTENAME).toLowerCase().includes(search)) ||
+                 (item.L_TITLE && String(item.L_TITLE).toLowerCase().includes(search)) ||
+                 (item.TITLE && String(item.TITLE).toLowerCase().includes(search)) ||
+                 (item.ALIAS && String(item.ALIAS).toLowerCase().includes(search)) ||
+                 (item.COLUMNNAME && String(item.COLUMNNAME).toLowerCase().includes(search))
+        })
+      }
+
+      return result
+    },
+    filteredRelationships() {
+      if (!this.relationshipSearch.trim()) {
+        return this.relationships
+      }
+      const search = this.relationshipSearch.toLowerCase()
+      return this.relationships.filter(item => {
+        return (item.NAME && String(item.NAME).toLowerCase().includes(search)) ||
+               (item.PARENT && String(item.PARENT).toLowerCase().includes(search)) ||
+               (item.CHILD && String(item.CHILD).toLowerCase().includes(search))
+      })
+    },
+    filteredChildRelationships() {
+      if (!this.childRelationshipSearch.trim()) {
+        return this.childRelationships
+      }
+      const search = this.childRelationshipSearch.toLowerCase()
+      return this.childRelationships.filter(item => {
+        return (item.NAME && String(item.NAME).toLowerCase().includes(search)) ||
+               (item.PARENT && String(item.PARENT).toLowerCase().includes(search)) ||
+               (item.CHILD && String(item.CHILD).toLowerCase().includes(search))
+      })
+    },
     mainInfoFieldDefs() {
       return [
         { prop: 'OBJECTNAME', label: '对象名' },
@@ -152,6 +334,17 @@ export default {
         .catch(() => {
           // 域信息非关键，失败不提示
         })
+
+      // 查询子表关系（该表作为子表被关联的关系）
+      getMaxObjectChildRelationships(this.objectName)
+        .then(res => {
+          if (res.code === 200 && res.data) {
+            this.childRelationships = res.data
+          }
+        })
+        .catch(() => {
+          // 子表关系非关键，失败不提示
+        })
     },
     handleKeyDown(event, field) {
       if (event.altKey && event.key === 'F1') {
@@ -200,6 +393,34 @@ export default {
 }
 .main-info-form .el-form-item {
   margin-bottom: 6px;
+}
+.section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+.section-search {
+  width: 250px;
+}
+.section-search-group {
+  display: flex;
+  gap: 8px;
+}
+.section-search-name {
+  width: 200px;
+}
+.divider-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.divider-title span {
+  font-weight: bold;
+  font-size: 14px;
+}
+.section-body {
+  margin-bottom: 10px;
 }
 
 </style>
