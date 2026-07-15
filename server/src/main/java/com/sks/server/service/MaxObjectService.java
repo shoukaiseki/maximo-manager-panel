@@ -265,6 +265,36 @@ public class MaxObjectService {
     }
 
     /**
+     * 查询 MAXOBJECT 的描述信息（英文描述 + 中文描述）
+     */
+    public Map<String, Object> getObjectDescription(String objectName) {
+        if (objectName == null || objectName.trim().isEmpty()) {
+            return Collections.emptyMap();
+        }
+        String sql = "SELECT mo.DESCRIPTION AS DESCRIPTION_EN, l.DESCRIPTION AS DESCRIPTION_CN " +
+                     "FROM MAXOBJECT mo " +
+                     "LEFT JOIN L_MAXOBJECT AS l ON (mo.MAXOBJECTID = l.OWNERID AND l.LANGCODE = 'ZH') " +
+                     "WHERE mo.OBJECTNAME = ?";
+
+        try (Connection conn = dataSource.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setString(1, objectName.trim().toUpperCase());
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) {
+                    Map<String, Object> result = new LinkedHashMap<>();
+                    result.put("objectName", objectName.trim().toUpperCase());
+                    result.put("description", rs.getString("DESCRIPTION_EN"));
+                    result.put("descriptionCn", rs.getString("DESCRIPTION_CN"));
+                    return result;
+                }
+            }
+        } catch (SQLException e) {
+            throw new RuntimeException("查询 MAXOBJECT 描述失败: " + e.getMessage(), e);
+        }
+        return Collections.emptyMap();
+    }
+
+    /**
      * 查询对象的摘要详情（主信息 + 属性）
      */
     public Map<String, Object> queryDetail(String objectName) {

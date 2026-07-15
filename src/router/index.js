@@ -91,6 +91,12 @@ export const constantRoutes = [
                 name: 'WangbaoComponentsEchartsBar',
                 meta: { title: '柱状图', icon: '' ,noCache: false},
             },
+            {
+                path: 'test-excel',
+                component: (resolve) => require(['/src/views/test/testExcel/index'], resolve),
+                name: 'TestExcelPaste',
+                meta: { title: 'Excel粘贴测试', icon: '' ,noCache: false},
+            },
         ]
     },
     {
@@ -195,6 +201,12 @@ export const constantRoutes = [
                 component: (resolve) => require(['/src/views/maximo/querydb/querydb'], resolve),
                 name: 'QueryDb',
                 meta: { title: '数据库搜索', icon: 'search', noCache: false }
+            },
+            {
+                path: 'relationship',
+                component: (resolve) => require(['/src/views/maximo/relationship/index'], resolve),
+                name: 'MaxRelationship',
+                meta: { title: '关系查询', icon: 'link', noCache: false }
             },
             {
                 path: 'apicaller',

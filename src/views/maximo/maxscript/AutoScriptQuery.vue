@@ -410,7 +410,7 @@ export default {
         launchpointname: this.formData.launchpointname || undefined,
         source: this.isDiagMode ? undefined : (this.formData.source || undefined),
         mode: this.isDiagMode ? 'diag' : 'query',
-        pageNum: 1,
+        pageNum: this.isDiagMode ? 1 : this.tableParam.pageNum,
         pageSize: this.isDiagMode ? 9999 : this.tableParam.pageSize
       }
 

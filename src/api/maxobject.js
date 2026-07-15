@@ -39,6 +39,17 @@ export function getMaxObjectDomains(objectname) {
 }
 
 /**
+ * 查询 MAXOBJECT 的描述信息（英文描述 + 中文描述）
+ * @param {string} objectname 对象名
+ */
+export function getMaxObjectDescription(objectname) {
+  return solonRequest({
+    url: `/maxobject/${objectname}/description`,
+    method: 'get'
+  })
+}
+
+/**
  * 查询对象被关联的关系（该表作为子表）
  * @param {string} objectname 对象名
  */

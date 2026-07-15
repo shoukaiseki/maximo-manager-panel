@@ -92,6 +92,19 @@ public class MaxObjectController {
     }
 
     /**
+     * 查询 MAXOBJECT 的描述信息（英文描述 + 中文描述）
+     * GET /solonapi/maxobject/{objectname}/description
+     */
+    @Mapping(value = "/maxobject/{objectname}/description", method = MethodType.GET)
+    public RestResult<Map<String, Object>> getDescription(@Path("objectname") String objectname) {
+        if (objectname == null || objectname.trim().isEmpty()) {
+            return RestResult.error("objectname 不能为空");
+        }
+        Map<String, Object> data = maxObjectService.getObjectDescription(objectname);
+        return RestResult.ok(data);
+    }
+
+    /**
      * MAXATTRIBUTE 列表查询（支持分页 + 多条件搜索）
      * 支持精确匹配（以=开头）和通配符（%）搜索
      * GET /solonapi/maxattribute/list?objectname=&attributename=&description=&pageNum=1&pageSize=20
