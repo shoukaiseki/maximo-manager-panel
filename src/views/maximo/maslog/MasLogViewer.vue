@@ -224,6 +224,7 @@ export default {
 
       this.manualStop = false
       this.connecting = true
+      this.isStreaming = true
       
       try {
         // 先初始化
@@ -233,6 +234,7 @@ export default {
         await this.connectToSSE()
       } catch (error) {
         this.connecting = false
+        this.isStreaming = false
         this.$message.error('启动日志流失败: ' + error.message)
         console.error('Start log stream error:', error)
         
@@ -373,9 +375,6 @@ export default {
           this.reconnectTimer = null
         }
         this.$message.info('已停止接收日志')
-      } else {
-        // 非手动停止，安排重连
-        this.scheduleReconnect()
       }
     },
     

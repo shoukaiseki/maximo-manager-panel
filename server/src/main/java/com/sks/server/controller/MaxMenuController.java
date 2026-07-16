@@ -111,4 +111,17 @@ public class MaxMenuController {
         List<Map<String, Object>> data = maxMenuService.querySigOption(app);
         return RestResult.ok(data);
     }
+
+    /**
+     * 查询签名条件属性（CTRLGROUP → CTRLCONDITION → CTRLCONDPROP）
+     * GET /maxmenu/ctrlgroup?app=IBM_PO
+     */
+    @Mapping(value = "/maxmenu/ctrlgroup", method = MethodType.GET)
+    public RestResult<List<Map<String, Object>>> ctrlgroup(String app) {
+        if (app == null || app.trim().isEmpty()) {
+            return RestResult.error("应用名称不能为空");
+        }
+        List<Map<String, Object>> data = maxMenuService.queryCtrlGroup(app);
+        return RestResult.ok(data);
+    }
 }

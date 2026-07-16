@@ -239,13 +239,67 @@
             <div class="menu-list-tab">
               <el-input v-model="menuFilterText" placeholder="搜索" clearable style="width:250px; margin-bottom: 10px" @keyup.enter.native="filterMenuList" />
               <el-table :data="filteredSigOption" border size="small" v-loading="menuLoading" highlight-current-row @row-click="handleSigOptionRowClick">
-                <el-table-column prop="DESCRIPTION" label="描述" min-width="200" show-overflow-tooltip />
+                <el-table-column prop="DESCRIPTION" label="中文描述" min-width="200" show-overflow-tooltip />
+                <el-table-column prop="EN_DESCRIPTION" label="英文描述" min-width="200" show-overflow-tooltip />
                 <el-table-column prop="OPTIONNAME" label="选项名称" min-width="150" show-overflow-tooltip />
                 <el-table-column prop="APP" label="应用" width="80" align="center" />
-                <el-table-column prop="VALUE" label="值" min-width="120" show-overflow-tooltip />
-                <el-table-column prop="DEFAULTVALUE" label="默认值" min-width="120" show-overflow-tooltip />
+                <el-table-column prop="ESIGENABLED" label="电子签名" width="100" align="center">
+                  <template slot-scope="scope">{{ scope.row.ESIGENABLED === 1 ? '是' : '否' }}</template>
+                </el-table-column>
+                <el-table-column prop="VISIBLE" label="可见" width="80" align="center">
+                  <template slot-scope="scope">{{ scope.row.VISIBLE === 1 ? '是' : '否' }}</template>
+                </el-table-column>
+                <el-table-column prop="ALSOGRANTS" label="同时授予" min-width="180" show-overflow-tooltip />
               </el-table>
               <el-empty v-if="!menuLoading && sigOptionList.length === 0" description="暂无数据" />
+            </div>
+          </el-tab-pane>
+          <el-tab-pane label="签名条件属性" name="ctrlgroup">
+            <div class="menu-list-tab">
+              <el-input v-model="menuFilterText" placeholder="搜索" clearable style="width:250px; margin-bottom: 10px" @keyup.enter.native="filterMenuList" />
+              <div v-loading="menuLoading">
+                <el-collapse v-model="ctrlGroupExpanded">
+                  <el-collapse-item v-for="group in filteredCtrlGroup" :key="group.CTRLGROUPID" :name="group.CTRLGROUPID" :title="group.GROUPNAME + ' (选项: ' + group.OPTIONNAME + ')'">
+                    <el-descriptions :column="3" border size="small" style="margin-bottom: 12px">
+                      <el-descriptions-item label="组ID">{{ group.CTRLGROUPID }}</el-descriptions-item>
+                      <el-descriptions-item label="组名称">{{ group.GROUPNAME }}</el-descriptions-item>
+                      <el-descriptions-item label="选项名称">{{ group.OPTIONNAME }}</el-descriptions-item>
+                      <el-descriptions-item label="应用">{{ group.APP }}</el-descriptions-item>
+                      <el-descriptions-item label="组顺序">{{ group.GROUPSEQ }}</el-descriptions-item>
+                      <el-descriptions-item label="ROWSTAMP">{{ group.ROWSTAMP }}</el-descriptions-item>
+                    </el-descriptions>
+                    <el-collapse v-model="ctrlConditionExpanded">
+                      <el-collapse-item v-for="condition in group.conditions" :key="condition.CTRLCONDITIONID" :name="condition.CTRLCONDITIONID" :title="'条件 ' + condition.CONDITIONNUM">
+                        <el-descriptions :column="3" border size="small" style="margin-bottom: 12px">
+                          <el-descriptions-item label="条件ID">{{ condition.CTRLCONDITIONID }}</el-descriptions-item>
+                          <el-descriptions-item label="条件号">{{ condition.CONDITIONNUM }}</el-descriptions-item>
+                          <el-descriptions-item label="条件序列">{{ condition.CONDITIONSEQ }}</el-descriptions-item>
+                          <el-descriptions-item label="重新求值">
+                            <el-tag :type="condition.REEVALUATE === 1 ? 'success' : 'danger'">
+                              {{ condition.REEVALUATE === 1 ? '是' : '否' }}
+                            </el-tag>
+                          </el-descriptions-item>
+                        </el-descriptions>
+                        <el-table v-if="condition.properties && condition.properties.length > 0" :data="condition.properties" border size="small" highlight-current-row @row-click="handleCtrlPropRowClick">
+                          <el-table-column prop="CONDITIONRESULT" label="条件结果" width="100" align="center">
+                    <template slot-scope="scope">
+                      <el-tag :type="scope.row.CONDITIONRESULT === 1 ? 'success' : 'danger'">
+                        {{ scope.row.CONDITIONRESULT === 1 ? '是' : '否' }}
+                      </el-tag>
+                    </template>
+                  </el-table-column>
+                  <el-table-column prop="PROPERTY" label="属性" min-width="150" show-overflow-tooltip />
+                  <el-table-column prop="PROPERTYVALUE" label="属性值(英文)" min-width="180" show-overflow-tooltip />
+                  <el-table-column prop="L_PROPERTYVALUE" label="属性值(中文)" min-width="180" show-overflow-tooltip />
+                        </el-table>
+                        <el-empty v-else description="无属性配置" />
+                      </el-collapse-item>
+                    </el-collapse>
+                    <el-empty v-if="!group.conditions || group.conditions.length === 0" description="无条件配置" />
+                  </el-collapse-item>
+                </el-collapse>
+                <el-empty v-if="!menuLoading && ctrlGroupList.length === 0" description="暂无数据" />
+              </div>
             </div>
           </el-tab-pane>
         </el-tabs>
@@ -255,7 +309,7 @@
 </template>
 
 <script>
-import { getMaxMenuFullTree, getMaxMenuList, getSigOption } from '@/api/maxmenu'
+import { getMaxMenuFullTree, getMaxMenuList, getSigOption, getCtrlGroup } from '@/api/maxmenu'
 
 export default {
   name: 'MaxMenuTree',
@@ -280,6 +334,9 @@ export default {
       searchMenuList: [],
       appToolList: [],
       sigOptionList: [],
+      ctrlGroupList: [],
+      ctrlGroupExpanded: [],
+      ctrlConditionExpanded: [],
       // MAXMENU 全字段定义（来自 MAXATTRIBUTE）
       menuFields: [
         { attr: 'MENUTYPE', title: '菜单类型', maxtype: 'UPPER' },
@@ -343,6 +400,33 @@ export default {
     },
     filteredSigOption() {
       return this.filterSigOptionByText(this.sigOptionList)
+    },
+    filteredCtrlGroup() {
+      if (!this.menuFilterText.trim()) {
+        return this.ctrlGroupList
+      }
+      const text = this.menuFilterText.toLowerCase()
+      return this.ctrlGroupList.filter(group => {
+        const matchGroup = (group.GROUPNAME && group.GROUPNAME.toLowerCase().includes(text)) ||
+                          (group.OPTIONNAME && group.OPTIONNAME.toLowerCase().includes(text)) ||
+                          (group.APP && group.APP.toLowerCase().includes(text))
+        if (matchGroup) return true
+        if (group.conditions) {
+          return group.conditions.some(condition => {
+            const matchCondition = (condition.CONDITIONNUM && condition.CONDITIONNUM.toLowerCase().includes(text))
+            if (matchCondition) return true
+            if (condition.properties) {
+              return condition.properties.some(prop => {
+                return (prop.PROPERTY && prop.PROPERTY.toLowerCase().includes(text)) ||
+                       (prop.PROPERTYVALUE && prop.PROPERTYVALUE.toLowerCase().includes(text)) ||
+                       (prop.L_PROPERTYVALUE && prop.L_PROPERTYVALUE.toLowerCase().includes(text))
+              })
+            }
+            return false
+          })
+        }
+        return false
+      })
     }
   },
   watch: {
@@ -363,6 +447,8 @@ export default {
         this.loadMenuList('APPTOOL')
       } else if (val === 'sigoption' && this.sigOptionList.length === 0) {
         this.loadSigOption()
+      } else if (val === 'ctrlgroup' && this.ctrlGroupList.length === 0) {
+        this.loadCtrlGroup()
       }
     }
   },
@@ -589,9 +675,10 @@ export default {
         this.activeTab = 'detail'
         this.menuFilterText = ''
         this.appMenuList = []
-        this.searchMenuList = []
-        this.appToolList = []
-        this.sigOptionList = []
+      this.searchMenuList = []
+      this.appToolList = []
+      this.sigOptionList = []
+      this.ctrlGroupList = []
         console.log('selectedNode set:', this.selectedNode.MODULEAPP, this.selectedNode.ELEMENTTYPE)
       }
     },
@@ -651,6 +738,34 @@ export default {
       })
     },
 
+    loadCtrlGroup() {
+      const moduleApp = this.selectedNode._isModule ? this.selectedNode.MODULE : this.selectedNode.KEYVALUE
+      if (!moduleApp) {
+        this.$message.warning('无法获取模块或应用信息')
+        return
+      }
+      this.menuLoading = true
+      getCtrlGroup(moduleApp).then(res => {
+        if (res.code === 200 && res.data) {
+          this.ctrlGroupList = res.data
+          this.ctrlGroupExpanded = res.data.map(g => g.CTRLGROUPID)
+          const conditionIds = []
+          res.data.forEach(g => {
+            if (g.conditions) {
+              g.conditions.forEach(c => conditionIds.push(c.CTRLCONDITIONID))
+            }
+          })
+          this.ctrlConditionExpanded = conditionIds
+        } else {
+          this.$message.error(res.message || '加载失败')
+        }
+      }).catch(err => {
+        this.$message.error('加载签名条件属性失败: ' + (err.message || String(err)))
+      }).finally(() => {
+        this.menuLoading = false
+      })
+    },
+
     handleMenuRowClick(row) {
       const fields = Object.keys(row)
       let html = '<div style="max-height:400px;overflow-y:auto;padding:10px;">'
@@ -676,6 +791,21 @@ export default {
       })
       html += '</table></div>'
       this.$alert(html, '签名详情', {
+        dangerouslyUseHTMLString: true,
+        width: '700px'
+      })
+    },
+
+    handleCtrlPropRowClick(row) {
+      const fields = Object.keys(row)
+      let html = '<div style="max-height:400px;overflow-y:auto;padding:10px;">'
+      html += '<table style="width:100%;border-collapse:collapse;font-size:12px;">'
+      fields.forEach(field => {
+        const value = row[field] != null ? String(row[field]) : '-'
+        html += `<tr><td style="border:1px solid #ebeef5;padding:6px 10px;width:30%;background:#fafafa;font-weight:bold;">${field}</td><td style="border:1px solid #ebeef5;padding:6px 10px;word-break:break-all;">${value}</td></tr>`
+      })
+      html += '</table></div>'
+      this.$alert(html, '条件属性详情', {
         dangerouslyUseHTMLString: true,
         width: '700px'
       })

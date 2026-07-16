@@ -86,3 +86,14 @@ export function getSigOption(app) {
     params: { app }
   })
 }
+
+/**
+ * 查询签名条件属性（CTRLGROUP → CTRLCONDITION → CTRLCONDPROP）
+ */
+export function getCtrlGroup(app) {
+  return solonRequest({
+    url: '/maxmenu/ctrlgroup',
+    method: 'get',
+    params: { app }
+  })
+}

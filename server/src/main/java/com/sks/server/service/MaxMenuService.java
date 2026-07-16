@@ -364,9 +364,10 @@ public class MaxMenuService {
     public List<Map<String, Object>> querySigOption(String app) {
         String sql = "SELECT " +
                 "l.DESCRIPTION, " +
-                "SIGOPTION.SIGOPTIONID, SIGOPTION.APP, SIGOPTION.OPTIONNAME, SIGOPTION.VALUE, " +
-                "SIGOPTION.DEFAULTVALUE, SIGOPTION.DESCRIPTION AS EN_DESCRIPTION, " +
-                "SIGOPTION.UPPERLIMIT, SIGOPTION.LOWERLIMIT, SIGOPTION.ROWSTAMP " +
+                "SIGOPTION.SIGOPTIONID, SIGOPTION.APP, SIGOPTION.OPTIONNAME, " +
+                "SIGOPTION.DESCRIPTION AS EN_DESCRIPTION, SIGOPTION.ESIGENABLED, " +
+                "SIGOPTION.VISIBLE, SIGOPTION.ALSOGRANTS, SIGOPTION.ALSOREVOKES, " +
+                "SIGOPTION.PREREQUISITE, SIGOPTION.HASLD, SIGOPTION.ROWSTAMP " +
                 "FROM SIGOPTION " +
                 "LEFT JOIN L_SIGOPTION l ON l.OWNERID = SIGOPTION.SIGOPTIONID AND l.LANGCODE = 'ZH' " +
                 "WHERE SIGOPTION.APP = ? " +
@@ -383,6 +384,68 @@ public class MaxMenuService {
             }
         } catch (SQLException e) {
             throw new RuntimeException("查询签名选项失败: " + e.getMessage(), e);
+        }
+        return result;
+    }
+
+    /**
+     * 查询签名条件属性（CTRLGROUP → CTRLCONDITION → CTRLCONDPROP）
+     * 按照层级结构返回
+     */
+    public List<Map<String, Object>> queryCtrlGroup(String app) {
+        String ctrlGroupSql = "SELECT cg.CTRLGROUPID, cg.GROUPNAME, cg.OPTIONNAME, cg.APP, cg.GROUPSEQ, cg.ROWSTAMP " +
+                "FROM CTRLGROUP cg " +
+                "WHERE cg.APP = ? " +
+                "ORDER BY cg.GROUPSEQ";
+
+        String ctrlConditionSql = "SELECT cc.CTRLCONDITIONID, cc.CTRLGROUPID, cc.CONDITIONNUM, cc.CONDITIONSEQ, cc.REEVALUATE, cc.ROWSTAMP " +
+                "FROM CTRLCONDITION cc " +
+                "WHERE cc.CTRLGROUPID = ? " +
+                "ORDER BY cc.CONDITIONSEQ";
+
+        String ctrlCondPropSql = "SELECT cp.CTRLCONDPROPID, cp.CTRLCONDITIONID, cp.PROPERTY, cp.PROPERTYVALUE, " +
+                "cp.CONDITIONRESULT, cp.ROWSTAMP, " +
+                "l.PROPERTYVALUE AS L_PROPERTYVALUE " +
+                "FROM CTRLCONDPROP cp " +
+                "LEFT JOIN L_CTRLCONDPROP l ON l.OWNERID = cp.CTRLCONDPROPID AND l.LANGCODE = 'ZH' " +
+                "WHERE cp.CTRLCONDITIONID = ? " +
+                "ORDER BY cp.PROPERTY";
+
+        List<Map<String, Object>> result = new ArrayList<>();
+        try (Connection conn = dataSource.getConnection();
+             PreparedStatement ps = conn.prepareStatement(ctrlGroupSql);
+             PreparedStatement ps2 = conn.prepareStatement(ctrlConditionSql);
+             PreparedStatement ps3 = conn.prepareStatement(ctrlCondPropSql)) {
+            ps.setString(1, app.trim().toUpperCase());
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    Map<String, Object> group = rowToMap(rs);
+                    Long ctrlGroupId = rs.getLong("CTRLGROUPID");
+                    List<Map<String, Object>> conditions = new ArrayList<>();
+
+                    ps2.setLong(1, ctrlGroupId);
+                    try (ResultSet rs2 = ps2.executeQuery()) {
+                        while (rs2.next()) {
+                            Map<String, Object> condition = rowToMap(rs2);
+                            Long ctrlConditionId = rs2.getLong("CTRLCONDITIONID");
+                            List<Map<String, Object>> props = new ArrayList<>();
+
+                            ps3.setLong(1, ctrlConditionId);
+                            try (ResultSet rs3 = ps3.executeQuery()) {
+                                while (rs3.next()) {
+                                    props.add(rowToMap(rs3));
+                                }
+                            }
+                            condition.put("properties", props);
+                            conditions.add(condition);
+                        }
+                    }
+                    group.put("conditions", conditions);
+                    result.add(group);
+                }
+            }
+        } catch (SQLException e) {
+            throw new RuntimeException("查询签名条件属性失败: " + e.getMessage(), e);
         }
         return result;
     }
