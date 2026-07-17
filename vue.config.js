@@ -12,7 +12,20 @@ const port = process.env.port || process.env.npm_config_port || 28765 // 端口
 
 // 直接读取 .env 文件获取目标地址
 const fs = require('fs')
-const envPath = path.resolve(__dirname, `.env.${process.env.NODE_ENV || 'development'}`)
+
+let mode = process.env.MODE
+if (!mode) {
+  const argv = process.argv
+  for (let i = 0; i < argv.length; i++) {
+    if (argv[i] === '--mode' && argv[i + 1]) {
+      mode = argv[i + 1]
+      break
+    }
+  }
+}
+
+const envPath = path.resolve(__dirname, `.env.${mode || process.env.NODE_ENV || 'development'}`)
+console.log("envPath=",envPath)
 let MAXIMO_TARGET = 'http://localhost:9080'
 
 try {
@@ -62,7 +75,7 @@ module.exports = {
     historyApiFallback: true,
     proxy: {
       '/maximo': {
-        target: MAXIMO_TARGET,
+        target: MAXIMO_TARGET+"",
         changeOrigin: true,
         logLevel: 'debug',
         onProxyReq: function(proxyReq, req, res) {

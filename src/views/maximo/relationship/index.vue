@@ -7,6 +7,7 @@
           <p class="page-summary">支持关系名、父对象、子对象搜索。以 "=" 开头精确匹配，支持 % 通配符。</p>
           <p class="page-tip"><i class="el-icon-info"></i> 在输入框中按 Alt+F1 可查看字段详细信息</p>
         </div>
+        <el-button type="success" icon="el-icon-download" size="small" :loading="genFullLoading" @click="generateFullJson">生成完整关系JSON</el-button>
       </div>
 
       <el-form :model="formData" ref="queryForm" :inline="true" label-width="90px" @submit.native.prevent>
@@ -112,6 +113,15 @@
         <el-button @click="dialogVisible = false">关 闭</el-button>
       </span>
     </el-dialog>
+
+    <el-dialog title="完整关系JSON" :visible.sync="fullJsonDialogVisible" width="900px" :close-on-click-modal="false">
+      <div class="json-toolbar">
+        <el-button type="primary" size="mini" icon="el-icon-document-copy" @click="copyFullJsonData">复制完整关系JSON</el-button>
+      </div>
+      <div class="monaco-wrapper">
+        <div ref="fullJsonMonacoRef" class="monaco-container"></div>
+      </div>
+    </el-dialog>
   </section>
 </template>
 
@@ -142,7 +152,11 @@ export default {
         child: ''
       },
       objectDescription: null,
-      fieldDetailLoading: false
+      fieldDetailLoading: false,
+      genFullLoading: false,
+      fullJsonData: null,
+      fullJsonDialogVisible: false,
+      fullJsonMonacoRef: null
     }
   },
   watch: {
@@ -153,6 +167,15 @@ export default {
         })
       } else {
         this.disposeEditors()
+      }
+    },
+    fullJsonDialogVisible(val) {
+      if (val) {
+        this.$nextTick(() => {
+          this.initFullJsonEditor()
+        })
+      } else {
+        this.disposeFullJsonEditor()
       }
     },
     activeTab() {
@@ -182,6 +205,8 @@ export default {
           this.sksUtils.newTableColumnList([
             { prop: 'NAME', label: '关系名', minWidth: 180 },
             { prop: 'PARENT', label: '父对象', minWidth: 180 },
+            { prop: 'PARENT_DESC_CN', label: '父对象描述(中文)', minWidth: 200 },
+            { prop: 'PARENT_DESC', label: '父对象描述(英文)', minWidth: 200, visible: false },
             { prop: 'CHILD', label: '子对象', minWidth: 180 },
             { prop: 'CARDINALITY', label: '基数', width: 100 },
             { prop: 'ISDEFAULT', label: '默认', width: 70 },
@@ -324,34 +349,12 @@ export default {
     },
     onDialogOpened() {
       this.detailLoading = true
-      const parent = this.currentRow?.PARENT
-      if (parent) {
-        getMaxObjectDescription(parent).then(res => {
-          if (res.code === 200 && res.data) {
-            this.objectDescription = res.data
-          }
-          this.$nextTick(() => {
-            setTimeout(() => {
-              this.initMonacoEditors()
-              this.detailLoading = false
-            }, 100)
-          })
-        }).catch(() => {
-          this.$nextTick(() => {
-            setTimeout(() => {
-              this.initMonacoEditors()
-              this.detailLoading = false
-            }, 100)
-          })
-        })
-      } else {
-        this.$nextTick(() => {
-          setTimeout(() => {
-            this.initMonacoEditors()
-            this.detailLoading = false
-          }, 100)
-        })
-      }
+      this.$nextTick(() => {
+        setTimeout(() => {
+          this.initMonacoEditors()
+          this.detailLoading = false
+        }, 100)
+      })
     },
     initMonacoEditors() {
       if (!this.currentRow) return
@@ -363,7 +366,7 @@ export default {
         cardinality: this.currentRow.CARDINALITY || null,
         isDefault: this.currentRow.ISDEFAULT === '1'
       }, null, 2)
-      const desc = this.objectDescription?.descriptionCn || this.objectDescription?.description || ''
+      const desc = this.currentRow?.PARENT_DESC_CN || this.currentRow?.PARENT_DESC || ''
       const fullJson = JSON.stringify({
         object: this.currentRow.PARENT,
         description: desc,
@@ -441,8 +444,119 @@ export default {
         this.fullEditor.dispose()
         this.fullEditor = null
       }
-      this.monacoLoaded = false
-      this._monaco = null
+    },
+    async generateFullJson() {
+      this.genFullLoading = true
+      try {
+        const params = {
+          keyword: this.formData.keyword,
+          name: this.formData.name,
+          parent: this.formData.parent,
+          child: this.formData.child,
+          pageNum: 1,
+          pageSize: 10000
+        }
+        const res = await getMaxRelationshipList(params)
+        if (res.code !== 200 || !res.data || !res.data.list) {
+          this.$message.error('获取关系数据失败')
+          return
+        }
+
+        const relationships = res.data.list
+        const parentGroups = {}
+        relationships.forEach(rel => {
+          const parent = rel.PARENT
+          if (!parentGroups[parent]) {
+            parentGroups[parent] = []
+          }
+          parentGroups[parent].push(rel)
+        })
+
+        const maxObjects = Object.keys(parentGroups).map(objName => {
+          const rels = parentGroups[objName]
+          const firstRel = rels[0]
+          return {
+            object: objName,
+            description: firstRel?.PARENT_DESC_CN || firstRel?.PARENT_DESC || '',
+            ignoreObjectMain: true,
+            relationships: rels.map(rel => ({
+              relationship: rel.NAME,
+              child: rel.CHILD,
+              whereClause: rel.WHERECLAUSE || null,
+              remarks: rel.REMARKS || null,
+              cardinality: rel.CARDINALITY || null,
+              isDefault: rel.ISDEFAULT === '1'
+            }))
+          }
+        })
+
+        this.fullJsonData = JSON.stringify({ maxObjects }, null, 2)
+        this.fullJsonDialogVisible = true
+      } catch (err) {
+        this.$message.error('生成JSON失败: ' + (err.message || String(err)))
+      } finally {
+        this.genFullLoading = false
+      }
+    },
+    escapeHtml(text) {
+      const div = document.createElement('div')
+      div.textContent = text
+      return div.innerHTML
+    },
+    initFullJsonEditor() {
+      if (!this.fullJsonData) return
+      if (!this.monacoLoaded) {
+        import(/* webpackChunkName: "monaco" */ 'monaco-editor').then(monaco => {
+          this.monacoLoaded = true
+          this._monaco = monaco
+          this.createFullJsonEditor()
+        }).catch(err => {
+          console.error('Monaco Editor 加载失败:', err)
+        })
+      } else {
+        this.createFullJsonEditor()
+      }
+    },
+    createFullJsonEditor() {
+      if (!this._monaco || !this.fullJsonData) return
+      const container = this.$refs.fullJsonMonacoRef
+      if (!container) return
+      if (this.fullJsonEditor) {
+        this.fullJsonEditor.dispose()
+        this.fullJsonEditor = null
+      }
+      this.fullJsonEditor = this._monaco.editor.create(container, {
+        value: this.fullJsonData,
+        language: 'json',
+        theme: 'vs',
+        readOnly: true,
+        minimap: { enabled: false },
+        lineNumbers: 'on',
+        automaticLayout: true,
+        fontSize: 13,
+        wordWrap: 'on',
+        folding: true,
+        scrollbar: {
+          verticalScrollbarSize: 10,
+          horizontalScrollbarSize: 10
+        }
+      })
+      setTimeout(() => {
+        if (this.fullJsonEditor) {
+          this.fullJsonEditor.layout()
+        }
+      }, 100)
+    },
+    disposeFullJsonEditor() {
+      if (this.fullJsonEditor) {
+        this.fullJsonEditor.dispose()
+        this.fullJsonEditor = null
+      }
+    },
+    copyFullJsonData() {
+      if (this.fullJsonData) {
+        this.copyToClipboard(this.fullJsonData, '完整关系JSON')
+      }
     },
     copySimpleJson(row = this.currentRow) {
       if (!row) return

@@ -33,7 +33,7 @@ export const menuListJson1= `{
                         "hidden": false,
                         "component": "tool/gen/index",
                         "meta": {
-                            "title": "代码生成",
+                            "title": "maximo管理面板",
                             "icon": "code",
                             "noCache": false
                         }

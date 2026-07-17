@@ -18,8 +18,8 @@ public class MaxRelationshipService {
         LikeCondition parentCond = buildLikeCondition(parent, "PARENT");
         LikeCondition childCond = buildLikeCondition(child, "CHILD");
 
-        StringBuilder countSqlBuilder = new StringBuilder("SELECT COUNT(*) AS total FROM MAXRELATIONSHIP WHERE 1=1");
-        StringBuilder dataSqlBuilder = new StringBuilder("SELECT * FROM MAXRELATIONSHIP WHERE 1=1");
+        StringBuilder countSqlBuilder = new StringBuilder("SELECT COUNT(*) AS total FROM MAXRELATIONSHIP mr LEFT JOIN MAXOBJECT mo ON mr.PARENT = mo.OBJECTNAME WHERE 1=1");
+        StringBuilder dataSqlBuilder = new StringBuilder("SELECT mr.*, mo.DESCRIPTION AS PARENT_DESC, l.DESCRIPTION AS PARENT_DESC_CN FROM MAXRELATIONSHIP mr LEFT JOIN MAXOBJECT mo ON mr.PARENT = mo.OBJECTNAME LEFT JOIN L_MAXOBJECT l ON mo.MAXOBJECTID = l.OWNERID AND l.LANGCODE = 'ZH' WHERE 1=1");
         List<String> params = new ArrayList<>();
 
         if (nameCond != null) {
@@ -39,14 +39,14 @@ public class MaxRelationshipService {
         }
         if (keyword != null && !keyword.trim().isEmpty()) {
             String kwPattern = "%" + keyword.trim().toUpperCase() + "%";
-            countSqlBuilder.append(" AND (UPPER(NAME) LIKE ? OR UPPER(PARENT) LIKE ? OR UPPER(CHILD) LIKE ? OR UPPER(WHERE CLAUSE) LIKE ? OR UPPER(REMARKS) LIKE ?)");
-            dataSqlBuilder.append(" AND (UPPER(NAME) LIKE ? OR UPPER(PARENT) LIKE ? OR UPPER(CHILD) LIKE ? OR UPPER(WHERE CLAUSE) LIKE ? OR UPPER(REMARKS) LIKE ?)");
+            countSqlBuilder.append(" AND (UPPER(mr.NAME) LIKE ? OR UPPER(mr.PARENT) LIKE ? OR UPPER(mr.CHILD) LIKE ? OR UPPER(mr.WHERECLAUSE) LIKE ? OR UPPER(mr.REMARKS) LIKE ?)");
+            dataSqlBuilder.append(" AND (UPPER(mr.NAME) LIKE ? OR UPPER(mr.PARENT) LIKE ? OR UPPER(mr.CHILD) LIKE ? OR UPPER(mr.WHERECLAUSE) LIKE ? OR UPPER(mr.REMARKS) LIKE ?)");
             for (int i = 0; i < 5; i++) {
                 params.add(kwPattern);
             }
         }
 
-        dataSqlBuilder.append(" ORDER BY PARENT, NAME");
+        dataSqlBuilder.append(" ORDER BY mr.PARENT, mr.NAME");
         dataSqlBuilder.append(" LIMIT ? OFFSET ?");
         params.add(String.valueOf(pageSize));
         params.add(String.valueOf((pageNum - 1) * pageSize));

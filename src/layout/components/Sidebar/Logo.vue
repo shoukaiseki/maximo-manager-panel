@@ -35,7 +35,7 @@ export default {
   },
   data() {
     return {
-      title: '代码生成',
+      title: 'maximo管理面板',
       logo: logoImg
     }
   }

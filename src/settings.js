@@ -1,5 +1,5 @@
 module.exports = {
-    title: '代码生成',
+    title: 'maximo管理面板',
 
     /**
      * 侧边栏主题 深色主题theme-dark，浅色主题theme-light

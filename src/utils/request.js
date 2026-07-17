@@ -42,10 +42,11 @@ service.interceptors.request.use(config => {
   if (urlPath.startsWith('/')) {
     urlPath = urlPath.slice(1)
   }
-  let url = '/maximo/' + urlPath+(urlPath.indexOf('?')>-1?'' : '?');
+  let url = '/maximo/' + urlPath;
   console.log('url', url)
   // get请求映射params参数
   if (config.method === 'get' && config.params) {
+    url += '?'
     for (const propName of Object.keys(config.params)) {
       const value = config.params[propName];
       var part = encodeURIComponent(propName) + "=";

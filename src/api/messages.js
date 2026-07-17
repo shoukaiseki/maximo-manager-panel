@@ -8,3 +8,11 @@ export function queryMessages(params) {
     params: params
   })
 }
+
+export function exportMessages(params) {
+  return request({
+    url: '/api/script/SKS_EXPORT_MESSAGES',
+    method: 'post',
+    data: params
+  })
+}
