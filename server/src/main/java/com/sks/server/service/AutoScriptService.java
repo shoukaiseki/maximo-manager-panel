@@ -308,7 +308,7 @@ public class AutoScriptService {
                 "H.ALIASNAME, H.HOSTNAME, H.CREATEPERSON, H.CREATETIME, H.HASLD " +
                 "FROM IBM_AUTOSCRIPT_HISTORY H " +
                 "WHERE H.AUTOSCRIPT = ? " +
-                "ORDER BY H.CREATETIME DESC";
+                "ORDER BY H.IBM_AUTOSCRIPT_HISTORYID DESC";
 
         List<Map<String, Object>> result = new ArrayList<>();
         try (Connection conn = dataSource.getConnection();

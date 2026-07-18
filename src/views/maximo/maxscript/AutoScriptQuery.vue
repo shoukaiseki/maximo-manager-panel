@@ -538,7 +538,9 @@ export default {
 
       getAutoScriptHistory(row.AUTOSCRIPT).then(res => {
         if (res.code === 200) {
-          this.historyDialog.list = res.data || []
+          let list = res.data || []
+          list.sort((a, b) => (b.IBM_AUTOSCRIPT_HISTORYID || 0) - (a.IBM_AUTOSCRIPT_HISTORYID || 0))
+          this.historyDialog.list = list
         } else {
           this.$message.error(res.message || '获取历史记录失败')
         }
