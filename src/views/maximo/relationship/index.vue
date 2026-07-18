@@ -40,16 +40,7 @@
           @rowClickAfter="handleRowClick"
           @refresh="fetchList">
           <template slot="tableColumnList-before">
-            <el-table-column label="操作" width="160" fixed="left" align="center">
-              <template slot-scope="{row}">
-                <el-tooltip content="复制精简JSON" placement="top">
-                  <el-button type="text" size="small" icon="el-icon-document-copy" @click.stop="copySimpleJson(row)">精简</el-button>
-                </el-tooltip>
-                <el-tooltip content="复制完整JSON" placement="top">
-                  <el-button type="text" size="small" icon="el-icon-document" @click.stop="copyFullJson(row)">完整</el-button>
-                </el-tooltip>
-              </template>
-            </el-table-column>
+            <!-- 操作列已移除 -->
           </template>
           <template slot="default">
           </template>
