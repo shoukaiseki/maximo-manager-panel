@@ -39,7 +39,7 @@
           :highlight-current-row="true"
           @rowClickAfter="handleRowClick"
           @refresh="fetchList">
-          <template slot="tableColumnBefore">
+          <template slot="tableColumnList-before">
             <el-table-column label="操作" width="160" fixed="left" align="center">
               <template slot-scope="{row}">
                 <el-tooltip content="复制精简JSON" placement="top">
@@ -346,6 +346,17 @@ export default {
       this.objectDescription = null
       this.activeTab = 'simple'
       this.dialogVisible = true
+      const hasDesc = row?.PARENT_DESC_CN || row?.PARENT_DESC
+      if (!hasDesc && row?.PARENT) {
+        getMaxObjectDescription(row.PARENT).then(res => {
+          if (res.code === 200 && res.data) {
+            this.objectDescription = res.data
+            this.$nextTick(() => {
+              this.initMonacoEditors()
+            })
+          }
+        }).catch(() => {})
+      }
     },
     onDialogOpened() {
       this.detailLoading = true
@@ -366,7 +377,7 @@ export default {
         cardinality: this.currentRow.CARDINALITY || null,
         isDefault: this.currentRow.ISDEFAULT === '1'
       }, null, 2)
-      const desc = this.currentRow?.PARENT_DESC_CN || this.currentRow?.PARENT_DESC || ''
+      const desc = this.objectDescription?.descriptionCn || this.objectDescription?.description || this.currentRow?.PARENT_DESC_CN || this.currentRow?.PARENT_DESC || ''
       const fullJson = JSON.stringify({
         object: this.currentRow.PARENT,
         description: desc,
@@ -472,12 +483,31 @@ export default {
           parentGroups[parent].push(rel)
         })
 
+        // 收集没有描述的父对象，批量查询
+        const missingDescParents = Object.keys(parentGroups).filter(objName => {
+          const firstRel = parentGroups[objName][0]
+          return !firstRel?.PARENT_DESC_CN && !firstRel?.PARENT_DESC
+        })
+        const descMap = {}
+        if (missingDescParents.length > 0) {
+          const results = await Promise.allSettled(
+            missingDescParents.map(name => getMaxObjectDescription(name))
+          )
+          results.forEach((result, i) => {
+            if (result.status === 'fulfilled' && result.value.code === 200 && result.value.data) {
+              const objName = missingDescParents[i]
+              descMap[objName] = result.value.data.descriptionCn || result.value.data.description || ''
+            }
+          })
+        }
+
         const maxObjects = Object.keys(parentGroups).map(objName => {
           const rels = parentGroups[objName]
           const firstRel = rels[0]
+          const desc = firstRel?.PARENT_DESC_CN || firstRel?.PARENT_DESC || descMap[objName] || ''
           return {
             object: objName,
-            description: firstRel?.PARENT_DESC_CN || firstRel?.PARENT_DESC || '',
+            description: desc,
             ignoreObjectMain: true,
             relationships: rels.map(rel => ({
               relationship: rel.NAME,
@@ -560,7 +590,7 @@ export default {
     },
     copySimpleJson(row = this.currentRow) {
       if (!row) return
-      const json = JSON.stringify({
+      const text = this.simpleEditor ? this.simpleEditor.getValue() : JSON.stringify({
         relationship: row.NAME,
         child: row.CHILD,
         whereClause: row.WHERECLAUSE || null,
@@ -568,13 +598,13 @@ export default {
         cardinality: row.CARDINALITY || null,
         isDefault: row.ISDEFAULT === '1'
       }, null, 2)
-      this.copyToClipboard(json, '关系精简JSON')
+      this.copyToClipboard(text, '关系精简JSON')
     },
     copyFullJson(row = this.currentRow) {
       if (!row) return
-      const json = JSON.stringify({
+      const text = this.fullEditor ? this.fullEditor.getValue() : JSON.stringify({
         object: row.PARENT,
-        description: '根据PARENT值查询max对象配配信息,取多语言ZH描述',
+        description: this.objectDescription?.descriptionCn || this.objectDescription?.description || row?.PARENT_DESC_CN || row?.PARENT_DESC || '',
         ignoreObjectMain: true,
         relationships: [{
           relationship: row.NAME,
@@ -585,7 +615,7 @@ export default {
           isDefault: row.ISDEFAULT === '1'
         }]
       }, null, 2)
-      this.copyToClipboard(json, '关系完整JSON')
+      this.copyToClipboard(text, '关系完整JSON')
     },
     copyToClipboard(text, label) {
       if (navigator.clipboard && window.isSecureContext) {

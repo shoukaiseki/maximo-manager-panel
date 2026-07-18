@@ -21,6 +21,7 @@
         <el-form-item>
           <el-button type="cyan" icon="el-icon-search" size="mini" :loading="loading" @click="handleQuery">搜索</el-button>
           <el-button icon="el-icon-refresh" size="mini" @click="resetForm">重置</el-button>
+          <el-button type="warning" icon="el-icon-s-data" size="mini" :disabled="tableSelection.length === 0" @click="showFieldPreview">字段统计预览</el-button>
         </el-form-item>
       </el-form>
 
@@ -33,18 +34,10 @@
           :visibleTop="true"
           :highlight-current-row="true"
           @rowClickAfter="handleRowClick"
-          @refresh="fetchList">
-          <template slot="tableColumnBefore">
-            <el-table-column label="操作" width="160" fixed="left" align="center">
-              <template slot-scope="{row}">
-                <el-tooltip content="复制精简JSON" placement="top">
-                  <el-button type="text" size="small" icon="el-icon-document-copy" @click.stop="copySimpleJson(row)">精简</el-button>
-                </el-tooltip>
-                <el-tooltip content="复制完整JSON" placement="top">
-                  <el-button type="text" size="small" icon="el-icon-document" @click.stop="copyFullJson(row)">完整</el-button>
-                </el-tooltip>
-              </template>
-            </el-table-column>
+          @refresh="fetchList"
+          @selectionChangeAfter="handleTableSelectionChange">
+          <template slot="tableColumnList-before">
+            <el-table-column type="selection" width="45" align="center" :reserve-selection="true" />
           </template>
           <template slot="default">
           </template>
@@ -138,6 +131,73 @@
         <el-button @click="dialogVisible = false">关 闭</el-button>
       </span>
     </el-dialog>
+
+    <!-- 字段统计预览弹窗 -->
+    <el-dialog title="字段统计预览" :visible.sync="fieldPreviewDialogVisible" width="1200px" :close-on-click-modal="true" @opened="onFieldPreviewOpened">
+      <el-tabs v-model="fieldPreviewActiveTab" type="border-card" @tab-click="onFieldPreviewTabClick">
+        <el-tab-pane label="字段名数组(Java) 单行" name="javaSingle">
+          <div class="json-toolbar">
+            <span style="float:left;color:#606266;line-height:32px;">共选中 {{ tableSelection.length }} 个字段</span>
+            <el-button type="primary" size="mini" icon="el-icon-document-copy" @click="copyFieldPreview('javaSingle')">复制 Java 数组(单行)</el-button>
+          </div>
+          <div class="monaco-wrapper">
+            <div ref="javaSingleMonacoRef" class="monaco-container"></div>
+          </div>
+        </el-tab-pane>
+        <el-tab-pane label="字段名数组(Java) 多行" name="javaMulti">
+          <div class="json-toolbar">
+            <span style="float:left;color:#606266;line-height:32px;">共选中 {{ tableSelection.length }} 个字段</span>
+            <el-button type="primary" size="mini" icon="el-icon-document-copy" @click="copyFieldPreview('javaMulti')">复制 Java 数组(多行)</el-button>
+          </div>
+          <div class="monaco-wrapper">
+            <div ref="javaMultiMonacoRef" class="monaco-container"></div>
+          </div>
+        </el-tab-pane>
+        <el-tab-pane label="SQL字段名(精简) 单行" name="sqlSimpleSingle">
+          <div class="json-toolbar">
+            <span style="float:left;color:#606266;line-height:32px;">共选中 {{ tableSelection.length }} 个字段</span>
+            <el-button type="primary" size="mini" icon="el-icon-document-copy" @click="copyFieldPreview('sqlSimpleSingle')">复制 SQL 字段名(单行)</el-button>
+          </div>
+          <div class="monaco-wrapper">
+            <div ref="sqlSimpleSingleMonacoRef" class="monaco-container"></div>
+          </div>
+        </el-tab-pane>
+        <el-tab-pane label="SQL字段名(精简) 多行" name="sqlSimpleMulti">
+          <div class="json-toolbar">
+            <span style="float:left;color:#606266;line-height:32px;">共选中 {{ tableSelection.length }} 个字段</span>
+            <el-button type="primary" size="mini" icon="el-icon-document-copy" @click="copyFieldPreview('sqlSimpleMulti')">复制 SQL 字段名(多行)</el-button>
+          </div>
+          <div class="monaco-wrapper">
+            <div ref="sqlSimpleMultiMonacoRef" class="monaco-container"></div>
+          </div>
+        </el-tab-pane>
+        <el-tab-pane label="复制为SQL字段名(高级)" name="sqlAdvanced">
+          <div class="json-toolbar" style="margin-bottom: 8px;">
+            <span style="float:left;color:#606266;line-height:32px;">共选中 {{ tableSelection.length }} 个字段</span>
+            <el-button type="primary" size="mini" icon="el-icon-document-copy" @click="copyFieldPreview('sqlAdvanced')">复制 SQL 字段名(高级)</el-button>
+          </div>
+          <el-table :data="sqlAliasList" border size="small" style="margin-bottom: 8px;">
+            <el-table-column label="对象名" prop="objectName" width="200" />
+            <el-table-column label="别名" width="150">
+              <template slot-scope="{row}">
+                <el-input v-model="row.alias" size="mini" @input="updateSqlAdvancedText" />
+              </template>
+            </el-table-column>
+            <el-table-column label="字段列表" prop="fields">
+              <template slot-scope="{row}">
+                {{ row.fields.join(', ') }}
+              </template>
+            </el-table-column>
+          </el-table>
+          <div class="monaco-wrapper">
+            <div ref="sqlAdvancedMonacoRef" class="monaco-container" style="height:250px;"></div>
+          </div>
+        </el-tab-pane>
+      </el-tabs>
+      <span slot="footer" class="dialog-footer">
+        <el-button @click="fieldPreviewDialogVisible = false">关 闭</el-button>
+      </span>
+    </el-dialog>
   </section>
 </template>
 
@@ -172,7 +232,18 @@ export default {
         objectname: '',
         attributename: '',
         description: ''
-      }
+      },
+      // 字段统计预览
+      tableSelection: [],
+      fieldPreviewDialogVisible: false,
+      fieldPreviewActiveTab: 'javaSingle',
+      sqlAliasList: [],
+      fieldPreviewMonacoLoaded: false,
+      javaSingleEditor: null,
+      javaMultiEditor: null,
+      sqlSimpleSingleEditor: null,
+      sqlSimpleMultiEditor: null,
+      sqlAdvancedEditor: null
     }
   },
   watch: {
@@ -189,6 +260,11 @@ export default {
       this.$nextTick(() => {
         this.layoutEditors()
       })
+    },
+    fieldPreviewDialogVisible(val) {
+      if (!val) {
+        this.disposeFieldPreviewEditors()
+      }
     }
   },
   methods: {
@@ -518,6 +594,206 @@ export default {
         this.$message.error('复制失败: ' + e.message)
       }
       document.body.removeChild(textarea)
+    },
+    // === 字段统计预览 ===
+    handleTableSelectionChange(selection) {
+      this.tableSelection = selection
+    },
+    showFieldPreview() {
+      if (this.tableSelection.length === 0) {
+        this.$message.warning('请先勾选需要预览的字段')
+        return
+      }
+      this.fieldPreviewActiveTab = 'javaSingle'
+      this.fieldPreviewDialogVisible = true
+    },
+    onFieldPreviewOpened() {
+      this.prepareFieldPreviewData()
+      this.$nextTick(() => {
+        setTimeout(() => {
+          this.initFieldPreviewEditors()
+        }, 100)
+      })
+    },
+    onFieldPreviewTabClick() {
+      this.$nextTick(() => {
+        setTimeout(() => {
+          this.layoutFieldPreviewEditors()
+        }, 100)
+      })
+    },
+    prepareFieldPreviewData() {
+      const objMap = {}
+      this.tableSelection.forEach(row => {
+        const objName = row.OBJECTNAME
+        if (!objMap[objName]) {
+          objMap[objName] = { objectName: objName, alias: objName, fields: [] }
+        }
+        objMap[objName].fields.push(row.COLUMNNAME || row.ATTRIBUTENAME)
+      })
+      this.sqlAliasList = Object.values(objMap)
+    },
+    getJavaArraySingleText() {
+      const names = this.tableSelection.map(row => row.ATTRIBUTENAME).filter(Boolean)
+      return 'String[] fields = new String[]{"' + names.join('", "') + '"};'
+    },
+    getJavaArrayMultiText() {
+      const names = this.tableSelection.map(row => row.ATTRIBUTENAME).filter(Boolean)
+      return 'String[] fields = new String[]{\n    "' + names.join('",\n    "') + '"\n};'
+    },
+    getSqlSimpleSingleText() {
+      const cols = this.tableSelection.map(row => row.COLUMNNAME || row.ATTRIBUTENAME).filter(Boolean)
+      return cols.join(', ')
+    },
+    getSqlSimpleMultiText() {
+      const cols = this.tableSelection.map(row => row.COLUMNNAME || row.ATTRIBUTENAME).filter(Boolean)
+      return cols.join(',\n')
+    },
+    updateSqlAdvancedText() {
+      if (!this.sqlAdvancedEditor) return
+      this.sqlAdvancedEditor.setValue(this.getSqlAdvancedText())
+    },
+    getSqlAdvancedText() {
+      const parts = []
+      this.sqlAliasList.forEach(item => {
+        const alias = item.alias || item.objectName
+        item.fields.forEach(col => {
+          parts.push(alias + '.' + col)
+        })
+      })
+      return parts.join(',\n')
+    },
+    initFieldPreviewEditors() {
+      if (!this.fieldPreviewMonacoLoaded) {
+        import(/* webpackChunkName: "monaco" */ 'monaco-editor').then(monaco => {
+          this.fieldPreviewMonacoLoaded = true
+          this._fieldPreviewMonaco = monaco
+          this.createFieldPreviewEditors(monaco)
+        }).catch(err => {
+          console.error('Monaco Editor 加载失败:', err)
+        })
+      } else {
+        this.createFieldPreviewEditors(this._fieldPreviewMonaco)
+      }
+    },
+    createFieldPreviewEditors(monaco) {
+      const options = {
+        language: 'text',
+        readOnly: true,
+        theme: 'vs',
+        automaticLayout: false,
+        minimap: { enabled: false },
+        scrollBeyondLastLine: false,
+        fontSize: 13,
+        wordWrap: 'on',
+        folding: true,
+        lineNumbers: 'on',
+        renderLineHighlight: 'none',
+        scrollbar: {
+          verticalScrollbarSize: 10,
+          horizontalScrollbarSize: 10
+        }
+      }
+      // Java 单行
+      if (this.$refs.javaSingleMonacoRef && !this.javaSingleEditor) {
+        this.javaSingleEditor = monaco.editor.create(this.$refs.javaSingleMonacoRef, {
+          value: this.getJavaArraySingleText(),
+          ...options
+        })
+      } else if (this.javaSingleEditor) {
+        this.javaSingleEditor.setValue(this.getJavaArraySingleText())
+      }
+      // Java 多行
+      if (this.$refs.javaMultiMonacoRef && !this.javaMultiEditor) {
+        this.javaMultiEditor = monaco.editor.create(this.$refs.javaMultiMonacoRef, {
+          value: this.getJavaArrayMultiText(),
+          ...options
+        })
+      } else if (this.javaMultiEditor) {
+        this.javaMultiEditor.setValue(this.getJavaArrayMultiText())
+      }
+      // SQL 单行
+      if (this.$refs.sqlSimpleSingleMonacoRef && !this.sqlSimpleSingleEditor) {
+        this.sqlSimpleSingleEditor = monaco.editor.create(this.$refs.sqlSimpleSingleMonacoRef, {
+          value: this.getSqlSimpleSingleText(),
+          ...options
+        })
+      } else if (this.sqlSimpleSingleEditor) {
+        this.sqlSimpleSingleEditor.setValue(this.getSqlSimpleSingleText())
+      }
+      // SQL 多行
+      if (this.$refs.sqlSimpleMultiMonacoRef && !this.sqlSimpleMultiEditor) {
+        this.sqlSimpleMultiEditor = monaco.editor.create(this.$refs.sqlSimpleMultiMonacoRef, {
+          value: this.getSqlSimpleMultiText(),
+          ...options
+        })
+      } else if (this.sqlSimpleMultiEditor) {
+        this.sqlSimpleMultiEditor.setValue(this.getSqlSimpleMultiText())
+      }
+      // SQL 高级
+      if (this.$refs.sqlAdvancedMonacoRef && !this.sqlAdvancedEditor) {
+        this.sqlAdvancedEditor = monaco.editor.create(this.$refs.sqlAdvancedMonacoRef, {
+          value: this.getSqlAdvancedText(),
+          ...options
+        })
+      } else if (this.sqlAdvancedEditor) {
+        this.sqlAdvancedEditor.setValue(this.getSqlAdvancedText())
+      }
+      setTimeout(() => {
+        this.layoutFieldPreviewEditors()
+      }, 100)
+    },
+    layoutFieldPreviewEditors() {
+      if (this.javaSingleEditor) this.javaSingleEditor.layout()
+      if (this.javaMultiEditor) this.javaMultiEditor.layout()
+      if (this.sqlSimpleSingleEditor) this.sqlSimpleSingleEditor.layout()
+      if (this.sqlSimpleMultiEditor) this.sqlSimpleMultiEditor.layout()
+      if (this.sqlAdvancedEditor) this.sqlAdvancedEditor.layout()
+    },
+    disposeFieldPreviewEditors() {
+      if (this.javaSingleEditor) {
+        this.javaSingleEditor.dispose()
+        this.javaSingleEditor = null
+      }
+      if (this.javaMultiEditor) {
+        this.javaMultiEditor.dispose()
+        this.javaMultiEditor = null
+      }
+      if (this.sqlSimpleSingleEditor) {
+        this.sqlSimpleSingleEditor.dispose()
+        this.sqlSimpleSingleEditor = null
+      }
+      if (this.sqlSimpleMultiEditor) {
+        this.sqlSimpleMultiEditor.dispose()
+        this.sqlSimpleMultiEditor = null
+      }
+      if (this.sqlAdvancedEditor) {
+        this.sqlAdvancedEditor.dispose()
+        this.sqlAdvancedEditor = null
+      }
+      this.fieldPreviewMonacoLoaded = false
+      this._fieldPreviewMonaco = null
+    },
+    copyFieldPreview(type) {
+      let text = ''
+      let label = ''
+      if (type === 'javaSingle') {
+        text = this.javaSingleEditor ? this.javaSingleEditor.getValue() : this.getJavaArraySingleText()
+        label = 'Java数组(单行)'
+      } else if (type === 'javaMulti') {
+        text = this.javaMultiEditor ? this.javaMultiEditor.getValue() : this.getJavaArrayMultiText()
+        label = 'Java数组(多行)'
+      } else if (type === 'sqlSimpleSingle') {
+        text = this.sqlSimpleSingleEditor ? this.sqlSimpleSingleEditor.getValue() : this.getSqlSimpleSingleText()
+        label = 'SQL字段名(单行)'
+      } else if (type === 'sqlSimpleMulti') {
+        text = this.sqlSimpleMultiEditor ? this.sqlSimpleMultiEditor.getValue() : this.getSqlSimpleMultiText()
+        label = 'SQL字段名(多行)'
+      } else if (type === 'sqlAdvanced') {
+        text = this.sqlAdvancedEditor ? this.sqlAdvancedEditor.getValue() : this.getSqlAdvancedText()
+        label = 'SQL字段名(高级)'
+      }
+      if (text) this.copyToClipboard(text, label)
     }
   },
   mounted() {
