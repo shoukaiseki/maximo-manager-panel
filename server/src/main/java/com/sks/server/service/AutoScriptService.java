@@ -19,7 +19,7 @@ public class AutoScriptService {
     public Map<String, Object> queryAutoScriptList(
             String autoscript, String description, String objectname,
             String attributename, String launchpointname, String source,
-            String mode, int pageNum, int pageSize) {
+            String mode, int pageNum, int pageSize, boolean sourceCaseSensitive) {
 
         boolean isDiagMode = !"query".equalsIgnoreCase(mode);
 
@@ -83,7 +83,8 @@ public class AutoScriptService {
                 whereSql.append(" AND EXISTS (SELECT 1 FROM SCRIPTLAUNCHPOINT sl4 WHERE sl4.AUTOSCRIPT = a.AUTOSCRIPT AND sl4.LAUNCHPOINTNAME LIKE ?)");
                 params.add("%" + launchpointname.trim().toUpperCase() + "%");
             }
-            if (source != null && !source.trim().isEmpty()) {
+            // source 区分大小写时在 SQL 中用 LIKE 过滤（快），不区分大小写在 Java 层过滤
+            if (!isDiagMode && source != null && !source.trim().isEmpty() && sourceCaseSensitive) {
                 whereSql.append(" AND a.SOURCE LIKE ?");
                 params.add("%" + source.trim() + "%");
             }
@@ -123,44 +124,107 @@ public class AutoScriptService {
         // 诊断模式下需要在 Java 层做源码包含过滤（CLOB 不能在 SQL 中 UPPER）
         boolean needSourceFilter = isDiagMode && objectname != null && !objectname.trim().isEmpty()
                 && attributename != null && !attributename.trim().isEmpty();
+        // 查询模式下 SOURCE 内容不区分大小写在 Java 层过滤
+        boolean needSourceJavaFilter = !isDiagMode && source != null && !source.trim().isEmpty() && !sourceCaseSensitive;
 
-        try (Connection conn = dataSource.getConnection();
-             PreparedStatement ps = conn.prepareStatement(dataSql)) {
-            for (int i = 0; i < params.size(); i++) {
-                ps.setObject(i + 1, params.get(i));
-            }
-            ps.setInt(params.size() + 1, offset);
-            ps.setInt(params.size() + 2, pageSize);
-            try (ResultSet rs = ps.executeQuery()) {
-                while (rs.next()) {
-                    Map<String, Object> row = rowToMap(rs);
-                    // 诊断模式下查询匹配类型
-                    if (isDiagMode && objectname != null && !objectname.trim().isEmpty()) {
-                        String scriptName = (String) row.get("AUTOSCRIPT");
-                        List<String> matchTypes = new ArrayList<>();
-                        String objUpper = objectname.trim().toUpperCase();
-
-                        // 检查对象匹配
-                        if (hasLaunchPointWithObject(conn, scriptName, objUpper)) {
-                            matchTypes.add("对象匹配");
-                        }
-                        // 检查脚本名匹配
-                        if ((objUpper + ".NEW").equals(scriptName)) {
-                            matchTypes.add("脚本名匹配");
-                        }
-                        // 检查源码包含（Java 层读取 CLOB）
-                        if (needSourceFilter) {
-                            if (sourceContainsAttribute(conn, scriptName, attributename.trim())) {
-                                matchTypes.add("源码包含");
-                            }
-                        }
-                        row.put("_matchType", String.join(", ", matchTypes));
+        if (needSourceJavaFilter) {
+            // Step 1: 查询所有匹配的脚本名称
+            String nameSql = "SELECT a.AUTOSCRIPT FROM AUTOSCRIPT a " + whereStr + " ORDER BY a.AUTOSCRIPT";
+            List<String> allNames = new ArrayList<>();
+            try (Connection conn = dataSource.getConnection();
+                 PreparedStatement ps = conn.prepareStatement(nameSql)) {
+                for (int i = 0; i < params.size(); i++) {
+                    ps.setObject(i + 1, params.get(i));
+                }
+                try (ResultSet rs = ps.executeQuery()) {
+                    while (rs.next()) {
+                        allNames.add(rs.getString("AUTOSCRIPT"));
                     }
-                    rows.add(row);
+                }
+            } catch (SQLException e) {
+                throw new RuntimeException("查询脚本名称列表失败: " + e.getMessage(), e);
+            }
+
+            // Step 2: 读取 SOURCE 内容做不区分大小写过滤
+            String srcKeyword = source.trim();
+            List<String> filteredNames = new ArrayList<>();
+            for (String name : allNames) {
+                String src = getSourceContent(name);
+                if (src != null && src.toLowerCase().contains(srcKeyword.toLowerCase())) {
+                    filteredNames.add(name);
                 }
             }
-        } catch (SQLException e) {
-            throw new RuntimeException("查询 AUTOSCRIPT 列表失败: " + e.getMessage(), e);
+
+            total = filteredNames.size();
+
+            // Step 3: 分页
+            int fromIndex = Math.min(offset, filteredNames.size());
+            int toIndex = Math.min(offset + pageSize, filteredNames.size());
+            List<String> pageNames = filteredNames.subList(fromIndex, toIndex);
+
+            // Step 4: 查询分页后的完整数据
+            if (!pageNames.isEmpty()) {
+                StringJoiner sj = new StringJoiner(",");
+                for (int i = 0; i < pageNames.size(); i++) sj.add("?");
+                String fullSql = "SELECT a.AUTOSCRIPT, a.DESCRIPTION, a.SCRIPTLANGUAGE, a.VERSION, " +
+                        "a.ACTIVE, a.USERDEFINED, a.LOGLEVEL, a.STATUS, a.OWNERID, a.OWNERNAME, " +
+                        "a.CREATEDBYID, a.CREATEDBYNAME, a.CREATEDDATE, a.CHANGEDATE, a.CHANGEBY, " +
+                        "a.COMMENTS, a.CATEGORY, a.INTERFACE, a.IBM_PACKAGEPATH " +
+                        "FROM AUTOSCRIPT a WHERE a.AUTOSCRIPT IN (" + sj.toString() + ") ORDER BY a.AUTOSCRIPT";
+                try (Connection conn = dataSource.getConnection();
+                     PreparedStatement ps = conn.prepareStatement(fullSql)) {
+                    for (int i = 0; i < pageNames.size(); i++) {
+                        ps.setString(i + 1, pageNames.get(i));
+                    }
+                    try (ResultSet rs = ps.executeQuery()) {
+                        while (rs.next()) {
+                            rows.add(rowToMap(rs));
+                        }
+                    }
+                } catch (SQLException e) {
+                    throw new RuntimeException("查询脚本分页数据失败: " + e.getMessage(), e);
+                }
+            }
+        } else {
+            // 原始分页查询
+            try (Connection conn = dataSource.getConnection();
+                 PreparedStatement ps = conn.prepareStatement(dataSql)) {
+                for (int i = 0; i < params.size(); i++) {
+                    ps.setObject(i + 1, params.get(i));
+                }
+                ps.setInt(params.size() + 1, offset);
+                ps.setInt(params.size() + 2, pageSize);
+                try (ResultSet rs = ps.executeQuery()) {
+                    while (rs.next()) {
+                        Map<String, Object> row = rowToMap(rs);
+                        // 诊断模式下查询匹配类型
+                        if (isDiagMode && objectname != null && !objectname.trim().isEmpty()) {
+                            String scriptName = (String) row.get("AUTOSCRIPT");
+                            List<String> matchTypes = new ArrayList<>();
+                            String objUpper = objectname.trim().toUpperCase();
+
+                            // 检查对象匹配
+                            if (hasLaunchPointWithObject(conn, scriptName, objUpper)) {
+                                matchTypes.add("对象匹配");
+                            }
+                            // 检查脚本名匹配
+                            if ((objUpper + ".NEW").equals(scriptName)) {
+                                matchTypes.add("脚本名匹配");
+                            }
+                            // 检查源码包含（Java 层读取 CLOB）
+                            if (needSourceFilter) {
+                                if (sourceContainsAttribute(conn, scriptName, attributename.trim())) {
+                                    matchTypes.add("源码包含");
+                                }
+                            }
+                            row.put("_matchType", String.join(", ", matchTypes));
+                        }
+                        rows.add(row);
+                    }
+                }
+            } catch (SQLException e) {
+                throw new RuntimeException("查询 AUTOSCRIPT 列表失败: " + e.getMessage(), e);
+            }
         }
 
         Map<String, Object> result = new LinkedHashMap<>();
@@ -204,6 +268,25 @@ public class AutoScriptService {
             return false;
         }
         return false;
+    }
+
+    /**
+     * 获取脚本源码内容
+     */
+    private String getSourceContent(String autoscript) {
+        String sql = "SELECT SOURCE FROM AUTOSCRIPT WHERE AUTOSCRIPT = ?";
+        try (Connection conn = dataSource.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setString(1, autoscript);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) {
+                    return rs.getString("SOURCE");
+                }
+            }
+        } catch (SQLException e) {
+            // ignore
+        }
+        return null;
     }
 
     /**

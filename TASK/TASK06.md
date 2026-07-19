@@ -53,3 +53,63 @@ ENTITYNAME,COLUMNNAME,MAXTYPE,符合的结果条数,查询时的语句,耗时
 还需返回总耗时
 
 返回使用sse流方式返回,前端显示进度条和最后一次接收到的行信息
+
+
+# 3
+显示的
+```
+{
+  "msgGroup": "system",
+  "msgKey": "NotSupported",
+  "value": "不支持对{0}（数据类型 ={1}、值 ={2}、对象名称 ={3}、属性名称 ={4}）进行操作。 请向系统管理员报告该错误。",
+  "displayMethod": "MSGBOX",
+  "options": [
+    "ok"
+  ],
+  "title": null,
+  "buttonText": null,
+  "explanation": "由于无法在指定的数据类型上执行操作，因此可能发生了定制编程错误。 例如，尝试从十进制字段检索日期。",
+  "adminResponse": "请检查字段是否已正确配置。 操作必须与数据类型匹配。",
+  "operatorResponse": null,
+  "systemAction": null,
+  "response": "请检查字段是否已正确配置。 操作必须与数据类型匹配。",
+  "msgId": "BMXAA7816E",
+  "ok": null,
+  "yes": null,
+  "no": null,
+  "cancel": null,
+  "close": true,
+  "stop": true,
+  "warning": null,
+  "exclamation": null,
+  "prefix": "Y",
+  "msgIdPrefix": "BMXAA",
+  "msgIdSuffix": "E"
+}
+```
+接口返回的
+```
+{
+    "messages": [
+        {
+            "msgGroup": "system",
+            "msgKey": "NotSupported",
+            "value": "不支持对{0}（数据类型 ={1}、值 ={2}、对象名称 ={3}、属性名称 ={4}）进行操作。 请向系统管理员报告该错误。",
+            "displayMethod": "MSGBOX",
+            "options": [
+                "ok"
+            ],
+            "sks:options": 65,
+            "explanation": "由于无法在指定的数据类型上执行操作，因此可能发生了定制编程错误。 例如，尝试从十进制字段检索日期。",
+            "adminResponse": "请检查字段是否已正确配置。 操作必须与数据类型匹配。",
+            "response": "请检查字段是否已正确配置。 操作必须与数据类型匹配。",
+            "msgId": "BMXAA7816E",
+            "close": true,
+            "stop": true,
+            "prefix": "Y",
+            "msgIdPrefix": "BMXAA",
+            "msgIdSuffix": "E"
+        }
+    ]
+}
+```

@@ -268,10 +268,6 @@ export default {
     },
     
     async connectToSSE() {
-      if (this.isStreaming) {
-        return
-      }
-
       this.connecting = true
       
       try {

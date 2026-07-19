@@ -30,6 +30,10 @@
         </el-form-item>
         <el-form-item label="脚本内容" v-if="!isDiagMode">
           <el-input v-model="formData.source" placeholder="SOURCE 模糊搜索" clearable @keyup.enter.native="handleQuery" style="width:200px" />
+          <el-radio-group v-model="sourceCaseSensitive" size="mini" style="margin-left:8px;vertical-align:middle;">
+            <el-radio-button :label="false">不区分大小写(慢)</el-radio-button>
+            <el-radio-button :label="true">区分大小写(快)</el-radio-button>
+          </el-radio-group>
         </el-form-item>
         <el-form-item>
           <el-button type="cyan" icon="el-icon-search" size="mini" :loading="loading" @click="handleQuery">搜索</el-button>
@@ -363,6 +367,7 @@ export default {
         source: ''
       },
       sourceDialog: { visible: false, name: '', loading: false, editor: null, fullscreen: false },
+      sourceCaseSensitive: true,
       historyDialog: { visible: false, name: '', loading: false, list: [] },
       historySourceDialog: { visible: false, name: '', loading: false, source: '', editor: null },
       detailDialog: {
@@ -410,6 +415,7 @@ export default {
         launchpointname: this.formData.launchpointname || undefined,
         source: this.isDiagMode ? undefined : (this.formData.source || undefined),
         mode: this.isDiagMode ? 'diag' : 'query',
+        sourceCaseSensitive: this.sourceCaseSensitive,
         pageNum: this.isDiagMode ? 1 : this.tableParam.pageNum,
         pageSize: this.isDiagMode ? 9999 : this.tableParam.pageSize
       }

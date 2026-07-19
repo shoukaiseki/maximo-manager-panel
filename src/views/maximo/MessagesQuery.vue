@@ -186,6 +186,8 @@ export default {
       },
       dialogVisible: false,
       currentRow: null,
+      apiSimpleMessages: [],
+      apiFullMessages: [],
       activeTab: 'simple',
       batchActiveTab: 'batch-simple',
       simpleEditor: null,
@@ -355,10 +357,8 @@ export default {
       this.activeTab = 'simple'
       this.dialogVisible = true
       this.detailLoading = true
-
-      this.$nextTick(() => {
-        this.initMonacoEditors()
-      })
+      this.apiSimpleMessages = []
+      this.apiFullMessages = []
 
       try {
         const whereClause = this.buildSqlWhere({
@@ -369,27 +369,43 @@ export default {
 
         if (!whereClause) return
 
-        const res = await exportMessages({
-          filterMode: 'where',
-          where: whereClause
-        })
-
-        const data = res.data || res
-        if (data && data.status === 'error') {
-          this.$message.error('获取消息详情失败: ' + (data.message || '未知错误'))
-          return
-        }
-        if (data && data.messages && data.messages.length > 0) {
-          this.currentRow = { ...row, ...data.messages[0] }
-          this.$nextTick(() => {
-            this.initMonacoEditors()
+        const [simpleRes, fullRes] = await Promise.all([
+          exportMessages({
+            filterMode: 'where',
+            where: whereClause,
+            ignoreDefVal: true
+          }),
+          exportMessages({
+            filterMode: 'where',
+            where: whereClause
           })
+        ])
+
+        const simpleData = simpleRes.data || simpleRes
+        const fullData = fullRes.data || fullRes
+
+        if (simpleData && simpleData.status === 'error') {
+          this.$message.error('获取精简消息失败: ' + (simpleData.message || '未知错误'))
+        } else if (simpleData && simpleData.messages && simpleData.messages.length > 0) {
+          this.apiSimpleMessages = simpleData.messages
+        }
+
+        if (fullData && fullData.status === 'error') {
+          this.$message.error('获取完整消息失败: ' + (fullData.message || '未知错误'))
+        } else if (fullData && fullData.messages && fullData.messages.length > 0) {
+          this.apiFullMessages = fullData.messages
+          this.currentRow = { ...row, ...fullData.messages[0] }
         }
       } catch (err) {
         console.warn('获取消息详情失败:', err)
         this.$message.error('获取消息详情失败: ' + (err.message || String(err)))
       } finally {
         this.detailLoading = false
+        this.$nextTick(() => {
+          setTimeout(() => {
+            this.initMonacoEditors()
+          }, 200)
+        })
       }
     },
     async handleBatchView() {
@@ -407,62 +423,49 @@ export default {
           return
         }
 
-        const res = await exportMessages({
-          filterMode: 'where',
-          where: whereClause
-        })
+        const [simpleRes, fullRes] = await Promise.all([
+          exportMessages({
+            filterMode: 'where',
+            where: whereClause,
+            ignoreDefVal: true
+          }),
+          exportMessages({
+            filterMode: 'where',
+            where: whereClause
+          })
+        ])
 
-        const data = res.data || res
-        if (data && data.status === 'error') {
-          this.$message.error('批量查看失败: ' + (data.message || '未知错误'))
+        const simpleData = simpleRes.data || simpleRes
+        const fullData = fullRes.data || fullRes
+
+        if (simpleData && simpleData.status === 'error') {
+          this.$message.error('获取精简消息失败: ' + (simpleData.message || '未知错误'))
+        }
+        if (fullData && fullData.status === 'error') {
+          this.$message.error('获取完整消息失败: ' + (fullData.message || '未知错误'))
+        }
+
+        const simpleMessages = simpleData && simpleData.messages ? simpleData.messages : []
+        const fullMessages = fullData && fullData.messages ? fullData.messages : []
+
+        if (simpleMessages.length === 0 && fullMessages.length === 0) {
+          this.$message.warning('未查询到消息数据')
           return
         }
-        if (data && data.messages && data.messages.length > 0) {
-          this.batchTotal = data.messages.length
-          const batchData = data.messages.map(msg => ({
-            msgGroup: msg.msggroup || msg.msgGroup || msg.MSGGROUP || null,
-            msgKey: msg.msgkey || msg.msgKey || msg.MSGKEY || null,
-            value: msg.value || msg.VALUE || null,
-            displayMethod: msg.displaymethod || msg.displayMethod || msg.DISPLAYMETHOD || null,
-            options: msg.options || null,
-            title: msg.title || null,
-            buttonText: msg.buttonText || null,
-            explanation: msg.explanation || null,
-            adminResponse: msg.adminResponse || null,
-            operatorResponse: msg.operatorResponse || null,
-            systemAction: msg.systemAction || null,
-            response: msg.response || null,
-            msgId: msg.msgid || msg.msgId || msg.MSGID || null,
-            ok: msg.ok || null,
-            yes: msg.yes || null,
-            no: msg.no || null,
-            cancel: msg.cancel || null,
-            close: msg.close || null,
-            stop: msg.stop || null,
-            warning: msg.warning || null,
-            exclamation: msg.exclamation || null,
-            prefix: msg.prefix || null
-          }))
 
-          const simpleJson = JSON.stringify({
-            messages: batchData.map(msg => ({
-              msgGroup: msg.msgGroup,
-              msgKey: msg.msgKey,
-              value: msg.value,
-              displayMethod: msg.displayMethod
-            }))
-          }, null, 2)
+        this.batchTotal = Math.max(simpleMessages.length, fullMessages.length)
 
-          const fullJson = JSON.stringify({
-            messages: batchData
-          }, null, 2)
+        const simpleJson = JSON.stringify({
+          messages: simpleMessages
+        }, null, 2)
 
-          this.batchSimpleJson = simpleJson
-          this.batchFullJson = fullJson
-          this.batchDialogVisible = true
-        } else {
-          this.$message.warning('未查询到消息数据')
-        }
+        const fullJson = JSON.stringify({
+          messages: fullMessages
+        }, null, 2)
+
+        this.batchSimpleJson = simpleJson
+        this.batchFullJson = fullJson
+        this.batchDialogVisible = true
       } catch (err) {
         console.error('批量查看失败:', err)
         this.$message.error('批量查看失败: ' + (err.message || String(err)))
@@ -559,39 +562,56 @@ export default {
       }
     },
     initMonacoEditors() {
-      if (!this.currentRow) return
-      const simpleJson = JSON.stringify({
-        msgGroup: this.currentRow.msggroup || null,
-        msgKey: this.currentRow.msgkey || null,
-        value: this.currentRow.value || null,
-        displayMethod: this.currentRow.displaymethod || null
-      }, null, 2)
-      const fullJson = JSON.stringify({
-        msgGroup: this.currentRow.msggroup || null,
-        msgKey: this.currentRow.msgkey || null,
-        value: this.currentRow.value || null,
-        displayMethod: this.currentRow.displaymethod || null,
-        options: this.currentRow.options || null,
-        title: this.currentRow.title || null,
-        buttonText: this.currentRow.buttonText || null,
-        explanation: this.currentRow.explanation || null,
-        adminResponse: this.currentRow.adminResponse || null,
-        operatorResponse: this.currentRow.operatorResponse || null,
-        systemAction: this.currentRow.systemAction || null,
-        response: this.currentRow.response || null,
-        msgId: this.currentRow.msgid || null,
-        ok: this.currentRow.ok || null,
-        yes: this.currentRow.yes || null,
-        no: this.currentRow.no || null,
-        cancel: this.currentRow.cancel || null,
-        close: this.currentRow.close || null,
-        stop: this.currentRow.stop || null,
-        warning: this.currentRow.warning || null,
-        exclamation: this.currentRow.exclamation || null,
-        prefix: this.currentRow.prefix || null,
-        msgIdPrefix: this.currentRow.msgIdPrefix || null,
-        msgIdSuffix: this.currentRow.msgIdSuffix || null
-      }, null, 2)
+      let simpleJson = ''
+      let fullJson = ''
+
+      if (this.apiSimpleMessages && this.apiSimpleMessages.length > 0) {
+        simpleJson = JSON.stringify(this.apiSimpleMessages[0], null, 2)
+      } else if (this.currentRow) {
+        simpleJson = JSON.stringify({
+          msgGroup: this.currentRow.msggroup || null,
+          msgKey: this.currentRow.msgkey || null,
+          value: this.currentRow.value || null,
+          displayMethod: this.currentRow.displaymethod || null
+        }, null, 2)
+      }
+
+      if (this.apiFullMessages && this.apiFullMessages.length > 0) {
+        fullJson = JSON.stringify(this.apiFullMessages[0], null, 2)
+      } else if (this.currentRow) {
+        fullJson = JSON.stringify({
+          msgGroup: this.currentRow.msggroup || null,
+          msgKey: this.currentRow.msgkey || null,
+          value: this.currentRow.value || null,
+          displayMethod: this.currentRow.displaymethod || null,
+          options: this.currentRow.options || null,
+          title: this.currentRow.title || null,
+          buttonText: this.currentRow.buttonText || null,
+          explanation: this.currentRow.explanation || null,
+          adminResponse: this.currentRow.adminResponse || null,
+          operatorResponse: this.currentRow.operatorResponse || null,
+          systemAction: this.currentRow.systemAction || null,
+          response: this.currentRow.response || null,
+          msgId: this.currentRow.msgid || null,
+          ok: this.currentRow.ok || null,
+          yes: this.currentRow.yes || null,
+          no: this.currentRow.no || null,
+          cancel: this.currentRow.cancel || null,
+          close: this.currentRow.close || null,
+          stop: this.currentRow.stop || null,
+          warning: this.currentRow.warning || null,
+          exclamation: this.currentRow.exclamation || null,
+          prefix: this.currentRow.prefix || null,
+          msgIdPrefix: this.currentRow.msgIdPrefix || null,
+          msgIdSuffix: this.currentRow.msgIdSuffix || null
+        }, null, 2)
+      }
+
+      if (!simpleJson && !fullJson) return
+
+      this.createEditorsWithJson(simpleJson, fullJson)
+    },
+    createEditorsWithJson(simpleJson, fullJson) {
       if (!this.monacoLoaded) {
         import(/* webpackChunkName: "monaco" */ 'monaco-editor').then(monaco => {
           this.monacoLoaded = true
@@ -659,6 +679,11 @@ export default {
     },
     copySimpleJson(row = this.currentRow) {
       if (!row) return
+      if (this.apiSimpleMessages && this.apiSimpleMessages.length > 0) {
+        const json = JSON.stringify(this.apiSimpleMessages[0], null, 2)
+        this.copyToClipboard(json, '消息精简JSON')
+        return
+      }
       const json = JSON.stringify({
         msgGroup: row.msggroup || null,
         msgKey: row.msgkey || null,
@@ -669,6 +694,11 @@ export default {
     },
     copyFullJson(row = this.currentRow) {
       if (!row) return
+      if (this.apiFullMessages && this.apiFullMessages.length > 0) {
+        const json = JSON.stringify(this.apiFullMessages[0], null, 2)
+        this.copyToClipboard(json, '消息完整JSON')
+        return
+      }
       const json = JSON.stringify({
         msgGroup: row.msggroup || null,
         msgKey: row.msgkey || null,
