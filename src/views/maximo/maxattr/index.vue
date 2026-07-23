@@ -125,6 +125,14 @@
             <div ref="objFullMonacoRef" class="monaco-container"></div>
           </div>
         </el-tab-pane>
+        <el-tab-pane label="对象不更改主信息" name="objNoChangeMain">
+          <div class="json-toolbar">
+            <el-button type="primary" size="mini" icon="el-icon-document" @click="copyObjNoChangeMainJson">复制对象不更改主信息JSON</el-button>
+          </div>
+          <div class="monaco-wrapper">
+            <div ref="objNoChangeMainMonacoRef" class="monaco-container"></div>
+          </div>
+        </el-tab-pane>
       </el-tabs>
 
       <span slot="footer" class="dialog-footer">
@@ -227,6 +235,7 @@ export default {
       fieldFullEditor: null,
       objSimpleEditor: null,
       objFullEditor: null,
+      objNoChangeMainEditor: null,
       monacoLoaded: false,
       formData: {
         objectname: '',
@@ -512,6 +521,7 @@ export default {
       } else if (this.objFullEditor) {
         this.objFullEditor.setValue(objFullJson)
       }
+      this.initObjNoChangeMainEditor(monaco, options)
       setTimeout(() => {
         this.layoutEditors()
       }, 100)
@@ -521,6 +531,7 @@ export default {
       if (this.fieldFullEditor) this.fieldFullEditor.layout()
       if (this.objSimpleEditor) this.objSimpleEditor.layout()
       if (this.objFullEditor) this.objFullEditor.layout()
+      if (this.objNoChangeMainEditor) this.objNoChangeMainEditor.layout()
     },
     disposeEditors() {
       if (this.fieldSimpleEditor) {
@@ -538,6 +549,10 @@ export default {
       if (this.objFullEditor) {
         this.objFullEditor.dispose()
         this.objFullEditor = null
+      }
+      if (this.objNoChangeMainEditor) {
+        this.objNoChangeMainEditor.dispose()
+        this.objNoChangeMainEditor = null
       }
       this.monacoLoaded = false
       this._monaco = null
@@ -565,6 +580,43 @@ export default {
         ? JSON.stringify(this.fullObjectData, null, 2)
         : '{}'
       this.copyToClipboard(json, '对象完整JSON')
+    },
+    getObjNoChangeMainJson() {
+      const objName = this.currentRow.OBJECTNAME || ''
+      let description = ''
+      const objectData = this.simpleObjectData || this.fullObjectData
+      if (objectData && objectData.maxObjects) {
+        const found = objectData.maxObjects.find(o => o.object === objName)
+        if (found && found.description) {
+          description = found.description
+        }
+      }
+      return JSON.stringify({
+        maxObjects: [
+          {
+            object: objName,
+            description: description,
+            ignoreObjectMain: true,
+            attributes: [],
+            relationships: []
+          }
+        ]
+      }, null, 2)
+    },
+    initObjNoChangeMainEditor(monaco, options) {
+      const json = this.getObjNoChangeMainJson()
+      if (this.$refs.objNoChangeMainMonacoRef && !this.objNoChangeMainEditor) {
+        this.objNoChangeMainEditor = monaco.editor.create(this.$refs.objNoChangeMainMonacoRef, {
+          value: json,
+          ...options
+        })
+      } else if (this.objNoChangeMainEditor) {
+        this.objNoChangeMainEditor.setValue(json)
+      }
+    },
+    copyObjNoChangeMainJson() {
+      const json = this.getObjNoChangeMainJson()
+      this.copyToClipboard(json, '对象不更改主信息JSON')
     },
     copyToClipboard(text, label) {
       if (navigator.clipboard && window.isSecureContext) {

@@ -145,8 +145,8 @@ public class AutoScriptService {
                 throw new RuntimeException("查询脚本名称列表失败: " + e.getMessage(), e);
             }
 
-            // Step 2: 读取 SOURCE 内容做不区分大小写过滤
-            String srcKeyword = source.trim();
+            // Step 2: 读取 SOURCE 内容做不区分大小写过滤（去掉所有 % 通配符）
+            String srcKeyword = source.trim().replace("%", "");
             List<String> filteredNames = new ArrayList<>();
             for (String name : allNames) {
                 String src = getSourceContent(name);

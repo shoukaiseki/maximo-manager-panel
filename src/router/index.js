@@ -209,6 +209,12 @@ export const constantRoutes = [
                 meta: { title: '关系查询', icon: 'link', noCache: false }
             },
             {
+                path: 'maxappxml',
+                component: (resolve) => require(['/src/views/maximo/maxappxml/index'], resolve),
+                name: 'MaxAppXml',
+                meta: { title: '应用XML', icon: 'document', noCache: false }
+            },
+            {
                 path: 'apicaller',
                 component: (resolve) => require(['/src/views/maximo/apicaller/ApiCaller'], resolve),
                 name: 'ApiCaller',
