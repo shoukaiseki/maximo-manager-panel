@@ -215,6 +215,18 @@ export const constantRoutes = [
                 meta: { title: '应用XML', icon: 'document', noCache: false }
             },
             {
+                path: 'ifacelog',
+                component: (resolve) => require(['/src/views/maximo/ifacelog/index'], resolve),
+                name: 'IfaceLog',
+                meta: { title: 'IFACE日志', icon: 'log', noCache: false }
+            },
+            {
+                path: 'dataformat',
+                component: (resolve) => require(['/src/views/maximo/dataformat/index'], resolve),
+                name: 'DataFormat',
+                meta: { title: '数据处理', icon: 'edit', noCache: false }
+            },
+            {
                 path: 'apicaller',
                 component: (resolve) => require(['/src/views/maximo/apicaller/ApiCaller'], resolve),
                 name: 'ApiCaller',
