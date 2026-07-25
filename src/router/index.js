@@ -219,18 +219,6 @@ export const constantRoutes = [
                 component: (resolve) => require(['/src/views/maximo/ifacelog/index'], resolve),
                 name: 'IfaceLog',
                 meta: { title: 'IFACE日志', icon: 'log', noCache: false }
-            },
-            {
-                path: 'dataformat',
-                component: (resolve) => require(['/src/views/maximo/dataformat/index'], resolve),
-                name: 'DataFormat',
-                meta: { title: '数据处理', icon: 'edit', noCache: false }
-            },
-            {
-                path: 'apicaller',
-                component: (resolve) => require(['/src/views/maximo/apicaller/ApiCaller'], resolve),
-                name: 'ApiCaller',
-                meta: { title: 'API调用', icon: 'link', noCache: false }
             }
         ]
     },
@@ -244,6 +232,45 @@ export const constantRoutes = [
                 component: (resolve) => require(['/src/views/maximo/maxobject/MaxObjectDetail'], resolve),
                 name: 'MaxObjectDetail',
                 meta: { title: '对象详情', activeMenu: '/maxobject', noCache: false }
+            }
+        ]
+    },
+    {
+        path: '/tools',
+        name: 'tools',
+        component: Layout,
+        hidden: false,
+        redirect: 'noRedirect',
+        alwaysShow: true,
+        meta: {
+            title: '通用工具',
+            icon: 'skill',
+            noCache: false
+        },
+        children: [
+            {
+                path: 'excelimport',
+                component: (resolve) => require(['/src/views/maximo/excelimport/ExcelImportConfig'], resolve),
+                name: 'ExcelImportConfig',
+                meta: { title: 'Excel导入', icon: 'excel', noCache: false }
+            },
+            {
+                path: 'jsonpreview',
+                component: (resolve) => require(['/src/views/maximo/excelimport/ExcelPreview'], resolve),
+                name: 'JsonPreview',
+                meta: { title: 'JSON预览', icon: 'clipboard', noCache: false }
+            },
+            {
+                path: 'dataformat',
+                component: (resolve) => require(['/src/views/maximo/dataformat/index'], resolve),
+                name: 'DataFormat',
+                meta: { title: '数据处理', icon: 'edit', noCache: false }
+            },
+            {
+                path: 'apicaller',
+                component: (resolve) => require(['/src/views/maximo/apicaller/ApiCaller'], resolve),
+                name: 'ApiCaller',
+                meta: { title: 'API调用', icon: 'link', noCache: false }
             }
         ]
     },

@@ -49,3 +49,5 @@ bin/run-web-hd.bat
 
 *.swp
 
+jxls-reader/
+jxls-reader

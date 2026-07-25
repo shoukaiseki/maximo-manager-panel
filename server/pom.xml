@@ -58,6 +58,20 @@
             <artifactId>fastjson</artifactId>
             <version>2.0.45</version>
         </dependency>
+
+        <!-- jxls-reader Excel 读取 -->
+        <dependency>
+            <groupId>org.jxls</groupId>
+            <artifactId>jxls-reader</artifactId>
+            <version>2.1.1-SNAPSHOT</version>
+        </dependency>
+
+        <!-- MySQL JDBC 驱动 -->
+        <dependency>
+            <groupId>com.mysql</groupId>
+            <artifactId>mysql-connector-j</artifactId>
+            <version>8.3.0</version>
+        </dependency>
     </dependencies>
 
     <build>

@@ -42,6 +42,7 @@
     "url": "https://gitee.com/y_project/Maximo-Management-Panel.git"
   },
   "dependencies": {
+    "@antv/g6": "^4.8.23",
     "@femessage/log-viewer": "^1.5.0",
     "@riophae/vue-treeselect": "0.4.0",
     "axios": "0.18.1",
@@ -71,6 +72,8 @@
     "vue": "2.6.10",
     "vue-count-to": "1.0.13",
     "vue-cropper": "0.4.9",
+    "vue-json-pretty": "^1.9.5",
+    "vue-json-viewer": "^2.2.22",
     "vue-monaco": "^1.2.2",
     "vue-qr": "^2.3.0",
     "vue-router": "^3.0.2",

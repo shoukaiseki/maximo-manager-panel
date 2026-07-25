@@ -10,3 +10,11 @@ db2:
   driverClassName: "com.ibm.db2.jcc.DB2Driver"
   maximumPoolSize: 10
   minimumIdle: 2
+
+mysql:
+  url: "jdbc:mysql://localhost:3306/sks_mas_parent?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai"
+  username: "sks_mas_parent"
+  password: "123456"
+  driverClassName: "com.mysql.cj.jdbc.Driver"
+  maximumPoolSize: 5
+  minimumIdle: 1

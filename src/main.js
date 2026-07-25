@@ -302,6 +302,24 @@ Vue.prototype.globalConfig=globalConfig
 import ProTaskWorkStatusLabel from  '/src/components/WorkStatusLabel/ProTaskWorkStatusLabel'
 Vue.component('ProTaskWorkStatusLabel',ProTaskWorkStatusLabel)
 
+// vue-json-pretty JSON 查看器
+import VueJsonPretty from 'vue-json-pretty'
+import 'vue-json-pretty/lib/styles.css'
+Vue.component('vue-json-pretty', VueJsonPretty)
+
+// vue-json-viewer JSON 查看器
+import VueJsonViewer from 'vue-json-viewer'
+import 'vue-json-viewer/style.css'
+Vue.use(VueJsonViewer)
+
+// 可视化 JSON 树图组件
+import JsonGraphView from '/src/components/JsonGraphView.vue'
+Vue.component('JsonGraphView', JsonGraphView)
+
+// G6 JSON 图可视化组件
+import JsonG6Graph from '/src/components/JsonG6Graph.vue'
+Vue.component('JsonG6Graph', JsonG6Graph)
+
 
 // import * as wb780js from './utils/wb780'
 //

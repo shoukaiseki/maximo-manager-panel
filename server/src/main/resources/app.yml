@@ -2,6 +2,10 @@ solon.app.name: maximo-management-panel
 server:
   port: 8081
 
+# 文件上传配置
+server.request.maxFileSize: "100MB"
+server.request.maxBodySize: "100MB"
+
 # log
 solon.logging.appender:
   console:
