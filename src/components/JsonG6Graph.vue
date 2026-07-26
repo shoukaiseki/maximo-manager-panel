@@ -142,6 +142,7 @@ export default {
           this.graph.fitView(20)
         }
       })
+      // 观测时立即触发一次，确保首次布局正确
       this.resizeObserver.observe(container)
     },
     getContainerSize() {
@@ -172,7 +173,8 @@ export default {
         container,
         width,
         height,
-        fitView: false,
+        fitView: true,
+        fitViewPadding: [20, 20, 20, 40],
         animate: true,
         defaultNode: { type: 'flow-rect' },
         defaultEdge: {
@@ -186,10 +188,18 @@ export default {
           ]
         },
         layout: {
-          type: 'indented',
+          type: 'compactBox',
           direction: 'LR',
-          indent: 220,
-          dropCap: false
+          getHGap: () => 60,
+          getVGap: () => 30,
+          getWidth: (d) => {
+            const [w] = computeSize(d.entries || {}, d.keyName || '')
+            return w + 16
+          },
+          getHeight: (d) => {
+            const [, h] = computeSize(d.entries || {}, d.keyName || '')
+            return h + 16
+          }
         }
       })
 
@@ -197,11 +207,10 @@ export default {
 
       this.drawGraph()
 
-      // 使用 afterlayout 事件，仅首次生效
+      // 布局完成后自动适配视图
       const onLayout = () => {
         if (this.graph && !this.graph.destroyed) {
-          this.graph.zoom(0.85)
-          this.graph.moveTo(width / 2, 20)
+          this.graph.fitView(20)
         }
       }
       if (!this.initZoomed) {
@@ -410,7 +419,7 @@ export default {
         Object.keys(this.data).length === 0
 
       const treeData = {
-        id: isEmpty ? '{ }' : 'root',
+        id: isEmpty ? '{ }' : '_root',
         type: 'root-icon',
         children: []
       }

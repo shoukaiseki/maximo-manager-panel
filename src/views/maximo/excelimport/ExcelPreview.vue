@@ -27,13 +27,26 @@
       <div v-else-if="viewerMode === 'graph'" class="graph-wrapper">
         <json-g6-graph ref="g6Graph" :data="resultData" @node-click="onGraphNodeClick" />
       </div>
-      <div v-else-if="viewerMode === 'table'" class="table-wrapper">
-        <json-table-grid
-          ref="jsonTable"
-          :data="resultData"
-          :highlight-path.sync="tableHighlightPath"
-          @cell-click="onTableCellClick"
-        />
+      <div v-else-if="viewerMode === 'table'" ref="splitLayout" class="split-layout" @mouseleave="stopResize" @mousemove="doResize" @mouseup="stopResize">
+        <div class="split-left" :style="{ width: splitLeftWidth + 'px' }">
+          <div class="split-left-header">JSON</div>
+          <JsonHighlightTree
+            ref="jsonTree"
+            :data="resultData"
+            :highlight-path="jsonHighlightPath"
+            @node-click="onJsonNodeClick"
+          />
+        </div>
+        <div class="split-divider" @mousedown="startResize" :class="{ 'split-divider-active': splitDragging }" />
+        <div class="split-right">
+          <div class="split-right-header">表格</div>
+          <json-table-grid
+            ref="jsonTable"
+            :data="resultData"
+            :highlight-path.sync="tableHighlightPath"
+            @cell-click="onTableCellClick"
+          />
+        </div>
       </div>
       <div v-else class="preview-scroll">
         <vue-json-pretty
@@ -100,7 +113,10 @@ export default {
       viewerMode: 'pretty',
       inputDialogVisible: false,
       parseTimer: null,
-      tableHighlightPath: ''
+      tableHighlightPath: '',
+      jsonHighlightPath: '',
+      splitLeftWidth: 400,
+      splitDragging: false
     }
   },
   created() {
@@ -115,12 +131,16 @@ export default {
     } catch (e) { /* ignore */ }
   },
   methods: {
-    /** 点击表格单元格 → 跳转到可视化并高亮 */
+    /** 点击表格单元格 → 高亮 JSON 树节点（不再切换 tab） */
     onTableCellClick(path) {
-      this.viewerMode = 'graph'
+      this.jsonHighlightPath = path
+    },
+    /** 点击 JSON 树节点 → 高亮并滚动到表格单元格 */
+    onJsonNodeClick(path) {
+      this.tableHighlightPath = path
       this.$nextTick(() => {
-        if (this.$refs.g6Graph) {
-          this.$refs.g6Graph.focusNode(path)
+        if (this.$refs.jsonTable) {
+          this.$refs.jsonTable.scrollToCell(path)
         }
       })
     },
@@ -134,6 +154,7 @@ export default {
         }
       })
     },
+    /** 防抖解析输入 */
     debounceParse() {
       if (this.parseTimer) clearTimeout(this.parseTimer)
       this.parseTimer = setTimeout(() => this.parseInput(), 400)
@@ -166,7 +187,28 @@ export default {
       this.resultData = null
       this.resultType = ''
       this.tableHighlightPath = ''
+      this.jsonHighlightPath = ''
     },
+
+    /* 分栏拖拽 */
+    startResize(e) {
+      this.splitDragging = true
+      e.preventDefault()
+    },
+    doResize(e) {
+      if (!this.splitDragging) return
+      const layout = this.$refs.splitLayout
+      if (!layout) return
+      const rect = layout.getBoundingClientRect()
+      let w = e.clientX - rect.left
+      if (w < 200) w = 200
+      if (w > rect.width - 200) w = rect.width - 200
+      this.splitLeftWidth = Math.round(w)
+    },
+    stopResize() {
+      this.splitDragging = false
+    },
+
     copyInputJson() {
       if (!this.inputJson) { this.$message.warning('没有可复制的内容'); return }
       navigator.clipboard.writeText(this.inputJson).then(() => {
@@ -286,6 +328,65 @@ export default {
       padding: 0;
       background: #fff;
     }
+  }
+
+  .split-layout {
+    display: flex;
+    height: 100%;
+    overflow: hidden;
+  }
+
+  .split-left {
+    display: flex;
+    flex-direction: column;
+    border-right: 1px solid #dcdfe6;
+    overflow: hidden;
+  }
+
+  .split-left-header,
+  .split-right-header {
+    padding: 6px 10px;
+    background: #f5f7fa;
+    border-bottom: 1px solid #dcdfe6;
+    font-size: 12px;
+    font-weight: 600;
+    color: #606266;
+    flex-shrink: 0;
+  }
+
+  .split-left :deep(.json-htree) {
+    flex: 1;
+    overflow: auto;
+  }
+
+  .split-right :deep(.json-table-grid) {
+    flex: 1;
+  }
+
+  .split-divider {
+    width: 4px;
+    cursor: col-resize;
+    background: #f0f0f0;
+    flex-shrink: 0;
+    transition: background 0.2s;
+    user-select: none;
+  }
+
+  .split-divider:hover,
+  .split-divider-active {
+    background: #409eff;
+  }
+
+  .split-right {
+    flex: 1;
+    min-width: 200px;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .split-layout.dragging {
+    user-select: none;
   }
 }
 </style>

@@ -320,6 +320,10 @@ Vue.component('JsonGraphView', JsonGraphView)
 import JsonG6Graph from '/src/components/JsonG6Graph.vue'
 Vue.component('JsonG6Graph', JsonG6Graph)
 
+// JSON 高亮树组件
+import JsonHighlightTree from '/src/components/JsonHighlightTree.vue'
+Vue.component('JsonHighlightTree', JsonHighlightTree)
+
 
 // import * as wb780js from './utils/wb780'
 //
