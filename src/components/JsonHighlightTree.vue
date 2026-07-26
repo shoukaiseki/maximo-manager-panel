@@ -49,8 +49,8 @@ export default {
   },
   data() {
     return {
-      /** Set of expanded paths */
-      expandedSet: new Set()
+      /** List of expanded paths */
+      expandedList: []
     }
   },
   computed: {
@@ -67,9 +67,15 @@ export default {
     data: {
       deep: true,
       handler() {
+        this._buildInitialExpanded()
         this.$nextTick(() => {
           if (this.highlightPath) this._revealPath(this.highlightPath)
         })
+      }
+    },
+    deep: {
+      handler() {
+        this._buildInitialExpanded()
       }
     },
     highlightPath(path) {
@@ -79,6 +85,7 @@ export default {
     }
   },
   mounted() {
+    this._buildInitialExpanded()
     if (this.highlightPath) {
       this.$nextTick(() => this._revealPath(this.highlightPath))
     }
@@ -97,7 +104,7 @@ export default {
       const isArray = Array.isArray(val)
       const isObj = !isPrimitive && !isArray
 
-      const isExpanded = this.expandedSet.has(path) || depth < this.deep
+      const isExpanded = this.expandedList.indexOf(path) > -1
 
       if (isPrimitive) {
         out.push(this._makeItem(path, key, depth, val, false, 0))
@@ -150,18 +157,18 @@ export default {
         if (bracketIdx > 0) {
           const key = p.substring(0, bracketIdx)
           if (acc) {
-            this.expandedSet.add(`${acc}.${key}`)
+            this._expandPath(`${acc}.${key}`)
             acc = `${acc}.${key}`
           } else {
-            this.expandedSet.add(key)
+            this._expandPath(key)
             acc = key
           }
           // Add the indexed version
-          this.expandedSet.add(`${acc}${p.substring(bracketIdx)}`)
+          this._expandPath(`${acc}${p.substring(bracketIdx)}`)
           acc = `${acc}${p.substring(bracketIdx)}`
         } else {
           acc = acc ? `${acc}.${p}` : p
-          this.expandedSet.add(acc)
+          this._expandPath(acc)
         }
       }
 
@@ -182,18 +189,48 @@ export default {
     },
 
     toggleNode(path) {
-      if (this.expandedSet.has(path)) {
-        this.expandedSet.delete(path)
+      const idx = this.expandedList.indexOf(path)
+      if (idx > -1) {
+        this.expandedList.splice(idx, 1)
       } else {
-        this.expandedSet.add(path)
+        this.expandedList.push(path)
       }
-      // Force re-compute
-      this.$forceUpdate()
+    },
+
+    /** add path to expanded list if not already present */
+    _expandPath(path) {
+      if (this.expandedList.indexOf(path) === -1) {
+        this.expandedList.push(path)
+      }
     },
 
     onRowClick(item) {
       if (item.path) {
+        if (item.hasChildren) {
+          this.toggleNode(item.path)
+        }
         this.$emit('node-click', item.path)
+      }
+    },
+
+    /** Pre-fill expandedList for nodes up to `deep` depth */
+    _buildInitialExpanded() {
+      if (!this.data) {
+        this.expandedList = []
+        return
+      }
+      const list = []
+      this._collectExpandPaths(this.data, 'root', 0, list)
+      this.expandedList = list
+    },
+    _collectExpandPaths(val, path, depth, list) {
+      if (depth >= this.deep) return
+      if (val === null || typeof val !== 'object') return
+      list.push(path)
+      if (Array.isArray(val)) {
+        val.forEach((item, i) => this._collectExpandPaths(item, `${path}[${i}]`, depth + 1, list))
+      } else {
+        Object.keys(val).forEach(k => this._collectExpandPaths(val[k], `${path}.${k}`, depth + 1, list))
       }
     }
   }

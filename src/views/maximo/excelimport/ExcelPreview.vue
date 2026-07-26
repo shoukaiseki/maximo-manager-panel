@@ -11,6 +11,7 @@
           <el-radio-button label="graph">可视化</el-radio-button>
           <el-radio-button label="table">表格</el-radio-button>
         </el-radio-group>
+        <el-button v-if="resultData" size="small" icon="el-icon-d-arrow-right" @click="toggleExpandAll">{{ allExpanded ? '折叠' : '展开' }}</el-button>
         <span class="result-type" v-if="resultData">{{ resultType }}</span>
       </div>
       <div class="toolbar-right">
@@ -33,6 +34,7 @@
           <JsonHighlightTree
             ref="jsonTree"
             :data="resultData"
+            :deep="expandAll ? 999 : 3"
             :highlight-path="jsonHighlightPath"
             @node-click="onJsonNodeClick"
           />
@@ -52,7 +54,7 @@
         <vue-json-pretty
           v-if="viewerMode === 'pretty'"
           :data="resultData"
-          :deep="3"
+          :deep="expandAll ? 999 : 3"
           :showLength="true"
           :showLineNumber="true"
           showIcon
@@ -61,7 +63,7 @@
         <json-viewer
           v-if="viewerMode === 'viewer'"
           :value="resultData"
-          :expand-depth="3"
+          :expand-depth="expandAll ? 999 : 3"
           copyable
           boxed
           sort
@@ -116,7 +118,14 @@ export default {
       tableHighlightPath: '',
       jsonHighlightPath: '',
       splitLeftWidth: 400,
-      splitDragging: false
+      splitDragging: false,
+      expandAll: false
+    }
+  },
+  computed: {
+    /** Are all views in expanded state? */
+    allExpanded() {
+      return this.expandAll
     }
   },
   created() {
@@ -188,6 +197,7 @@ export default {
       this.resultType = ''
       this.tableHighlightPath = ''
       this.jsonHighlightPath = ''
+      this.expandAll = false
     },
 
     /* 分栏拖拽 */
@@ -242,6 +252,10 @@ export default {
       } catch (e) {
         this.$message.error('复制失败: ' + e.message)
       }
+    },
+
+    toggleExpandAll() {
+      this.expandAll = !this.expandAll
     }
   }
 }
