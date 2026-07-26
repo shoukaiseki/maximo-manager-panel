@@ -122,6 +122,24 @@ public class MysqlDbConfig {
                     param_value TEXT COMMENT '参数值',
                     created_at DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间'
                 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='API 请求Body参数(form-data/urlencoded)'
+                """,
+            """
+                CREATE TABLE IF NOT EXISTS api_environment (
+                    id VARCHAR(36) PRIMARY KEY COMMENT '环境ID(UUID)',
+                    name VARCHAR(100) NOT NULL COMMENT '环境名称',
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+                    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间'
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='API 环境配置'
+                """,
+            """
+                CREATE TABLE IF NOT EXISTS api_env_variable (
+                    id VARCHAR(36) PRIMARY KEY COMMENT '变量ID(UUID)',
+                    env_id VARCHAR(36) NOT NULL COMMENT '所属环境ID',
+                    var_key VARCHAR(100) NOT NULL COMMENT '变量名',
+                    var_value TEXT COMMENT '变量值',
+                    var_value_type VARCHAR(20) DEFAULT 'default' COMMENT '值类型: default=直接值, system=系统预设',
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间'
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='API 环境变量'
                 """
         };
 
@@ -136,6 +154,14 @@ public class MysqlDbConfig {
                     if (!rs.next()) {
                         System.out.println("[MySQL] Adding parent_id column to api_folder...");
                         stmt.execute("ALTER TABLE api_folder ADD COLUMN parent_id VARCHAR(36) DEFAULT NULL COMMENT '父文件夹ID' AFTER project_id");
+                    }
+                }
+
+                // 检查并添加 var_value_type 列
+                try (var rs = stmt.executeQuery("SHOW COLUMNS FROM api_env_variable LIKE 'var_value_type'")) {
+                    if (!rs.next()) {
+                        System.out.println("[MySQL] Adding var_value_type column to api_env_variable...");
+                        stmt.execute("ALTER TABLE api_env_variable ADD COLUMN var_value_type VARCHAR(20) DEFAULT 'default' COMMENT '值类型: default=直接值, system=系统预设' AFTER var_value");
                     }
                 }
 

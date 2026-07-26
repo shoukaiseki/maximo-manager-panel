@@ -619,32 +619,18 @@ public class ApiProjectService {
                         // 创建项目
                         createProjectRecord(conn, projectId, name, description, type, isGlobal, user);
 
-                        // 转换 OpenAPI tags → folders（支持 / 分隔的多层目录）
-                        JSONArray tags = collection.getJSONArray("tags");
-                        if (tags != null) {
-                            for (int i = 0; i < tags.size(); i++) {
-                                JSONObject tag = tags.getJSONObject(i);
-                                String tagName = tag.getString("name");
-                                if (tagName != null && !tagName.isEmpty()) {
-                                    // 使用 ensureFolderHierarchy 支持 a/b/c 多层目录
-                                    String folderId = ensureFolderHierarchy(conn, projectId, tagName);
-                                    if (folderId != null) {
-                                        folderIdMap.put(tagName, folderId);
-                                    }
-                                }
-                            }
-                        }
-
-                        // 转换 OpenAPI paths → requests
+                        // 转换 OpenAPI paths → requests（按 paths 中出现顺序创建文件夹）
                         JSONObject paths = collection.getJSONObject("paths");
                         if (paths != null) {
+                            int[] folderOrder = {0};
                             for (String url : paths.keySet()) {
                                 JSONObject pathItem = paths.getJSONObject(url);
                                 if (pathItem == null) continue;
                                 for (String method : Arrays.asList("get", "post", "put", "delete", "patch")) {
                                     JSONObject operation = pathItem.getJSONObject(method);
                                     if (operation == null) continue;
-                                    importOpenApiRequest(conn, projectId, folderIdMap, operation, method, url);
+                                    folderOrder[0]++;
+                                    importOpenApiRequest(conn, projectId, folderIdMap, operation, method, url, folderOrder[0]);
                                 }
                             }
                         }
@@ -724,7 +710,7 @@ public class ApiProjectService {
      * 创建层级文件夹，支持 / 分隔的多层路径
      * 返回最底层文件夹的 ID
      */
-    private String ensureFolderHierarchy(Connection conn, String projectId, String fullName) throws SQLException {
+    private String ensureFolderHierarchy(Connection conn, String projectId, String fullName, int sortOrder) throws SQLException {
         if (fullName == null || fullName.isEmpty()) return null;
         String[] parts = fullName.split("/");
         String parentId = null;
@@ -764,9 +750,9 @@ public class ApiProjectService {
                 String newId = UUID.randomUUID().toString();
                 String insertSql;
                 if (parentId != null) {
-                    insertSql = "INSERT INTO api_folder (id, project_id, parent_id, name) VALUES (?, ?, ?, ?)";
+                    insertSql = "INSERT INTO api_folder (id, project_id, parent_id, name, sort_order) VALUES (?, ?, ?, ?, ?)";
                 } else {
-                    insertSql = "INSERT INTO api_folder (id, project_id, name) VALUES (?, ?, ?)";
+                    insertSql = "INSERT INTO api_folder (id, project_id, name, sort_order) VALUES (?, ?, ?, ?)";
                 }
                 try (PreparedStatement ps = conn.prepareStatement(insertSql)) {
                     ps.setString(1, newId);
@@ -774,8 +760,10 @@ public class ApiProjectService {
                     if (parentId != null) {
                         ps.setString(3, parentId);
                         ps.setString(4, trimmed);
+                        ps.setInt(5, sortOrder);
                     } else {
                         ps.setString(3, trimmed);
+                        ps.setInt(4, sortOrder);
                     }
                     ps.executeUpdate();
                 }
@@ -786,7 +774,7 @@ public class ApiProjectService {
     }
 
     private void importOpenApiRequest(Connection conn, String projectId, Map<String, String> folderIdMap,
-                                       JSONObject operation, String method, String url) throws SQLException {
+                                       JSONObject operation, String method, String url, int sortOrder) throws SQLException {
         String reqId = UUID.randomUUID().toString();
         String name = operation.getString("summary");
         if (name == null || name.isEmpty()) {
@@ -801,7 +789,7 @@ public class ApiProjectService {
             folderId = folderIdMap.get(tagName);
             if (folderId == null && tagName != null && !tagName.isEmpty()) {
                 // 自动创建层级文件夹
-                folderId = ensureFolderHierarchy(conn, projectId, tagName);
+                folderId = ensureFolderHierarchy(conn, projectId, tagName, sortOrder);
                 if (folderId != null) {
                     folderIdMap.put(tagName, folderId);
                 }
@@ -1028,7 +1016,145 @@ public class ApiProjectService {
         return JSON.toJSONString(project);
     }
 
-    // ==================== OpenAPI 导入（通过 importProject 最终实现） ====================
+    // ==================== 环境变量 ====================
 
-    // OpenAPI 转换在 importProject 的 JSON 解析层由前端或上层处理，保持不变
+    public List<Map<String, Object>> listEnvironments() {
+        List<Map<String, Object>> list = new ArrayList<>();
+        String sql = "SELECT id, name FROM api_environment ORDER BY created_at";
+        try (Connection conn = mysqlDataSource.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql);
+             ResultSet rs = ps.executeQuery()) {
+            while (rs.next()) {
+                Map<String, Object> env = new LinkedHashMap<>();
+                env.put("id", rs.getString("id"));
+                env.put("name", rs.getString("name"));
+                // 查询变量
+                List<Map<String, String>> vars = getEnvironmentVariables(rs.getString("id"));
+                env.put("variables", vars);
+                list.add(env);
+            }
+        } catch (Exception e) {
+            throw new RuntimeException("查询环境列表失败: " + e.getMessage(), e);
+        }
+        return list;
+    }
+
+    private List<Map<String, String>> getEnvironmentVariables(String envId) {
+        List<Map<String, String>> vars = new ArrayList<>();
+        String sql = "SELECT id, var_key, var_value, var_value_type FROM api_env_variable WHERE env_id = ? ORDER BY created_at";
+        try (Connection conn = mysqlDataSource.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setString(1, envId);
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    Map<String, String> v = new LinkedHashMap<>();
+                    v.put("id", rs.getString("id"));
+                    v.put("key", rs.getString("var_key"));
+                    v.put("value", rs.getString("var_value"));
+                    String type = rs.getString("var_value_type");
+                    if (type != null) {
+                        v.put("valueType", type);
+                    }
+                    vars.add(v);
+                }
+            }
+        } catch (Exception e) {
+            throw new RuntimeException("查询环境变量失败: " + e.getMessage(), e);
+        }
+        return vars;
+    }
+
+    /**
+     * 保存环境（含变量）。id 为空则新建，否则更新。
+     */
+    public Map<String, Object> saveEnvironment(String id, String name, JSONArray variables) {
+        try (Connection conn = mysqlDataSource.getConnection()) {
+            conn.setAutoCommit(false);
+            try {
+                boolean isNew = (id == null || id.isEmpty());
+                if (isNew) {
+                    id = UUID.randomUUID().toString();
+                    String insertEnv = "INSERT INTO api_environment (id, name) VALUES (?, ?)";
+                    try (PreparedStatement ps = conn.prepareStatement(insertEnv)) {
+                        ps.setString(1, id);
+                        ps.setString(2, name);
+                        ps.executeUpdate();
+                    }
+                } else {
+                    String updateEnv = "UPDATE api_environment SET name = ? WHERE id = ?";
+                    try (PreparedStatement ps = conn.prepareStatement(updateEnv)) {
+                        ps.setString(1, name);
+                        ps.setString(2, id);
+                        ps.executeUpdate();
+                    }
+                    // 删除旧变量
+                    try (PreparedStatement ps = conn.prepareStatement("DELETE FROM api_env_variable WHERE env_id = ?")) {
+                        ps.setString(1, id);
+                        ps.executeUpdate();
+                    }
+                }
+
+                // 插入变量
+                if (variables != null) {
+                    String insertVar = "INSERT INTO api_env_variable (id, env_id, var_key, var_value, var_value_type) VALUES (?, ?, ?, ?, ?)";
+                    try (PreparedStatement ps = conn.prepareStatement(insertVar)) {
+                        for (int i = 0; i < variables.size(); i++) {
+                            JSONObject var = variables.getJSONObject(i);
+                            String key = var.getString("key");
+                            String value = var.getString("value");
+                            if (key != null && !key.isEmpty()) {
+                                ps.setString(1, UUID.randomUUID().toString());
+                                ps.setString(2, id);
+                                ps.setString(3, key);
+                                ps.setString(4, value != null ? value : "");
+                                String type = var.getString("valueType");
+                                ps.setString(5, type != null && !type.isEmpty() ? type : "default");
+                                ps.addBatch();
+                            }
+                        }
+                        ps.executeBatch();
+                    }
+                }
+
+                conn.commit();
+            } catch (Exception e) {
+                conn.rollback();
+                throw e;
+            }
+        } catch (Exception e) {
+            if (e instanceof RuntimeException) throw (RuntimeException) e;
+            throw new RuntimeException("保存环境失败: " + e.getMessage(), e);
+        }
+
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("id", id);
+        result.put("name", name);
+        return result;
+    }
+
+    public void deleteEnvironment(String id) {
+        try (Connection conn = mysqlDataSource.getConnection()) {
+            conn.setAutoCommit(false);
+            try {
+                try (PreparedStatement ps = conn.prepareStatement("DELETE FROM api_env_variable WHERE env_id = ?")) {
+                    ps.setString(1, id);
+                    ps.executeUpdate();
+                }
+                try (PreparedStatement ps = conn.prepareStatement("DELETE FROM api_environment WHERE id = ?")) {
+                    ps.setString(1, id);
+                    int affected = ps.executeUpdate();
+                    if (affected == 0) {
+                        throw new RuntimeException("环境不存在");
+                    }
+                }
+                conn.commit();
+            } catch (Exception e) {
+                conn.rollback();
+                throw e;
+            }
+        } catch (Exception e) {
+            if (e instanceof RuntimeException) throw (RuntimeException) e;
+            throw new RuntimeException("删除环境失败: " + e.getMessage(), e);
+        }
+    }
 }

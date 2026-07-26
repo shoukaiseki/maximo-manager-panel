@@ -6,6 +6,11 @@
         <el-option v-for="p in projects" :key="p.id" :label="p.name + (p.type === 'global' ? ' (全局)' : '')" :value="p.id" />
       </el-select>
       <el-button type="text" icon="el-icon-folder-opened" @click="showProjectList = true">项目列表</el-button>
+      <el-select v-model="selectedEnvId" placeholder="环境" class="env-select" size="small">
+        <el-option label="无" value="" />
+        <el-option v-for="e in environments" :key="e.id" :label="e.name" :value="e.id" />
+      </el-select>
+      <el-button type="text" icon="el-icon-setting" @click="openEnvDialog">环境</el-button>
       <el-select v-model="requestMethod" class="method-select" size="small">
         <el-option label="GET" value="GET" />
         <el-option label="POST" value="POST" />
@@ -21,7 +26,10 @@
       <div v-if="projectRequests.length > 0" class="request-sidebar">
         <div class="sidebar-header">
           <span>接口列表</span>
-          <el-input v-model="requestFilter" placeholder="搜索" size="small" class="sidebar-filter" />
+          <div class="sidebar-header-right">
+            <el-button type="text" :icon="allExpanded ? 'el-icon-caret-bottom' : 'el-icon-caret-right'" @click="toggleExpandAll" class="expand-all-btn" :title="allExpanded ? '全部折叠' : '全部展开'" />
+            <el-input v-model="requestFilter" placeholder="搜索" size="small" class="sidebar-filter" />
+          </div>
         </div>
         <div class="sidebar-tree">
           <FolderNode v-for="folder in rootFolders" :key="folder.id"
@@ -288,6 +296,64 @@
         <el-button type="primary" @click="doCopy">确定</el-button>
       </div>
     </el-dialog>
+
+    <el-dialog title="环境管理" :visible.sync="showEnvDialog" width="600px">
+      <div class="env-header">
+        <el-button type="primary" icon="el-icon-plus" size="small" @click="addEnv">新建环境</el-button>
+      </div>
+      <el-table :data="environments" border size="small">
+        <el-table-column prop="name" label="环境名称" />
+        <el-table-column label="变量数">
+          <template slot-scope="scope">
+            {{ (scope.row.variables || []).length }} 个
+          </template>
+        </el-table-column>
+        <el-table-column label="操作" width="160">
+          <template slot-scope="scope">
+            <el-button type="text" @click="editEnv(scope.row)">编辑</el-button>
+            <el-button type="text" style="color:#f56c6c" @click="deleteEnv(scope.row)">删除</el-button>
+          </template>
+        </el-table-column>
+      </el-table>
+    </el-dialog>
+
+    <el-dialog :title="envEditId ? '编辑环境' : '新建环境'" :visible.sync="showEnvEditDialog" width="500px">
+      <el-form>
+        <el-form-item label="环境名称">
+          <el-input v-model="envEditName" placeholder="如：开发、测试、生产" />
+        </el-form-item>
+        <el-form-item label="变量列表">
+          <div class="env-vars-header">
+            <span>使用 <code>{<!-- -->{key}}</code> 语法在 URL/Header/参数中引用变量</span>
+            <el-button type="text" icon="el-icon-plus" @click="addEnvVar">添加变量</el-button>
+          </div>
+          <div v-for="(v, idx) in envEditVars" :key="idx" class="env-var-row">
+            <el-input v-model="v.key" placeholder="变量名" size="small" class="env-var-key" />
+            <el-select v-model="v.valueType" size="small" class="env-var-type" @change="onEnvVarTypeChange(v)">
+              <el-option label="自定义" value="default" />
+              <el-option label="系统预设" value="system" />
+            </el-select>
+            <template v-if="v.valueType === 'system'">
+              <el-select v-model="v.value" placeholder="选择预设" size="small" class="env-var-value">
+                <el-option label="全局 API Key (apiKey)" value="apiKey" />
+                <el-option label="Maximo 接口路径 (masUrl)" value="masUrl" />
+              </el-select>
+            </template>
+            <template v-else>
+              <el-input v-model="v.value" placeholder="变量值" size="small" class="env-var-value" />
+            </template>
+            <el-button type="text" icon="el-icon-delete" style="color:#f56c6c" @click="envEditVars.splice(idx, 1)" />
+          </div>
+          <div class="env-preset-hint">
+            预设变量（自动生效）：<code>{<!-- -->{apiKey}}</code> <code>{<!-- -->{maxauth}}</code> <code>{<!-- -->{baseUrl}}</code>
+          </div>
+        </el-form-item>
+      </el-form>
+      <div slot="footer">
+        <el-button @click="showEnvEditDialog = false">取消</el-button>
+        <el-button type="primary" @click="saveEnv">保存</el-button>
+      </div>
+    </el-dialog>
   </div>
 </template>
 
@@ -325,6 +391,13 @@ export default {
       importToGlobal: 'personal',
       copyToGlobal: 'personal',
       createToGlobal: 'create_personal',
+      environments: [],
+      selectedEnvId: '',
+      showEnvDialog: false,
+      showEnvEditDialog: false,
+      envEditId: '',
+      envEditName: '',
+      envEditVars: [],
       requestMethod: 'GET',
       urlPath: '/api/os/MXAPIMESSAGE',
       activeTab: 'params',
@@ -361,13 +434,57 @@ export default {
     rootFolders() {
       return this.folders.filter(f => !f.parentId)
     },
+    allExpanded() {
+      return this.folders.length > 0 && this.expandedFolders.length === this.folders.length
+    },
     getRequestsWithoutFolder() {
       return this.projectRequests.filter(r => !r.folderId && 
         r.name.toLowerCase().includes(this.requestFilter.toLowerCase()))
+    },
+    resolvedEnvVariables() {
+      const vars = {}
+      // 预设变量
+      try {
+        const saved = localStorage.getItem('maximo-env-settings')
+        if (saved) {
+          const settings = JSON.parse(saved)
+          if (settings.apiKey) vars['apiKey'] = settings.apiKey
+          if (settings.maxauth) vars['maxauth'] = settings.maxauth
+          if (settings.baseUrl) vars['baseUrl'] = settings.baseUrl
+        }
+      } catch (e) {}
+      if (!vars['baseUrl']) vars['baseUrl'] = 'http://localhost:9080'
+      // 选中环境的用户自定义变量（覆盖预设）
+      if (this.selectedEnvId) {
+        const env = this.environments.find(e => e.id === this.selectedEnvId)
+        if (env && env.variables) {
+          env.variables.forEach(v => {
+            if (!v.key) return
+            if (v.valueType === 'system') {
+              // 系统预设变量
+              if (v.value === 'apiKey') {
+                const saved = localStorage.getItem('maximo-env-settings')
+                if (saved) {
+                  try {
+                    const settings = JSON.parse(saved)
+                    if (settings.apiKey) vars[v.key] = settings.apiKey
+                  } catch (e) {}
+                }
+              } else if (v.value === 'masUrl') {
+                vars[v.key] = '/maximo'
+              }
+            } else {
+              vars[v.key] = v.value
+            }
+          })
+        }
+      }
+      return vars
     }
   },
   mounted() {
     this.loadProjects()
+    this.loadEnvironments()
   },
   methods: {
     getAuthHeaders() {
@@ -417,6 +534,13 @@ export default {
         }
       } catch (e) {
         console.error('加载项目失败', e)
+      }
+    },
+    toggleExpandAll() {
+      if (this.allExpanded) {
+        this.expandedFolders = []
+      } else {
+        this.expandedFolders = this.folders.map(f => f.id)
       }
     },
     toggleFolder(folderId) {
@@ -707,7 +831,7 @@ export default {
       this.responseTime = null
 
       const startTime = Date.now()
-      let url = this.urlPath
+      let url = this.resolveTemplate(this.urlPath)
       if (!url.startsWith('/')) {
         url = '/' + url
       }
@@ -739,7 +863,7 @@ export default {
 
         this.headers.forEach(h => {
           if (h.enabled && h.key) {
-            config.headers[h.key] = h.value
+            config.headers[this.resolveTemplate(h.key)] = this.resolveTemplate(h.value)
           }
         })
 
@@ -747,7 +871,7 @@ export default {
         if (enabledParams.length > 0) {
           const params = {}
           enabledParams.forEach(p => {
-            params[p.key] = p.value
+            params[this.resolveTemplate(p.key)] = this.resolveTemplate(p.value)
           })
           if (this.requestMethod === 'GET') {
             config.params = params
@@ -777,7 +901,7 @@ export default {
             config.data = data
             config.headers['Content-Type'] = 'application/x-www-form-urlencoded'
           } else if (this.bodyType === 'json') {
-            config.data = this.bodyJson ? JSON.parse(this.bodyJson) : {}
+            config.data = this.bodyJson ? JSON.parse(this.resolveTemplate(this.bodyJson)) : {}
             config.headers['Content-Type'] = 'application/json;charset=utf-8'
           }
         }
@@ -804,6 +928,107 @@ export default {
       }).catch(() => {
         this.$message.error('复制失败')
       })
+    },
+    resolveTemplate(text) {
+      if (!text || !this.selectedEnvId) return text
+      let result = text
+      const vars = this.resolvedEnvVariables
+      for (const key of Object.keys(vars)) {
+        const regex = new RegExp('\\{\\{' + key + '\\}\\}', 'g')
+        result = result.replace(regex, vars[key])
+      }
+      return result
+    },
+    async loadEnvironments() {
+      try {
+        const response = await axios.get('/solonapi/apiproject/env/list', { headers: this.getAuthHeaders() })
+        if (response.data.code === 200) {
+          this.environments = response.data.data || []
+        }
+      } catch (e) {
+        console.error('加载环境列表失败', e)
+      }
+    },
+    openEnvDialog() {
+      this.loadEnvironments()
+      this.showEnvDialog = true
+    },
+    addEnv() {
+      this.envEditId = ''
+      this.envEditName = ''
+      this.envEditVars = []
+      this.showEnvDialog = false
+      this.showEnvEditDialog = true
+    },
+    onEnvVarTypeChange(v) {
+      if (v.valueType === 'system') {
+        v.value = 'apiKey'
+      } else {
+        v.value = ''
+      }
+    },
+    editEnv(env) {
+      this.envEditId = env.id
+      this.envEditName = env.name
+      this.envEditVars = (env.variables || []).map(v => ({
+        key: v.key || '',
+        value: v.value || '',
+        valueType: v.valueType || 'default'
+      }))
+      this.showEnvDialog = false
+      this.showEnvEditDialog = true
+    },
+    async deleteEnv(env) {
+      this.$confirm('确定删除环境 "' + env.name + '" 吗？', '提示', { confirmButtonText: '确定', cancelButtonText: '取消', type: 'warning' })
+        .then(async () => {
+          try {
+            const response = await axios.post('/solonapi/apiproject/env/delete', null, {
+              params: { id: env.id },
+              headers: this.getAuthHeaders()
+            })
+            if (response.data.code === 200) {
+              this.$message.success('删除成功')
+              this.loadEnvironments()
+              if (this.selectedEnvId === env.id) this.selectedEnvId = ''
+            } else {
+              this.$message.error(response.data.message)
+            }
+          } catch (e) {
+            this.$message.error('删除失败')
+          }
+        })
+    },
+    addEnvVar() {
+      this.envEditVars.push({ key: '', value: '', valueType: 'default' })
+    },
+    async saveEnv() {
+      if (!this.envEditName.trim()) {
+        this.$message.warning('请输入环境名称')
+        return
+      }
+      try {
+        const headers = this.getAuthHeaders()
+        headers['Content-Type'] = 'application/json'
+        const body = JSON.stringify({
+          id: this.envEditId,
+          name: this.envEditName,
+          variables: this.envEditVars.filter(v => v.key.trim()).map(v => ({
+            key: v.key,
+            value: v.valueType === 'system' ? v.value : v.value,
+            valueType: v.valueType || 'default'
+          }))
+        })
+        const response = await axios.post('/solonapi/apiproject/env/save', body, { headers })
+        if (response.data.code === 200) {
+          this.$message.success('保存成功')
+          this.showEnvEditDialog = false
+          this.loadEnvironments()
+        } else {
+          this.$message.error(response.data.message)
+        }
+      } catch (e) {
+        this.$message.error('保存失败')
+      }
     }
   }
 }
@@ -866,6 +1091,17 @@ export default {
   padding: 8px 10px;
   background: #f5f7fa;
   border-bottom: 1px solid #dcdfe6;
+}
+
+.sidebar-header-right {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.expand-all-btn {
+  padding: 0 4px;
+  font-size: 14px;
 }
 
 .sidebar-filter {
@@ -1111,5 +1347,55 @@ export default {
 
 .import-radio-group :deep(.el-radio) {
   margin-right: 20px;
+}
+
+.env-select {
+  width: 100px;
+}
+
+.env-header {
+  margin-bottom: 10px;
+}
+
+.env-vars-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+  font-size: 12px;
+  color: #909399;
+}
+
+.env-var-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.env-var-key {
+  width: 130px;
+}
+
+.env-var-type {
+  width: 110px;
+}
+
+.env-var-value {
+  flex: 1;
+}
+
+.env-preset-hint {
+  margin-top: 10px;
+  font-size: 12px;
+  color: #909399;
+}
+
+.env-preset-hint code {
+  background: #f5f7fa;
+  padding: 1px 4px;
+  border-radius: 2px;
+  font-size: 12px;
+  color: #409eff;
 }
 </style>

@@ -4,6 +4,7 @@ import com.sks.server.service.ApiProjectService;
 import org.noear.solon.annotation.*;
 import org.noear.solon.core.handle.MethodType;
 
+import com.alibaba.fastjson.JSONArray;
 import java.util.List;
 import java.util.Map;
 
@@ -84,6 +85,39 @@ public class ApiProjectController {
         try {
             String content = apiProjectService.exportProject(user, projectId);
             return Map.of("code", 200, "data", content);
+        } catch (Exception e) {
+            return Map.of("code", 500, "message", e.getMessage());
+        }
+    }
+
+    // ==================== 环境变量 ====================
+
+    @Mapping(value = "/apiproject/env/list", method = MethodType.GET)
+    public Map<String, Object> listEnvironments() {
+        List<Map<String, Object>> list = apiProjectService.listEnvironments();
+        return Map.of("code", 200, "data", list);
+    }
+
+    @Mapping(value = "/apiproject/env/save", method = MethodType.POST)
+    public Map<String, Object> saveEnvironment(String id, String name, org.noear.solon.core.handle.Context ctx) {
+        try {
+            String body = ctx.body();
+            com.alibaba.fastjson.JSONObject json = com.alibaba.fastjson.JSON.parseObject(body);
+            String envId = json.getString("id");
+            String envName = json.getString("name");
+            JSONArray variables = json.getJSONArray("variables");
+            Map<String, Object> result = apiProjectService.saveEnvironment(envId, envName, variables);
+            return Map.of("code", 200, "data", result);
+        } catch (Exception e) {
+            return Map.of("code", 500, "message", e.getMessage());
+        }
+    }
+
+    @Mapping(value = "/apiproject/env/delete", method = MethodType.POST)
+    public Map<String, Object> deleteEnvironment(String id) {
+        try {
+            apiProjectService.deleteEnvironment(id);
+            return Map.of("code", 200, "message", "删除成功");
         } catch (Exception e) {
             return Map.of("code", 500, "message", e.getMessage());
         }

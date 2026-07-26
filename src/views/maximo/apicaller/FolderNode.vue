@@ -1,6 +1,7 @@
 <template>
   <div class="folder-item">
     <div class="folder-title" @click="$emit('toggle', folder.id)">
+      <i v-if="hasChildren" :class="expandedFolders.includes(folder.id) ? 'el-icon-caret-bottom' : 'el-icon-caret-right'" class="caret-icon" />
       <i class="el-icon-folder" :class="{ 'el-icon-folder-opened': expandedFolders.includes(folder.id) }" />
       {{ folder.name }}
     </div>
@@ -42,6 +43,9 @@ export default {
     childFolders() {
       return this.allFolders.filter(f => f.parentId === this.folder.id)
     },
+    hasChildren() {
+      return this.childFolders.length > 0 || this.projectRequests.some(r => r.folderId === this.folder.id)
+    },
     folderRequests() {
       const nameFilter = this.requestFilter || ''
       return this.projectRequests.filter(r =>
@@ -65,6 +69,11 @@ export default {
   padding: 4px 8px;
   cursor: pointer;
   font-size: 13px;
+}
+
+.caret-icon {
+  font-size: 12px;
+  color: #909399;
 }
 
 .folder-title:hover {
