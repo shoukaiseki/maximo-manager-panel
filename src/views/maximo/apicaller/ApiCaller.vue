@@ -2,12 +2,12 @@
   <div class="api-caller-container">
     <div class="api-caller-header">
       <el-select v-model="selectedProjectId" placeholder="选择项目" class="project-select" size="small" @change="loadProject">
-        <el-option label="无" value="" />
+        <el-option label="默认" value="" />
         <el-option v-for="p in projects" :key="p.id" :label="p.name + (p.type === 'global' ? ' (全局)' : '')" :value="p.id" />
       </el-select>
       <el-button type="text" icon="el-icon-folder-opened" @click="showProjectList = true">项目列表</el-button>
       <el-select v-model="selectedEnvId" placeholder="环境" class="env-select" size="small">
-        <el-option label="无" value="" />
+        <el-option label="默认" value="" />
         <el-option v-for="e in environments" :key="e.id" :label="e.name" :value="e.id" />
       </el-select>
       <el-button type="text" icon="el-icon-setting" @click="openEnvDialog">环境</el-button>
@@ -20,13 +20,16 @@
       <el-input v-model="urlPath" placeholder="/api/os/MXAPIMESSAGE" class="url-input" />
       <el-button type="primary" @click="sendRequest" :loading="loading" class="send-btn">发送</el-button>
       <el-button @click="clearResult" class="clear-btn">清空</el-button>
+      <el-button type="success" icon="el-icon-document" @click="saveCurrentRequest" :disabled="!selectedProjectId" class="save-btn">保存</el-button>
     </div>
 
     <div class="api-caller-body">
-      <div v-if="projectRequests.length > 0" class="request-sidebar">
+      <div class="request-sidebar" :style="{ width: sidebarWidth + 'px' }">
         <div class="sidebar-header">
           <span>接口列表</span>
           <div class="sidebar-header-right">
+            <el-button type="text" size="small" icon="el-icon-folder-add" @click="openAddFolderDialog()" title="添加目录" class="sidebar-action-btn" />
+            <el-button type="text" size="small" icon="el-icon-plus" @click="openAddRequestDialog()" title="添加接口" class="sidebar-action-btn" />
             <el-button type="text" :icon="allExpanded ? 'el-icon-caret-bottom' : 'el-icon-caret-right'" @click="toggleExpandAll" class="expand-all-btn" :title="allExpanded ? '全部折叠' : '全部展开'" />
             <el-input v-model="requestFilter" placeholder="搜索" size="small" class="sidebar-filter" />
           </div>
@@ -40,18 +43,33 @@
             :request-filter="requestFilter"
             :project-requests="projectRequests"
             @toggle="toggleFolder"
-            @select-request="loadRequest" />
+            @select-request="loadRequest"
+            @add-folder="openAddFolderDialog"
+            @add-request="openAddRequestDialog"
+            @delete-folder="deleteFolderConfirm"
+            @delete-request="deleteRequestConfirm" />
           <div v-for="req in getRequestsWithoutFolder" :key="req.id" 
                class="request-item" :class="{ active: currentRequestId === req.id }"
                @click="loadRequest(req)">
             <span class="method-badge" :class="req.method.toLowerCase()">{{ req.method }}</span>
             {{ req.name }}
+            <el-button type="text" icon="el-icon-delete" size="mini" class="sidebar-item-delete" @click.stop="deleteRequestConfirm(req)" />
+          </div>
+          <div v-if="folders.length === 0 && projectRequests.length === 0" class="sidebar-empty">
+            <el-empty description="暂无接口，点击上方按钮添加" :image-size="60" />
           </div>
         </div>
       </div>
 
+      <div
+        class="sidebar-divider"
+        @mousedown="startSidebarResize"
+        :class="{ dragging: sidebarDragging }"
+      ></div>
+
       <div class="main-content">
-        <el-tabs v-model="activeTab" type="border-card">
+        <div class="tabs-wrapper">
+          <el-tabs v-model="activeTab" type="border-card">
           <el-tab-pane label="参数" name="params">
             <div class="params-header">
               <el-button type="text" icon="el-icon-plus" @click="addParam">添加参数</el-button>
@@ -85,6 +103,7 @@
           <el-tab-pane label="Headers" name="headers">
             <div class="params-header">
               <el-button type="text" icon="el-icon-plus" @click="addHeader">添加Header</el-button>
+              <el-button type="text" icon="el-icon-plus" @click="addApiKeyHeader">+ apiKey</el-button>
               <el-button type="text" icon="el-icon-delete" @click="clearHeaders">清空</el-button>
             </div>
             <el-table :data="headers" border size="small" :show-header="headers.length > 0">
@@ -146,7 +165,7 @@
             </div>
 
             <div v-if="bodyType === 'json'" class="body-json">
-              <textarea v-model="bodyJson" class="json-textarea" placeholder="输入JSON格式的请求体..." />
+              <textarea v-model="bodyJson" class="json-textarea" placeholder="输入JSON格式的请求体..."></textarea>
             </div>
 
             <div v-if="bodyType === 'none'" class="body-none">
@@ -155,23 +174,41 @@
           </el-tab-pane>
         </el-tabs>
 
-        <div class="result-section">
+        <div class="result-divider" @mousedown="startResultResize" :class="{ dragging: resultDragging }">
+          <i class="el-icon-d-arrow-thick"></i>
+        </div>
+
+        <div class="result-section" :style="resultSectionStyle">
           <div class="result-header">
             <span class="result-label">响应结果</span>
             <span v-if="responseTime" class="response-time">{{ responseTime }}ms</span>
             <span v-if="responseStatus" :class="['status-code', responseStatus >= 200 && responseStatus < 300 ? 'success' : 'error']">
               {{ responseStatus }}
             </span>
-            <el-button type="text" icon="el-icon-copy-document" @click="copyResult" v-if="responseText">复制</el-button>
+            <div class="result-header-right" v-if="responseText">
+              <el-button type="text" size="mini" :icon="resultAllExpanded ? 'el-icon-caret-bottom' : 'el-icon-caret-right'" @click="toggleResultExpandAll" title="全部展开/折叠" />
+              <el-radio-group v-model="resultViewerMode" size="mini">
+                <el-radio-button label="tree">树形</el-radio-button>
+                <el-radio-button label="source">源码</el-radio-button>
+                <el-radio-button label="table">表格</el-radio-button>
+              </el-radio-group>
+              <el-button type="text" icon="el-icon-copy-document" @click="copyResult">复制</el-button>
+            </div>
           </div>
-          <div v-if="responseText" class="result-body">
-            <pre class="result-pre">{{ formattedResponse }}</pre>
+          <div v-if="responseText && parsedResponse !== null" class="result-body">
+            <vue-json-pretty v-if="resultViewerMode === 'tree'" :data="parsedResponse" :deep="resultAllExpanded ? 999 : 3" class="result-json-pretty" />
+            <json-viewer v-else-if="resultViewerMode === 'source'" :value="parsedResponse" :expand-depth="resultAllExpanded ? 999 : 3" boxed class="result-json-viewer" />
+            <JsonTableGrid v-else-if="resultViewerMode === 'table'" :data="parsedResponse" class="result-json-table" />
+          </div>
+          <div v-else-if="responseText && parsedResponse === null" class="result-body">
+            <pre class="result-pre">{{ responseText }}</pre>
           </div>
           <div v-else class="result-empty">
             <el-empty description="点击发送按钮执行请求" />
           </div>
         </div>
       </div>
+    </div>
     </div>
 
     <el-dialog title="项目列表" :visible.sync="showProjectList" width="800px" top="10vh">
@@ -181,7 +218,12 @@
         <el-button type="primary" icon="el-icon-upload" @click="showImportDialog = true">导入</el-button>
       </div>
       <el-table :data="filteredProjects" border size="small">
-        <el-table-column prop="name" label="项目名称" />
+        <el-table-column prop="name" label="项目名称">
+          <template slot-scope="scope">
+            <span>{{ scope.row.name }}</span>
+            <el-tag v-if="scope.row.id === defaultProjectId" size="mini" type="warning" style="margin-left:6px">默认</el-tag>
+          </template>
+        </el-table-column>
         <el-table-column prop="description" label="描述" />
         <el-table-column prop="requestCount" label="接口数量">
           <template slot-scope="scope">
@@ -195,12 +237,13 @@
             </span>
           </template>
         </el-table-column>
-        <el-table-column label="操作">
+        <el-table-column label="操作" width="260">
           <template slot-scope="scope">
             <el-button type="text" @click="selectProject(scope.row.id)">选择</el-button>
             <el-button type="text" @click="editProject(scope.row)">编辑</el-button>
             <el-button type="text" @click="copyProject(scope.row)">复制</el-button>
             <el-button type="text" @click="exportProject(scope.row)">导出</el-button>
+            <el-button type="text" @click="setDefaultProject(scope.row.id)" :disabled="scope.row.id === defaultProjectId">设为默认</el-button>
             <el-button type="text" @click="deleteProjectConfirm(scope.row)">删除</el-button>
           </template>
         </el-table-column>
@@ -302,15 +345,21 @@
         <el-button type="primary" icon="el-icon-plus" size="small" @click="addEnv">新建环境</el-button>
       </div>
       <el-table :data="environments" border size="small">
-        <el-table-column prop="name" label="环境名称" />
+        <el-table-column prop="name" label="环境名称">
+          <template slot-scope="scope">
+            <span>{{ scope.row.name }}</span>
+            <el-tag v-if="scope.row.id === defaultEnvId" size="mini" type="warning" style="margin-left:6px">默认</el-tag>
+          </template>
+        </el-table-column>
         <el-table-column label="变量数">
           <template slot-scope="scope">
             {{ (scope.row.variables || []).length }} 个
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="160">
+        <el-table-column label="操作" width="220">
           <template slot-scope="scope">
             <el-button type="text" @click="editEnv(scope.row)">编辑</el-button>
+            <el-button type="text" @click="setDefaultEnv(scope.row.id)" :disabled="scope.row.id === defaultEnvId">设为默认</el-button>
             <el-button type="text" style="color:#f56c6c" @click="deleteEnv(scope.row)">删除</el-button>
           </template>
         </el-table-column>
@@ -354,12 +403,57 @@
         <el-button type="primary" @click="saveEnv">保存</el-button>
       </div>
     </el-dialog>
+
+    <el-dialog title="添加目录" :visible.sync="showFolderDialog" width="400px">
+      <el-form>
+        <el-form-item label="目录名称">
+          <el-input v-model="editFolderName" placeholder="输入目录名称" />
+        </el-form-item>
+        <el-form-item label="上级目录">
+          <el-select v-model="editFolderParentId" placeholder="无（根目录）" clearable style="width:100%">
+            <el-option label="无（根目录）" value="" />
+            <el-option v-for="f in folders" :key="f.id" :label="f.name" :value="f.id" />
+          </el-select>
+        </el-form-item>
+      </el-form>
+      <div slot="footer">
+        <el-button @click="showFolderDialog = false">取消</el-button>
+        <el-button type="primary" @click="saveFolder">确定</el-button>
+      </div>
+    </el-dialog>
+
+    <el-dialog title="添加接口" :visible.sync="showRequestDialog" width="400px">
+      <el-form>
+        <el-form-item label="接口名称">
+          <el-input v-model="editRequestName" placeholder="输入接口名称" />
+        </el-form-item>
+        <el-form-item label="请求方式">
+          <el-select v-model="editRequestMethod" style="width:100%">
+            <el-option label="GET" value="GET" />
+            <el-option label="POST" value="POST" />
+            <el-option label="PUT" value="PUT" />
+            <el-option label="DELETE" value="DELETE" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="所属目录">
+          <el-select v-model="editRequestFolderId" placeholder="无（根目录）" clearable style="width:100%">
+            <el-option label="无（根目录）" value="" />
+            <el-option v-for="f in folders" :key="f.id" :label="f.name" :value="f.id" />
+          </el-select>
+        </el-form-item>
+      </el-form>
+      <div slot="footer">
+        <el-button @click="showRequestDialog = false">取消</el-button>
+        <el-button type="primary" @click="confirmAddRequest">确定</el-button>
+      </div>
+    </el-dialog>
   </div>
 </template>
 
 <script>
 import axios from 'axios'
 import FolderNode from './FolderNode.vue'
+import JsonTableGrid from '/src/components/JsonTableGrid.vue'
 
 export default {
   name: 'ApiCaller',
@@ -409,13 +503,47 @@ export default {
       loading: false,
       responseText: '',
       responseStatus: null,
-      responseTime: null
+      responseTime: null,
+      resultDragging: false,
+      resultViewerMode: 'tree',
+      resultAllExpanded: false,
+      resultSectionHeight: 350,
+      resultStartY: 0,
+      resultStartHeight: 0,
+      sidebarWidth: 260,
+      sidebarDragging: false,
+      sidebarStartX: 0,
+      sidebarStartWidth: 0,
+      showFolderDialog: false,
+      editFolderId: '',
+      editFolderName: '',
+      editFolderParentId: '',
+      showRequestDialog: false,
+      editRequestId: '',
+      editRequestName: '',
+      editRequestMethod: 'GET',
+      editRequestFolderId: '',
+      currentRequestName: '',
+      currentRequestFolderId: '',
+      defaultProjectId: localStorage.getItem('apicaller-default-project') || '',
+      defaultEnvId: localStorage.getItem('apicaller-default-env') || ''
     }
   },
   components: {
-    FolderNode
+    FolderNode,
+    JsonTableGrid
   },
   computed: {
+    parsedResponse() {
+      try {
+        return JSON.parse(this.responseText)
+      } catch (e) {
+        return null
+      }
+    },
+    resultSectionStyle() {
+      return { height: this.resultSectionHeight + 'px' }
+    },
     formattedResponse() {
       try {
         const obj = JSON.parse(this.responseText)
@@ -485,8 +613,67 @@ export default {
   mounted() {
     this.loadProjects()
     this.loadEnvironments()
+    document.addEventListener('mousemove', this.doResultResize)
+    document.addEventListener('mouseup', this.stopResultResize)
+    document.addEventListener('mousemove', this.doSidebarResize)
+    document.addEventListener('mouseup', this.stopSidebarResize)
+  },
+  beforeDestroy() {
+    document.removeEventListener('mousemove', this.doResultResize)
+    document.removeEventListener('mouseup', this.stopResultResize)
+    document.removeEventListener('mousemove', this.doSidebarResize)
+    document.removeEventListener('mouseup', this.stopSidebarResize)
   },
   methods: {
+    startResultResize(e) {
+      this.resultDragging = true
+      this.resultStartY = e.clientY
+      this.resultStartHeight = this.resultSectionHeight
+      document.body.style.cursor = 'row-resize'
+      document.body.style.userSelect = 'none'
+    },
+    doResultResize(e) {
+      if (!this.resultDragging) return
+      const delta = this.resultStartY - e.clientY
+      const mainContent = this.$el && this.$el.querySelector('.main-content')
+      if (mainContent) {
+        const maxHeight = mainContent.clientHeight - 100
+        let newHeight = this.resultStartHeight + delta
+        newHeight = Math.max(150, Math.min(newHeight, maxHeight))
+        this.resultSectionHeight = newHeight
+      }
+    },
+    stopResultResize() {
+      if (this.resultDragging) {
+        this.resultDragging = false
+        document.body.style.cursor = ''
+        document.body.style.userSelect = ''
+      }
+    },
+    toggleResultExpandAll() {
+      this.resultAllExpanded = !this.resultAllExpanded
+    },
+    startSidebarResize(e) {
+      this.sidebarDragging = true
+      this.sidebarStartX = e.clientX
+      this.sidebarStartWidth = this.sidebarWidth
+      document.body.style.cursor = 'col-resize'
+      document.body.style.userSelect = 'none'
+    },
+    doSidebarResize(e) {
+      if (!this.sidebarDragging) return
+      const delta = e.clientX - this.sidebarStartX
+      let newWidth = this.sidebarStartWidth + delta
+      newWidth = Math.max(160, Math.min(newWidth, 600))
+      this.sidebarWidth = newWidth
+    },
+    stopSidebarResize() {
+      if (this.sidebarDragging) {
+        this.sidebarDragging = false
+        document.body.style.cursor = ''
+        document.body.style.userSelect = ''
+      }
+    },
     getAuthHeaders() {
       const headers = {}
       const saved = localStorage.getItem('maximo-env-settings')
@@ -510,6 +697,14 @@ export default {
         })
         if (response.data.code === 200) {
           this.projects = response.data.data
+          // 自动选择默认项目
+          if (this.defaultProjectId && !this.selectedProjectId) {
+            const exists = this.projects.some(p => p.id === this.defaultProjectId)
+            if (exists) {
+              this.selectedProjectId = this.defaultProjectId
+              this.loadProject(this.defaultProjectId)
+            }
+          }
         }
       } catch (e) {
         console.error('加载项目列表失败', e)
@@ -557,6 +752,8 @@ export default {
     },
     loadRequest(request) {
       this.currentRequestId = request.id
+      this.currentRequestName = request.name || ''
+      this.currentRequestFolderId = request.folderId || ''
       this.requestMethod = request.method || 'GET'
       this.urlPath = request.url || ''
       this.params = []
@@ -805,6 +1002,9 @@ export default {
     clearHeaders() {
       this.headers = []
     },
+    addApiKeyHeader() {
+      this.headers.push({ key: 'apiKey', value: '{{apiKey}}', enabled: true })
+    },
     addBodyParam() {
       this.bodyParams.push({ key: '', value: '' })
     },
@@ -944,6 +1144,13 @@ export default {
         const response = await axios.get('/solonapi/apiproject/env/list', { headers: this.getAuthHeaders() })
         if (response.data.code === 200) {
           this.environments = response.data.data || []
+          // 自动选择默认环境
+          if (this.defaultEnvId && !this.selectedEnvId) {
+            const exists = this.environments.some(e => e.id === this.defaultEnvId)
+            if (exists) {
+              this.selectedEnvId = this.defaultEnvId
+            }
+          }
         }
       } catch (e) {
         console.error('加载环境列表失败', e)
@@ -998,6 +1205,16 @@ export default {
           }
         })
     },
+    setDefaultProject(projectId) {
+      this.defaultProjectId = projectId
+      localStorage.setItem('apicaller-default-project', projectId)
+      this.$message.success('已设为默认项目')
+    },
+    setDefaultEnv(envId) {
+      this.defaultEnvId = envId
+      localStorage.setItem('apicaller-default-env', envId)
+      this.$message.success('已设为默认环境')
+    },
     addEnvVar() {
       this.envEditVars.push({ key: '', value: '', valueType: 'default' })
     },
@@ -1029,6 +1246,184 @@ export default {
       } catch (e) {
         this.$message.error('保存失败')
       }
+    },
+    openAddFolderDialog(parentId) {
+      this.editFolderId = ''
+      this.editFolderName = ''
+      this.editFolderParentId = parentId || ''
+      this.showFolderDialog = true
+    },
+    async saveFolder() {
+      if (!this.editFolderName.trim()) {
+        this.$message.warning('请输入目录名称')
+        return
+      }
+      try {
+        const response = await axios.post('/solonapi/apiproject/folder/save', null, {
+          params: {
+            projectId: this.selectedProjectId,
+            id: this.editFolderId,
+            name: this.editFolderName,
+            parentId: this.editFolderParentId || ''
+          },
+          headers: this.getAuthHeaders()
+        })
+        if (response.data.code === 200) {
+          this.$message.success('目录创建成功')
+          this.showFolderDialog = false
+          this.loadProject(this.selectedProjectId)
+        } else {
+          this.$message.error(response.data.message)
+        }
+      } catch (e) {
+        this.$message.error('保存目录失败')
+      }
+    },
+    deleteFolderConfirm(folderId) {
+      this.$confirm('确定删除该目录及其所有子目录和接口吗？', '提示', {
+        confirmButtonText: '确定',
+        cancelButtonText: '取消',
+        type: 'warning'
+      }).then(async () => {
+        try {
+          const response = await axios.post('/solonapi/apiproject/folder/delete', null, {
+            params: { projectId: this.selectedProjectId, folderId },
+            headers: this.getAuthHeaders()
+          })
+          if (response.data.code === 200) {
+            this.$message.success('删除成功')
+            this.loadProject(this.selectedProjectId)
+          } else {
+            this.$message.error(response.data.message)
+          }
+        } catch (e) {
+          this.$message.error('删除失败')
+        }
+      })
+    },
+    openAddRequestDialog(folderId) {
+      this.editRequestId = ''
+      this.editRequestName = ''
+      this.editRequestMethod = 'GET'
+      this.editRequestFolderId = folderId || ''
+      this.showRequestDialog = true
+    },
+    async confirmAddRequest() {
+      if (!this.editRequestName.trim()) {
+        this.$message.warning('请输入接口名称')
+        return
+      }
+      try {
+        const requestData = {
+          id: '',
+          name: this.editRequestName,
+          method: this.editRequestMethod,
+          url: '',
+          folderId: this.editRequestFolderId || null,
+          params: [],
+          headers: [],
+          body: {}
+        }
+        const headers = this.getAuthHeaders()
+        headers['Content-Type'] = 'application/json'
+        const response = await axios.post('/solonapi/apiproject/request/save?projectId=' + this.selectedProjectId, JSON.stringify(requestData), { headers })
+        if (response.data.code === 200) {
+          this.$message.success('接口创建成功')
+          this.showRequestDialog = false
+          const newReqId = response.data.data.id
+          await this.loadProject(this.selectedProjectId)
+          // 自动选中新创建的接口
+          const newReq = this.projectRequests.find(r => r.id === newReqId)
+          if (newReq) {
+            this.loadRequest(newReq)
+          }
+        } else {
+          this.$message.error(response.data.message)
+        }
+      } catch (e) {
+        this.$message.error('创建接口失败')
+      }
+    },
+    async saveCurrentRequest() {
+      if (!this.selectedProjectId) {
+        this.$message.warning('请先选择项目')
+        return
+      }
+
+      const requestData = {
+        id: this.currentRequestId || '',
+        name: this.currentRequestName || '',
+        method: this.requestMethod,
+        url: this.urlPath,
+        folderId: this.currentRequestFolderId || null,
+        params: this.params.filter(p => p.key).map(p => ({
+          key: p.key,
+          value: p.value,
+          enabled: p.enabled !== false
+        })),
+        headers: this.headers.filter(h => h.key).map(h => ({
+          key: h.key,
+          value: h.value,
+          enabled: h.enabled !== false
+        })),
+        body: {}
+      }
+
+      if (this.bodyType !== 'none') {
+        if (this.bodyType === 'json') {
+          requestData.body = { type: 'json', content: this.bodyJson }
+        } else if (this.bodyType === 'form-data') {
+          requestData.body = {
+            type: 'form-data',
+            formData: this.bodyParams.filter(p => p.key).map(p => ({ key: p.key, value: p.value }))
+          }
+        } else if (this.bodyType === 'urlencoded') {
+          requestData.body = {
+            type: 'urlencoded',
+            urlEncoded: this.bodyParams.filter(p => p.key).map(p => ({ key: p.key, value: p.value }))
+          }
+        }
+      }
+
+      try {
+        const headers = this.getAuthHeaders()
+        headers['Content-Type'] = 'application/json'
+        const response = await axios.post('/solonapi/apiproject/request/save?projectId=' + this.selectedProjectId, JSON.stringify(requestData), { headers })
+        if (response.data.code === 200) {
+          this.$message.success('保存成功')
+          this.currentRequestId = response.data.data.id
+          this.loadProject(this.selectedProjectId)
+        } else {
+          this.$message.error(response.data.message)
+        }
+      } catch (e) {
+        this.$message.error('保存失败')
+      }
+    },
+    deleteRequestConfirm(request) {
+      this.$confirm('确定删除接口 "' + request.name + '" 吗？', '提示', {
+        confirmButtonText: '确定',
+        cancelButtonText: '取消',
+        type: 'warning'
+      }).then(async () => {
+        try {
+          const response = await axios.post('/solonapi/apiproject/request/delete', null, {
+            params: { requestId: request.id },
+            headers: this.getAuthHeaders()
+          })
+          if (response.data.code === 200) {
+            this.$message.success('删除成功')
+            if (this.currentRequestId === request.id) {
+              this.currentRequestId = ''
+            }
+            this.loadProject(this.selectedProjectId)
+          } else {
+            this.$message.error(response.data.message)
+          }
+        } catch (e) {
+          this.$message.error('删除失败')
+        }
+      })
     }
   }
 }
@@ -1077,13 +1472,34 @@ export default {
 }
 
 .request-sidebar {
-  width: 260px;
   border: 1px solid #dcdfe6;
   border-radius: 4px;
   display: flex;
   flex-direction: column;
+  flex-shrink: 0;
 }
 
+.sidebar-divider {
+  width: 5px;
+  background: #e8eaed;
+  cursor: col-resize;
+  border-radius: 3px;
+  flex-shrink: 0;
+  transition: background 0.15s;
+}
+
+.sidebar-divider:hover,
+.sidebar-divider.dragging {
+  background: #409eff;
+}
+
+.tabs-wrapper {
+  flex: 1;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
 .sidebar-header {
   display: flex;
   align-items: center;
@@ -1104,8 +1520,41 @@ export default {
   font-size: 14px;
 }
 
+.sidebar-action-btn {
+  padding: 0 4px;
+  font-size: 14px;
+  color: #909399;
+}
+
+.sidebar-action-btn:hover {
+  color: #409eff;
+}
+
+.save-btn {
+  margin-left: 4px;
+}
+
+.sidebar-item-delete {
+  margin-left: auto;
+  padding: 0 2px;
+  font-size: 12px;
+  color: #c0c4cc;
+  visibility: hidden;
+}
+
+.request-item:hover .sidebar-item-delete {
+  visibility: visible;
+  color: #f56c6c;
+}
+
 .sidebar-filter {
   width: 120px;
+}
+
+.sidebar-empty {
+  padding: 20px 10px;
+  display: flex;
+  justify-content: center;
 }
 
 .sidebar-tree {
@@ -1223,22 +1672,60 @@ export default {
 }
 
 .result-section {
-  flex: 1;
   border: 1px solid #dcdfe6;
   border-radius: 4px;
-  margin-top: 10px;
+  margin-top: 0;
   display: flex;
   flex-direction: column;
-  min-height: 200px;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.result-divider {
+  height: 6px;
+  background: #e8eaed;
+  cursor: row-resize;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 10px;
+  margin-bottom: 0;
+  border-radius: 3px;
+  flex-shrink: 0;
+  transition: background 0.15s;
+}
+
+.result-divider:hover,
+.result-divider.dragging {
+  background: #409eff;
+}
+
+.result-divider i {
+  font-size: 10px;
+  color: #909399;
+  line-height: 1;
+}
+
+.result-divider:hover i,
+.result-divider.dragging i {
+  color: #fff;
 }
 
 .result-header {
   display: flex;
   align-items: center;
-  gap: 15px;
-  padding: 8px 15px;
+  gap: 12px;
+  padding: 6px 12px;
   background: #f5f7fa;
   border-bottom: 1px solid #dcdfe6;
+  flex-shrink: 0;
+}
+
+.result-header-right {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .result-label {
@@ -1269,7 +1756,25 @@ export default {
 .result-body {
   flex: 1;
   overflow: auto;
-  padding: 15px;
+  padding: 0;
+}
+
+.result-body :deep(.vue-json-pretty) {
+  padding: 12px 16px;
+  font-size: 13px;
+}
+
+.result-body :deep(.json-viewer) {
+  padding: 12px 16px;
+  font-size: 13px;
+}
+
+.result-body :deep(.jv-container) {
+  border: none !important;
+}
+
+.result-json-table {
+  height: 100%;
 }
 
 .result-pre {

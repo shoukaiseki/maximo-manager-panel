@@ -122,4 +122,51 @@ public class ApiProjectController {
             return Map.of("code", 500, "message", e.getMessage());
         }
     }
+
+    // ==================== 文件夹管理 ====================
+
+    @Mapping(value = "/apiproject/folder/save", method = MethodType.POST)
+    public Map<String, Object> saveFolder(String projectId, String id, String name, String parentId) {
+        try {
+            Map<String, Object> result = apiProjectService.saveFolder(projectId, id, name, parentId);
+            return Map.of("code", 200, "data", result);
+        } catch (Exception e) {
+            return Map.of("code", 500, "message", e.getMessage());
+        }
+    }
+
+    @Mapping(value = "/apiproject/folder/delete", method = MethodType.POST)
+    public Map<String, Object> deleteFolder(String projectId, String folderId) {
+        try {
+            apiProjectService.deleteFolder(projectId, folderId);
+            return Map.of("code", 200, "message", "删除成功");
+        } catch (Exception e) {
+            return Map.of("code", 500, "message", e.getMessage());
+        }
+    }
+
+    // ==================== 请求管理 ====================
+
+    @Mapping(value = "/apiproject/request/save", method = MethodType.POST)
+    public Map<String, Object> saveRequest(String projectId, org.noear.solon.core.handle.Context ctx) {
+        try {
+            String body = ctx.body();
+            com.alibaba.fastjson.JSONObject json = com.alibaba.fastjson.JSON.parseObject(body);
+            json.put("projectId", projectId);
+            Map<String, Object> result = apiProjectService.saveRequest(projectId, json);
+            return Map.of("code", 200, "data", result);
+        } catch (Exception e) {
+            return Map.of("code", 500, "message", e.getMessage());
+        }
+    }
+
+    @Mapping(value = "/apiproject/request/delete", method = MethodType.POST)
+    public Map<String, Object> deleteRequest(String requestId) {
+        try {
+            apiProjectService.deleteRequest(requestId);
+            return Map.of("code", 200, "message", "删除成功");
+        } catch (Exception e) {
+            return Map.of("code", 500, "message", e.getMessage());
+        }
+    }
 }

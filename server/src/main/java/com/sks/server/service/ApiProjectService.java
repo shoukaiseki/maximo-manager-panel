@@ -1132,6 +1132,374 @@ public class ApiProjectService {
         return result;
     }
 
+    // ==================== 文件夹管理 ====================
+
+    public Map<String, Object> saveFolder(String projectId, String id, String name, String parentId) {
+        try (Connection conn = mysqlDataSource.getConnection()) {
+            boolean isNew = (id == null || id.isEmpty());
+            if (isNew) {
+                id = UUID.randomUUID().toString();
+                String sql;
+                if (parentId != null && !parentId.isEmpty()) {
+                    sql = "INSERT INTO api_folder (id, project_id, parent_id, name) VALUES (?, ?, ?, ?)";
+                } else {
+                    sql = "INSERT INTO api_folder (id, project_id, name) VALUES (?, ?, ?)";
+                }
+                try (PreparedStatement ps = conn.prepareStatement(sql)) {
+                    ps.setString(1, id);
+                    ps.setString(2, projectId);
+                    if (parentId != null && !parentId.isEmpty()) {
+                        ps.setString(3, parentId);
+                        ps.setString(4, name);
+                    } else {
+                        ps.setString(3, name);
+                    }
+                    ps.executeUpdate();
+                }
+            } else {
+                String sql = "UPDATE api_folder SET name = ?, parent_id = ? WHERE id = ? AND project_id = ?";
+                try (PreparedStatement ps = conn.prepareStatement(sql)) {
+                    ps.setString(1, name);
+                    if (parentId != null && !parentId.isEmpty()) {
+                        ps.setString(2, parentId);
+                    } else {
+                        ps.setNull(2, Types.VARCHAR);
+                    }
+                    ps.setString(3, id);
+                    ps.setString(4, projectId);
+                    ps.executeUpdate();
+                }
+            }
+
+            Map<String, Object> result = new LinkedHashMap<>();
+            result.put("id", id);
+            result.put("name", name);
+            result.put("projectId", projectId);
+            if (parentId != null && !parentId.isEmpty()) {
+                result.put("parentId", parentId);
+            }
+            return result;
+        } catch (Exception e) {
+            throw new RuntimeException("保存文件夹失败: " + e.getMessage(), e);
+        }
+    }
+
+    public void deleteFolder(String projectId, String folderId) {
+        try (Connection conn = mysqlDataSource.getConnection()) {
+            conn.setAutoCommit(false);
+            try {
+                // 递归删除子文件夹及其请求
+                deleteFolderRecursive(conn, projectId, folderId);
+                conn.commit();
+            } catch (Exception e) {
+                conn.rollback();
+                throw e;
+            }
+        } catch (Exception e) {
+            if (e instanceof RuntimeException) throw (RuntimeException) e;
+            throw new RuntimeException("删除文件夹失败: " + e.getMessage(), e);
+        }
+    }
+
+    private void deleteFolderRecursive(Connection conn, String projectId, String folderId) throws SQLException {
+        // 查找子文件夹
+        String findChildren = "SELECT id FROM api_folder WHERE project_id = ? AND parent_id = ?";
+        try (PreparedStatement ps = conn.prepareStatement(findChildren)) {
+            ps.setString(1, projectId);
+            ps.setString(2, folderId);
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    String childId = rs.getString("id");
+                    deleteFolderRecursive(conn, projectId, childId);
+                }
+            }
+        }
+
+        // 删除本文件夹下的请求
+        deleteRequestsByFolder(conn, folderId);
+
+        // 删除文件夹本身
+        try (PreparedStatement ps = conn.prepareStatement("DELETE FROM api_folder WHERE id = ? AND project_id = ?")) {
+            ps.setString(1, folderId);
+            ps.setString(2, projectId);
+            ps.executeUpdate();
+        }
+    }
+
+    private void deleteRequestsByFolder(Connection conn, String folderId) throws SQLException {
+        // 查找所有请求
+        String findReqs = "SELECT id FROM api_request WHERE folder_id = ?";
+        try (PreparedStatement ps = conn.prepareStatement(findReqs)) {
+            ps.setString(1, folderId);
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    String reqId = rs.getString("id");
+                    deleteRequestData(conn, reqId);
+                }
+            }
+        }
+    }
+
+    // ==================== 请求管理 ====================
+
+    public Map<String, Object> saveRequest(String projectId, JSONObject requestJson) {
+        try (Connection conn = mysqlDataSource.getConnection()) {
+            conn.setAutoCommit(false);
+            try {
+                String id = requestJson.getString("id");
+                boolean isNew = (id == null || id.isEmpty());
+                if (isNew) {
+                    id = UUID.randomUUID().toString();
+                }
+
+                String name = requestJson.getString("name");
+                String method = requestJson.getString("method");
+                String url = requestJson.getString("url");
+                String folderId = requestJson.getString("folderId");
+
+                if (isNew) {
+                    String insertReq = "INSERT INTO api_request (id, project_id, folder_id, name, method, url) VALUES (?, ?, ?, ?, ?, ?)";
+                    try (PreparedStatement ps = conn.prepareStatement(insertReq)) {
+                        ps.setString(1, id);
+                        ps.setString(2, projectId);
+                        if (folderId != null && !folderId.isEmpty()) {
+                            ps.setString(3, folderId);
+                        } else {
+                            ps.setNull(3, Types.VARCHAR);
+                        }
+                        ps.setString(4, name != null ? name : "");
+                        ps.setString(5, method != null ? method : "GET");
+                        ps.setString(6, url != null ? url : "");
+                        ps.executeUpdate();
+                    }
+                } else {
+                    // 更新请求基本信息
+                    String updateReq = "UPDATE api_request SET name = ?, method = ?, url = ?, folder_id = ? WHERE id = ? AND project_id = ?";
+                    try (PreparedStatement ps = conn.prepareStatement(updateReq)) {
+                        ps.setString(1, name != null ? name : "");
+                        ps.setString(2, method != null ? method : "GET");
+                        ps.setString(3, url != null ? url : "");
+                        if (folderId != null && !folderId.isEmpty()) {
+                            ps.setString(4, folderId);
+                        } else {
+                            ps.setNull(4, Types.VARCHAR);
+                        }
+                        ps.setString(5, id);
+                        ps.setString(6, projectId);
+                        int affected = ps.executeUpdate();
+                        if (affected == 0) {
+                            throw new RuntimeException("请求不存在");
+                        }
+                    }
+
+                    // 删除旧的子数据
+                    deleteRequestChildren(conn, id);
+                }
+
+                // 保存 params
+                JSONArray params = requestJson.getJSONArray("params");
+                if (params != null) {
+                    String insertParam = "INSERT INTO api_request_param (request_id, param_key, param_value, enabled) VALUES (?, ?, ?, ?)";
+                    try (PreparedStatement ps = conn.prepareStatement(insertParam)) {
+                        for (int i = 0; i < params.size(); i++) {
+                            JSONObject p = params.getJSONObject(i);
+                            String key = p.getString("key");
+                            String value = p.getString("value");
+                            boolean enabled = p.getBooleanValue("enabled");
+                            if (key != null && !key.isEmpty()) {
+                                ps.setString(1, id);
+                                ps.setString(2, key);
+                                ps.setString(3, value != null ? value : "");
+                                ps.setInt(4, enabled ? 1 : 0);
+                                ps.addBatch();
+                            }
+                        }
+                        ps.executeBatch();
+                    }
+                }
+
+                // 保存 headers
+                JSONArray headers = requestJson.getJSONArray("headers");
+                if (headers != null) {
+                    String insertHeader = "INSERT INTO api_request_header (request_id, header_key, header_value, enabled) VALUES (?, ?, ?, ?)";
+                    try (PreparedStatement ps = conn.prepareStatement(insertHeader)) {
+                        for (int i = 0; i < headers.size(); i++) {
+                            JSONObject h = headers.getJSONObject(i);
+                            String key = h.getString("key");
+                            String value = h.getString("value");
+                            boolean enabled = h.getBooleanValue("enabled");
+                            if (key != null && !key.isEmpty()) {
+                                ps.setString(1, id);
+                                ps.setString(2, key);
+                                ps.setString(3, value != null ? value : "");
+                                ps.setInt(4, enabled ? 1 : 0);
+                                ps.addBatch();
+                            }
+                        }
+                        ps.executeBatch();
+                    }
+                }
+
+                // 保存 body
+                JSONObject body = requestJson.getJSONObject("body");
+                if (body != null && !body.isEmpty()) {
+                    String bodyType = body.getString("type");
+                    if (bodyType != null && !"none".equals(bodyType)) {
+                        String bodyContent = null;
+                        List<Map<String, String>> bodyParams = new ArrayList<>();
+
+                        if ("json".equals(bodyType)) {
+                            String content = body.getString("content");
+                            if (content != null && !content.isEmpty()) {
+                                bodyContent = content;
+                            }
+                        } else if ("form-data".equals(bodyType)) {
+                            JSONArray formData = body.getJSONArray("formData");
+                            if (formData != null) {
+                                for (int i = 0; i < formData.size(); i++) {
+                                    JSONObject item = formData.getJSONObject(i);
+                                    Map<String, String> p = new LinkedHashMap<>();
+                                    p.put("key", item.getString("key"));
+                                    p.put("value", item.getString("value"));
+                                    bodyParams.add(p);
+                                }
+                            }
+                        } else if ("urlencoded".equals(bodyType)) {
+                            JSONArray urlEncoded = body.getJSONArray("urlEncoded");
+                            if (urlEncoded != null) {
+                                for (int i = 0; i < urlEncoded.size(); i++) {
+                                    JSONObject item = urlEncoded.getJSONObject(i);
+                                    Map<String, String> p = new LinkedHashMap<>();
+                                    p.put("key", item.getString("key"));
+                                    p.put("value", item.getString("value"));
+                                    bodyParams.add(p);
+                                }
+                            }
+                        }
+
+                        String insertBody = "INSERT INTO api_request_body (request_id, body_type, body_content) VALUES (?, ?, ?)";
+                        try (PreparedStatement ps = conn.prepareStatement(insertBody, Statement.RETURN_GENERATED_KEYS)) {
+                            ps.setString(1, id);
+                            ps.setString(2, bodyType);
+                            ps.setString(3, bodyContent);
+                            ps.executeUpdate();
+
+                            long bodyId = 0;
+                            try (ResultSet rs = ps.getGeneratedKeys()) {
+                                if (rs.next()) {
+                                    bodyId = rs.getLong(1);
+                                }
+                            }
+
+                            if (!bodyParams.isEmpty() && bodyId > 0) {
+                                String insertBp = "INSERT INTO api_request_body_param (body_id, param_key, param_value) VALUES (?, ?, ?)";
+                                try (PreparedStatement ps2 = conn.prepareStatement(insertBp)) {
+                                    for (Map<String, String> p : bodyParams) {
+                                        ps2.setLong(1, bodyId);
+                                        ps2.setString(2, p.get("key"));
+                                        ps2.setString(3, p.get("value"));
+                                        ps2.addBatch();
+                                    }
+                                    ps2.executeBatch();
+                                }
+                            }
+                        }
+                    }
+                }
+
+                conn.commit();
+
+                Map<String, Object> result = new LinkedHashMap<>();
+                result.put("id", id);
+                return result;
+            } catch (Exception e) {
+                conn.rollback();
+                throw e;
+            }
+        } catch (Exception e) {
+            if (e instanceof RuntimeException) throw (RuntimeException) e;
+            throw new RuntimeException("保存请求失败: " + e.getMessage(), e);
+        }
+    }
+
+    public void deleteRequest(String requestId) {
+        try (Connection conn = mysqlDataSource.getConnection()) {
+            conn.setAutoCommit(false);
+            try {
+                deleteRequestData(conn, requestId);
+                conn.commit();
+            } catch (Exception e) {
+                conn.rollback();
+                throw e;
+            }
+        } catch (Exception e) {
+            if (e instanceof RuntimeException) throw (RuntimeException) e;
+            throw new RuntimeException("删除请求失败: " + e.getMessage(), e);
+        }
+    }
+
+    private void deleteRequestData(Connection conn, String requestId) throws SQLException {
+        // 删除 body 参数
+        String delBodyParams = "DELETE bdp FROM api_request_body_param bdp " +
+                "INNER JOIN api_request_body b ON b.id = bdp.body_id WHERE b.request_id = ?";
+        try (PreparedStatement ps = conn.prepareStatement(delBodyParams)) {
+            ps.setString(1, requestId);
+            ps.executeUpdate();
+        }
+
+        // 删除 body
+        try (PreparedStatement ps = conn.prepareStatement("DELETE FROM api_request_body WHERE request_id = ?")) {
+            ps.setString(1, requestId);
+            ps.executeUpdate();
+        }
+
+        // 删除 params
+        try (PreparedStatement ps = conn.prepareStatement("DELETE FROM api_request_param WHERE request_id = ?")) {
+            ps.setString(1, requestId);
+            ps.executeUpdate();
+        }
+
+        // 删除 headers
+        try (PreparedStatement ps = conn.prepareStatement("DELETE FROM api_request_header WHERE request_id = ?")) {
+            ps.setString(1, requestId);
+            ps.executeUpdate();
+        }
+
+        // 删除 request
+        try (PreparedStatement ps = conn.prepareStatement("DELETE FROM api_request WHERE id = ?")) {
+            ps.setString(1, requestId);
+            ps.executeUpdate();
+        }
+    }
+
+    private void deleteRequestChildren(Connection conn, String requestId) throws SQLException {
+        // 删除 body 参数
+        String delBodyParams = "DELETE bdp FROM api_request_body_param bdp " +
+                "INNER JOIN api_request_body b ON b.id = bdp.body_id WHERE b.request_id = ?";
+        try (PreparedStatement ps = conn.prepareStatement(delBodyParams)) {
+            ps.setString(1, requestId);
+            ps.executeUpdate();
+        }
+
+        // 删除 body
+        try (PreparedStatement ps = conn.prepareStatement("DELETE FROM api_request_body WHERE request_id = ?")) {
+            ps.setString(1, requestId);
+            ps.executeUpdate();
+        }
+
+        // 删除 params
+        try (PreparedStatement ps = conn.prepareStatement("DELETE FROM api_request_param WHERE request_id = ?")) {
+            ps.setString(1, requestId);
+            ps.executeUpdate();
+        }
+
+        // 删除 headers
+        try (PreparedStatement ps = conn.prepareStatement("DELETE FROM api_request_header WHERE request_id = ?")) {
+            ps.setString(1, requestId);
+            ps.executeUpdate();
+        }
+    }
+
     public void deleteEnvironment(String id) {
         try (Connection conn = mysqlDataSource.getConnection()) {
             conn.setAutoCommit(false);

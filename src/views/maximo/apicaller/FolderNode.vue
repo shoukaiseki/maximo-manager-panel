@@ -4,6 +4,11 @@
       <i v-if="hasChildren" :class="expandedFolders.includes(folder.id) ? 'el-icon-caret-bottom' : 'el-icon-caret-right'" class="caret-icon" />
       <i class="el-icon-folder" :class="{ 'el-icon-folder-opened': expandedFolders.includes(folder.id) }" />
       {{ folder.name }}
+      <span class="folder-actions">
+        <el-button type="text" size="mini" icon="el-icon-plus" class="folder-action-btn" title="添加子目录" @click.stop="$emit('add-folder', folder.id)" />
+        <el-button type="text" size="mini" icon="el-icon-edit-outline" class="folder-action-btn" title="添加接口到此目录" @click.stop="$emit('add-request', folder.id)" />
+        <el-button type="text" size="mini" icon="el-icon-delete" class="folder-action-btn folder-delete-btn" title="删除目录" @click.stop="$emit('delete-folder', folder.id)" />
+      </span>
     </div>
     <div v-if="expandedFolders.includes(folder.id)" class="folder-content">
       <FolderNode
@@ -15,7 +20,11 @@
         :request-filter="requestFilter"
         :project-requests="projectRequests"
         @toggle="(id) => $emit('toggle', id)"
-        @select-request="(req) => $emit('select-request', req)" />
+        @select-request="(req) => $emit('select-request', req)"
+        @add-folder="(pid) => $emit('add-folder', pid)"
+        @add-request="(pid) => $emit('add-request', pid)"
+        @delete-folder="(pid) => $emit('delete-folder', pid)"
+        @delete-request="(req) => $emit('delete-request', req)" />
       <div
         v-for="req in folderRequests" :key="req.id"
         class="request-item"
@@ -23,6 +32,7 @@
         @click="$emit('select-request', req)">
         <span class="method-badge" :class="req.method.toLowerCase()">{{ req.method }}</span>
         {{ req.name }}
+        <el-button type="text" icon="el-icon-delete" size="mini" class="request-delete-btn" @click.stop="$emit('delete-request', req)" />
       </div>
     </div>
   </div>
@@ -128,5 +138,42 @@ export default {
 .method-badge.delete {
   background: #f56c6c;
   color: #fff;
+}
+
+.folder-actions {
+  display: none;
+  margin-left: auto;
+  gap: 2px;
+}
+
+.folder-title:hover .folder-actions {
+  display: inline-flex;
+}
+
+.folder-action-btn {
+  padding: 0 2px;
+  font-size: 12px;
+  color: #909399;
+}
+
+.folder-action-btn:hover {
+  color: #409eff;
+}
+
+.folder-delete-btn:hover {
+  color: #f56c6c !important;
+}
+
+.request-delete-btn {
+  margin-left: auto;
+  padding: 0 2px;
+  font-size: 12px;
+  color: #c0c4cc;
+  visibility: hidden;
+}
+
+.request-item:hover .request-delete-btn {
+  visibility: visible;
+  color: #f56c6c;
 }
 </style>
