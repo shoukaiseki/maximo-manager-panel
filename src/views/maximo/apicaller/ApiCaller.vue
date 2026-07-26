@@ -24,20 +24,15 @@
           <el-input v-model="requestFilter" placeholder="搜索" size="small" class="sidebar-filter" />
         </div>
         <div class="sidebar-tree">
-          <div v-for="folder in folders" :key="folder.id" class="folder-item">
-            <div class="folder-title" @click="toggleFolder(folder.id)">
-              <i class="el-icon-folder" :class="{ 'el-icon-folder-opened': expandedFolders.includes(folder.id) }" />
-              {{ folder.name }}
-            </div>
-            <div v-if="expandedFolders.includes(folder.id)" class="folder-content">
-              <div v-for="req in getRequestsByFolder(folder.id)" :key="req.id" 
-                   class="request-item" :class="{ active: currentRequestId === req.id }"
-                   @click="loadRequest(req)">
-                <span class="method-badge" :class="req.method.toLowerCase()">{{ req.method }}</span>
-                {{ req.name }}
-              </div>
-            </div>
-          </div>
+          <FolderNode v-for="folder in rootFolders" :key="folder.id"
+            :folder="folder"
+            :all-folders="folders"
+            :expanded-folders="expandedFolders"
+            :current-request-id="currentRequestId"
+            :request-filter="requestFilter"
+            :project-requests="projectRequests"
+            @toggle="toggleFolder"
+            @select-request="loadRequest" />
           <div v-for="req in getRequestsWithoutFolder" :key="req.id" 
                class="request-item" :class="{ active: currentRequestId === req.id }"
                @click="loadRequest(req)">
@@ -198,7 +193,7 @@
             <el-button type="text" @click="editProject(scope.row)">编辑</el-button>
             <el-button type="text" @click="copyProject(scope.row)">复制</el-button>
             <el-button type="text" @click="exportProject(scope.row)">导出</el-button>
-            <el-button v-if="scope.row.type !== 'global'" type="text" @click="deleteProjectConfirm(scope.row)">删除</el-button>
+            <el-button type="text" @click="deleteProjectConfirm(scope.row)">删除</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -298,6 +293,7 @@
 
 <script>
 import axios from 'axios'
+import FolderNode from './FolderNode.vue'
 
 export default {
   name: 'ApiCaller',
@@ -343,6 +339,9 @@ export default {
       responseTime: null
     }
   },
+  components: {
+    FolderNode
+  },
   computed: {
     formattedResponse() {
       try {
@@ -358,6 +357,9 @@ export default {
         p.name.toLowerCase().includes(this.projectFilter.toLowerCase()) ||
         (p.description && p.description.toLowerCase().includes(this.projectFilter.toLowerCase()))
       )
+    },
+    rootFolders() {
+      return this.folders.filter(f => !f.parentId)
     },
     getRequestsWithoutFolder() {
       return this.projectRequests.filter(r => !r.folderId && 
