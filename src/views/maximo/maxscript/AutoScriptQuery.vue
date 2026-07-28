@@ -277,6 +277,7 @@
 <script>
 import { getAutoScriptList, getAutoScriptDetail, getAutoScriptSource, getAutoScriptHistory, getAutoScriptHistoryDetail } from '@/api/autoscript'
 import { parseTime } from '@/utils/ruoyi'
+import { stringTrim } from '@/utils/sks'
 
 // OBJECTEVENT 位标志 - OBJECT 类型
 const OBJECT_EVENT_BITS = [
@@ -407,13 +408,14 @@ export default {
     getList() {
       this.loading = true
       this.hasSearched = true
+      const trim = v => v ? stringTrim(v) : undefined
       const params = {
-        autoscript: this.formData.autoscript || undefined,
-        description: this.formData.description || undefined,
-        objectname: this.formData.objectname || undefined,
-        attributename: this.formData.attributename || undefined,
-        launchpointname: this.formData.launchpointname || undefined,
-        source: this.isDiagMode ? undefined : (this.formData.source || undefined),
+        autoscript: trim(this.formData.autoscript),
+        description: trim(this.formData.description),
+        objectname: trim(this.formData.objectname),
+        attributename: trim(this.formData.attributename),
+        launchpointname: trim(this.formData.launchpointname),
+        source: this.isDiagMode ? undefined : trim(this.formData.source),
         mode: this.isDiagMode ? 'diag' : 'query',
         sourceCaseSensitive: this.sourceCaseSensitive,
         pageNum: this.isDiagMode ? 1 : this.tableParam.pageNum,

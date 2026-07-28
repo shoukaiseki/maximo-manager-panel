@@ -236,6 +236,29 @@ export function resetBlank(str){
   return str.replace(regEx, ' ');
 }
 
+/**
+ * 去除零宽字符和不可见控制字符
+ * 包括: 零宽空格(U+200B)、零宽连词/不连词、BOM(U+FEFF)、左右序标记等
+ * @param {string} str
+ * @returns {string}
+ */
+export function removeZeroWidthChars(str) {
+  if (!str) return str
+  return str.replace(/[\u200B-\u200F\u2028\u2029\uFEFF\u00AD\u2060-\u2064]/g, '')
+}
+
+/**
+ * 去除首尾空格后，再去除零宽字符
+ * @param {string} str
+ * @returns {string}
+ */
+export function stringTrim(str) {
+  if (!str) return str
+  return removeZeroWidthChars(str.trim())
+}
+
+
+
 export function bitFlagToArray(bigFlag){
   // console.log("bitFlagToArray.in=",bigFlag)
   let tmp=1;

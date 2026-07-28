@@ -30,9 +30,10 @@
           </el-table-column>
           <el-table-column prop="description" label="英文描述" />
           <el-table-column prop="descriptionCn" label="中文描述" />
-          <el-table-column label="操作" width="120" fixed="right">
+          <el-table-column label="操作" width="180" fixed="right">
             <template slot-scope="scope">
               <el-button type="text" size="small" @click.stop="goDetail(scope.row.objectName)">详情</el-button>
+              <el-button type="text" size="small" @click.stop="showTodoSql(scope.row.objectName)">生成待办SQL</el-button>
             </template>
           </el-table-column>
         </el-table>
@@ -47,6 +48,13 @@
         <el-empty v-if="!loading && objectList.length === 0 && !hasSearched" description="请输入关键词后点击搜索" />
       </div>
     </el-card>
+
+    <el-dialog title="待办SQL" :visible.sync="todoSqlDialog.visible" width="70%" top="10vh" :close-on-click-modal="true">
+      <div style="margin-bottom:8px">
+        <el-button size="mini" type="primary" @click="copyTodoSql">复制SQL</el-button>
+      </div>
+      <div ref="todoMonacoContainer" style="height:50vh;border:1px solid #dcdfe6"></div>
+    </el-dialog>
   </section>
 </template>
 
@@ -66,7 +74,8 @@ export default {
       formData: {
         objectname: '',
         keyword: ''
-      }
+      },
+      todoSqlDialog: { visible: false, sql: '', editor: null }
     }
   },
   methods: {
@@ -129,6 +138,63 @@ export default {
       this.$router.push({
         path: `/maxobject-detail/index/${objectName}`
       })
+    },
+    showTodoSql(objectName) {
+      this.todoSqlDialog.sql = `exists(
+select 1 from WFASSIGNMENT
+ where ownertable = '${objectName}'
+   and WFASSIGNMENT.ownerid = ${objectName}.${objectName}ID
+   and assignstatus in (select value from synonymdomain where domainid='WFASGNSTATUS' and maxvalue='ACTIVE')
+   and ASSIGNCODE = :&PERSONID&)`
+      this.todoSqlDialog.visible = true
+      this.$nextTick(() => this.initTodoSqlEditor())
+    },
+    initTodoSqlEditor() {
+      const container = this.$refs.todoMonacoContainer
+      if (!container) return
+      if (this.todoSqlDialog.editor) {
+        this.todoSqlDialog.editor.dispose()
+        this.todoSqlDialog.editor = null
+      }
+      import(/* webpackChunkName: "monaco" */ 'monaco-editor').then(monaco => {
+        this.todoSqlDialog.editor = monaco.editor.create(container, {
+          value: this.todoSqlDialog.sql,
+          language: 'sql',
+          readOnly: true,
+          theme: 'vs',
+          automaticLayout: true,
+          minimap: { enabled: false },
+          scrollBeyondLastLine: false,
+          fontSize: 13,
+          wordWrap: 'on'
+        })
+      }).catch(err => {
+        console.error('Monaco Editor 加载失败:', err)
+      })
+    },
+    copyTodoSql() {
+      if (!this.todoSqlDialog.sql) return
+      const el = document.createElement('textarea')
+      el.value = this.todoSqlDialog.sql
+      document.body.appendChild(el)
+      el.select()
+      document.execCommand('copy')
+      document.body.removeChild(el)
+      this.$message.success('已复制到剪贴板')
+    }
+  },
+  watch: {
+    'todoSqlDialog.visible'(val) {
+      if (!val && this.todoSqlDialog.editor) {
+        this.todoSqlDialog.editor.dispose()
+        this.todoSqlDialog.editor = null
+      }
+    }
+  },
+  beforeDestroy() {
+    if (this.todoSqlDialog.editor) {
+      this.todoSqlDialog.editor.dispose()
+      this.todoSqlDialog.editor = null
     }
   }
 }
