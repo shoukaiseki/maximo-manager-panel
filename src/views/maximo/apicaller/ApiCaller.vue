@@ -581,7 +581,7 @@ export default {
           if (settings.baseUrl) vars['baseUrl'] = settings.baseUrl
         }
       } catch (e) {}
-      if (!vars['baseUrl']) vars['baseUrl'] = 'http://localhost:9080'
+      if (!vars['baseUrl']) vars['baseUrl'] = 'http://' + window.location.hostname + ':9080'
       // 选中环境的用户自定义变量（覆盖预设）
       if (this.selectedEnvId) {
         const env = this.environments.find(e => e.id === this.selectedEnvId)
