@@ -268,6 +268,8 @@ export default {
       }
 
       exportMessages({
+          _langcode: 'ZH',
+          apiType: 'query',
         pageNum: this.tablePatam.pageNum,
         pageSize: this.tablePatam.pageSize
       }, body).then(res => {
@@ -321,12 +323,18 @@ export default {
         if (!whereClause) return
 
         const [simpleRes, fullRes] = await Promise.all([
-          exportMessages({}, {
+          exportMessages({
+          _langcode: 'ZH',
+          apiType: 'exp',
+          }, {
             filterMode: 'where',
             where: whereClause,
             ignoreDefVal: true
           }),
-          exportMessages({}, {
+          exportMessages({
+          _langcode: 'ZH',
+          apiType: 'exp',
+          }, {
             filterMode: 'where',
             where: whereClause
           })
@@ -471,7 +479,8 @@ export default {
         }
 
         const params = {
-          _langcode: _langcode
+          _langcode: _langcode,
+          apiType: 'exp',
         }
         const [simpleRes, fullRes] = await Promise.all([
           exportMessages(params, {
