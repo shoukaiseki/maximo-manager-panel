@@ -88,11 +88,12 @@ service.interceptors.request.use(config => {
   Promise.reject(error)
 })
 
-// 响应拦截器（保持不变）
+// 响应拦截器
 service.interceptors.response.use(res => {
   return res
 }, error => {
-  return error
+  // 不要静默吞掉错误,让 Promise 进入 catch 分支
+  return Promise.reject(error)
 })
 
 export default service

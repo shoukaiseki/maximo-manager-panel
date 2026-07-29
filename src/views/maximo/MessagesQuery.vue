@@ -36,7 +36,12 @@
           <el-table-column prop="msgid" label="msgid" />
           <el-table-column prop="msggroup" label="msggroup" />
           <el-table-column prop="msgkey" label="msgkey" />
-          <el-table-column prop="value" label="value" />
+          <el-table-column prop="value" label="value(EN)" min-width="200" show-overflow-tooltip />
+          <el-table-column prop="value_zh" label="value(ZH)" min-width="200" show-overflow-tooltip>
+            <template slot-scope="scope">
+              <span :class="{'zh-empty': !scope.row.value_zh}">{{ scope.row.value_zh || '-' }}</span>
+            </template>
+          </el-table-column>
           <el-table-column prop="displaymethod_description" label="displaymethod" />
         </el-table>
        <pagination v-show="tablePatam.total > 0"
@@ -162,8 +167,7 @@
 </template>
 
 <script>
-import { mapGetters } from 'vuex'
-import { queryMessages, exportMessages } from '../../api/messages'
+import { exportMessages } from '../../api/messages'
 
 export default {
   name: 'MessagesQuery',
@@ -204,9 +208,6 @@ export default {
     }
   },
   computed: {
-    ...mapGetters([
-      'selectedEnv'
-    ])
   },
   watch: {
     dialogVisible(val) {
@@ -236,41 +237,6 @@ export default {
     }
   },
   methods: {
-    buildWhere(params) {
-      let clauses = []
-      if (params.msgid) {
-        clauses.push(`msgid="${params.msgid}"`)
-      }
-      if (params.msggroup) {
-        clauses.push(`msggroup="${params.msggroup}"`)
-      }
-      if (params.msgkey) {
-        clauses.push(`msgkey="${params.msgkey}"`)
-      }
-      if (params.value) {
-        clauses.push(`value="${params.value}"`)
-      }
-      return clauses.join(' and ')
-    },
-    buildSqlWhere(params) {
-      let clauses = []
-      if (params.msgid) {
-        const op = params.msgid.includes('%') || params.msgid.includes('_') ? 'LIKE' : '='
-        clauses.push(`UPPER(MSGID) ${op} UPPER('${params.msgid}')`)
-      }
-      if (params.msggroup) {
-        const op = params.msggroup.includes('%') || params.msggroup.includes('_') ? 'LIKE' : '='
-        clauses.push(`UPPER(MSGGROUP) ${op} UPPER('${params.msggroup}')`)
-      }
-      if (params.msgkey) {
-        const op = params.msgkey.includes('%') || params.msgkey.includes('_') ? 'LIKE' : '='
-        clauses.push(`UPPER(MSGKEY) ${op} UPPER('${params.msgkey}')`)
-      }
-      if (params.value) {
-        clauses.push(`UPPER(VALUE) LIKE UPPER('%${params.value}%')`)
-      }
-      return clauses.join(' and ')
-    },
     formatOptions(options) {
       if (!options) return '-'
       if (Array.isArray(options)) {
@@ -293,53 +259,42 @@ export default {
       this.error = ''
       this.messages = []
 
-      try {
-        const env = this.selectedEnv
-        const params = {
-          msgid:  this.formData.msgid ,
-          msggroup:this.formData.msggroup ,
-          msgkey:  this.formData.msgkey ,
-          value:   this.formData.value 
-        }
-
-        const whereClause = this.buildWhere(params)
-        console.log("whereClause=", whereClause)
-
-        const queryParams={
-          lean: '1',
-          'collectioncount': 1,
-          'oslc.select': '*',
-          'oslc.where': whereClause&&whereClause!==''?whereClause: undefined,
-          'oslc.paging': 'true',
-          'oslc.pageSize': this.tablePatam.pageSize,
-          'pageno': this.tablePatam.pageNum
-        }
-
-        queryMessages(queryParams).then(res => {
-          console.log("查询结果", res)
-          const data = res.data || res
-          const members = data.member || data.Member || []
-          this.messages = members.map(item => ({
-            msgid: item.msgid || item.msgId || item.MSGID || '-',
-            msggroup: item.msggroup || item.msgGroup || item.MSGGROUP || '-',
-            msgkey: item.msgkey || item.msgKey || item.MSGKEY || '-',
-            value: item.value || item.VALUE || '-',
-            displaymethod: item.displaymethod || item.displayMethod || item.DISPLAYMETHOD || '-',
-            displaymethod_description: item.displaymethod_description || item.displayMethod_description || item.DISPLAYMETHOD_DESCRIPTION || '-',
-            ...item
-          }))
-          this.tablePatam.total = data.responseInfo && data.responseInfo.totalCount || this.messages.length
-          this.loading = false
-        }).catch(err => {
-          console.error("查询失败", err)
-          this.$message.error("查询消息失败：" + (err.message || String(err)))
-          this.loading = false
-        })
-      } catch (err) {
-        this.error = err instanceof Error ? err.message : String(err)
-      } finally {
-        this.loading = false
+      // 直接传字段值, 脚本中处理搜索逻辑
+      const body = {
+        msgid: this.formData.msgid || undefined,
+        msggroup: this.formData.msggroup || undefined,
+        msgkey: this.formData.msgkey || undefined,
+        value: this.formData.value || undefined
       }
+
+      exportMessages({
+        pageNum: this.tablePatam.pageNum,
+        pageSize: this.tablePatam.pageSize
+      }, body).then(res => {
+        const data = res.data || res
+        if (data.status === 'error') {
+          this.$message.error(data.message || '查询失败')
+          this.loading = false
+          return
+        }
+        const list = data.messages || []
+        this.messages = list.map(item => ({
+          msgid: item.msgId || item.MSGID || '-',
+          msggroup: item.msgGroup || item.MSGGROUP || '-',
+          msgkey: item.msgKey || item.MSGKEY || '-',
+          value: item.value || '-',
+          value_zh: item.value_zh || null,
+          displaymethod: item.displayMethod || item.DISPLAYMETHOD || '-',
+          displaymethod_description: item.displayMethod || item.DISPLAYMETHOD || '-',
+          ...item
+        }))
+        this.tablePatam.total = data.total || list.length
+        this.loading = false
+      }).catch(err => {
+        console.error('查询失败', err)
+        this.$message.error('查询消息失败：' + (err.message || String(err)))
+        this.loading = false
+      })
     },
     resetForm() {
       this.formData = {
@@ -348,7 +303,6 @@ export default {
         msgkey: '',
         value: ''
       }
-      this.searchMode = 'msgid'
       this.error = ''
       this.tablePatam.pageNum=1
       this.messages = []
@@ -362,21 +316,17 @@ export default {
       this.apiFullMessages = []
 
       try {
-        const whereClause = this.buildSqlWhere({
-          msgid: row.msgid,
-          msggroup: row.msggroup,
-          msgkey: row.msgkey
-        })
+        const whereClause = "MAXMESSAGESID = '" + row.MAXMESSAGESID + "'"
 
         if (!whereClause) return
 
         const [simpleRes, fullRes] = await Promise.all([
-          exportMessages({
+          exportMessages({}, {
             filterMode: 'where',
             where: whereClause,
             ignoreDefVal: true
           }),
-          exportMessages({
+          exportMessages({}, {
             filterMode: 'where',
             where: whereClause
           })
@@ -407,83 +357,6 @@ export default {
             this.initMonacoEditors()
           }, 200)
         })
-      }
-    },
-    async handleBatchViewEn() {
-      this.handleBatchView('EN')
-    },
-    async handleBatchViewZh() {
-      this.handleBatchView('ZH')
-    },
-    async handleBatchView(_langcode) {
-      if (!this.messages || this.messages.length === 0) {
-        this.$message.warning('没有数据可批量查看')
-        return
-      }
-
-      this.batchLoading = true
-
-      try {
-        var whereClause = this.buildSqlWhere(this.formData)
-        if (!whereClause) {
-        //   this.$message.warning('请先设置查询条件')
-        //   return
-          whereClause="1=1"
-        }
-
-        const params = {
-          // _langcode: 'ZH',
-          // _langcode: 'EN',
-          _langcode: _langcode
-        }
-        const [simpleRes, fullRes] = await Promise.all([
-          exportMessages(params,{
-            filterMode: 'where',
-            where: whereClause,
-            ignoreDefVal: true
-          }),
-          exportMessages(params,{
-            filterMode: 'where',
-            where: whereClause
-          })
-        ])
-
-        const simpleData = simpleRes.data || simpleRes
-        const fullData = fullRes.data || fullRes
-
-        if (simpleData && simpleData.status === 'error') {
-          this.$message.error('获取精简消息失败: ' + (simpleData.message || '未知错误'))
-        }
-        if (fullData && fullData.status === 'error') {
-          this.$message.error('获取完整消息失败: ' + (fullData.message || '未知错误'))
-        }
-
-        const simpleMessages = simpleData && simpleData.messages ? simpleData.messages : []
-        const fullMessages = fullData && fullData.messages ? fullData.messages : []
-
-        if (simpleMessages.length === 0 && fullMessages.length === 0) {
-          this.$message.warning('未查询到消息数据')
-          return
-        }
-
-        this.batchTotal = Math.max(simpleMessages.length, fullMessages.length)
-
-        const simpleJson = JSON.stringify({
-          messages: simpleMessages
-        }, null, 2)
-
-        const fullJson = JSON.stringify({
-          messages: fullMessages
-        }, null, 2)
-
-        this.batchSimpleJson = simpleJson
-        this.batchFullJson = fullJson
-        this.batchDialogVisible = true
-      } catch (err) {
-        console.error('批量查看失败:', err)
-        this.$message.error('批量查看失败: ' + (err.message || String(err)))
-      } finally {
-        this.batchLoading = false
       }
     },
     onDialogOpened() {
@@ -572,6 +445,84 @@ export default {
       if (this.batchFullEditor) {
         this.batchFullEditor.dispose()
         this.batchFullEditor = null
+      }
+    },
+    handleBatchViewEn() {
+      this.handleBatchView('EN')
+    },
+    handleBatchViewZh() {
+      this.handleBatchView('ZH')
+    },
+    async handleBatchView(_langcode) {
+      if (!this.messages || this.messages.length === 0) {
+        this.$message.warning('没有数据可批量查看')
+        return
+      }
+
+      this.batchLoading = true
+
+      try {
+        // 直接传字段值, 脚本中处理搜索逻辑
+        const body = {
+          msgid: this.formData.msgid || undefined,
+          msggroup: this.formData.msggroup || undefined,
+          msgkey: this.formData.msgkey || undefined,
+          value: this.formData.value || undefined
+        }
+
+        const params = {
+          _langcode: _langcode
+        }
+        const [simpleRes, fullRes] = await Promise.all([
+          exportMessages(params, {
+            ...body,
+            ignoreDefVal: true
+          }),
+          exportMessages(params, body)
+        ])
+
+        const simpleData = simpleRes.data || simpleRes
+        const fullData = fullRes.data || fullRes
+
+        if (simpleData && simpleData.status === 'error') {
+          this.$message.error('获取精简消息失败: ' + (simpleData.message || '未知错误'))
+        }
+        if (fullData && fullData.status === 'error') {
+          this.$message.error('获取完整消息失败: ' + (fullData.message || '未知错误'))
+        }
+
+        const simpleMessages = simpleData && simpleData.messages ? simpleData.messages : []
+        const fullMessages = fullData && fullData.messages ? fullData.messages : []
+
+        if (simpleMessages.length === 0 && fullMessages.length === 0) {
+          this.$message.warning('未查询到消息数据')
+          return
+        }
+
+        this.batchTotal = Math.max(simpleMessages.length, fullMessages.length)
+
+        this.batchSimpleJson = JSON.stringify({ messages: simpleMessages }, null, 2)
+        this.batchFullJson = JSON.stringify({ messages: fullMessages }, null, 2)
+        this.batchDialogVisible = true
+      } catch (err) {
+        console.error('批量查看失败:', err)
+        // 尝试从 AxiosError 中提取服务器返回的错误信息
+        var serverMsg = ''
+        if (err.response && err.response.data) {
+          if (typeof err.response.data === 'string') {
+            serverMsg = err.response.data.substring(0, 200)
+          } else if (err.response.data.message) {
+            serverMsg = err.response.data.message
+          } else if (err.response.data['oslc:Error']) {
+            serverMsg = err.response.data['oslc:Error']['oslc:message'] || ''
+          } else {
+            serverMsg = JSON.stringify(err.response.data).substring(0, 200)
+          }
+        }
+        var displayMsg = serverMsg || err.message || String(err)
+        this.$message.error('批量查看失败: ' + displayMsg)
+      } finally {
+        this.batchLoading = false
       }
     },
     initMonacoEditors() {
@@ -838,5 +789,9 @@ export default {
 }
 .monaco-wrapper {
   position: relative;
+}
+.zh-empty {
+  color: #c0c4cc;
+  font-style: italic;
 }
 </style>
