@@ -28,7 +28,8 @@
 
       <div class="result-panel">
         <div style="margin-bottom: 12px; text-align: right;">
-          <el-button type="primary" icon="el-icon-view" size="mini" :loading="batchLoading" @click="handleBatchView">批量查看</el-button>
+          <el-button type="primary" icon="el-icon-view" size="mini" :loading="batchLoading" @click="handleBatchViewEn">批量查看EN</el-button>
+          <el-button type="primary" icon="el-icon-view" size="mini" :loading="batchLoading" @click="handleBatchViewZh">批量查看ZH</el-button>
         </div>
         <el-table :loading="loading" :data="messages" stripe style="width: 100%" class="result-table"
           :highlight-current-row="true" @row-click="handleRowClick">
@@ -408,7 +409,13 @@ export default {
         })
       }
     },
-    async handleBatchView() {
+    async handleBatchViewEn() {
+      this.handleBatchView('EN')
+    },
+    async handleBatchViewZh() {
+      this.handleBatchView('ZH')
+    },
+    async handleBatchView(_langcode) {
       if (!this.messages || this.messages.length === 0) {
         this.$message.warning('没有数据可批量查看')
         return
@@ -417,19 +424,25 @@ export default {
       this.batchLoading = true
 
       try {
-        const whereClause = this.buildSqlWhere(this.formData)
+        var whereClause = this.buildSqlWhere(this.formData)
         if (!whereClause) {
-          this.$message.warning('请先设置查询条件')
-          return
+        //   this.$message.warning('请先设置查询条件')
+        //   return
+          whereClause="1=1"
         }
 
+        const params = {
+          // _langcode: 'ZH',
+          // _langcode: 'EN',
+          _langcode: _langcode
+        }
         const [simpleRes, fullRes] = await Promise.all([
-          exportMessages({
+          exportMessages(params,{
             filterMode: 'where',
             where: whereClause,
             ignoreDefVal: true
           }),
-          exportMessages({
+          exportMessages(params,{
             filterMode: 'where',
             where: whereClause
           })

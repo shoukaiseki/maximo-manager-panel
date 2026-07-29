@@ -9,10 +9,11 @@ export function queryMessages(params) {
   })
 }
 
-export function exportMessages(params) {
+export function exportMessages(params,data) {
   return request({
     url: '/api/script/SKS_EXPORT_MESSAGES',
     method: 'post',
-    data: params
+    params: params,
+    data:data 
   })
 }

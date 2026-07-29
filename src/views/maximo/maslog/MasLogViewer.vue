@@ -317,8 +317,18 @@ export default {
           
           if (done) {
             console.log('\nSSE connection closed')
-            this.stopLogStream()
-            this.$message.warning('日志流已断开')
+            // 流自然结束时，不调 stopLogStream（避免 isStreaming 被重置导致 UI 变化）
+            // 根据 manualStop 决定是否重连
+            if (this.manualStop) {
+              this.isStreaming = false
+              this.connecting = false
+              this.$message.info('已停止接收日志')
+            } else {
+              this.isStreaming = false
+              this.connecting = false
+              this.$message.warning('日志流已断开，正在重连...')
+              this.scheduleReconnect()
+            }
             break
           }
           
@@ -345,11 +355,17 @@ export default {
       } catch (error) {
         if (error.name === 'AbortError') {
           console.log('SSE connection aborted by user')
+          this.isStreaming = false
+          this.connecting = false
         } else {
           console.error('SSE connection error:', error)
           this.$message.error('连接错误: ' + error.message)
+          this.isStreaming = false
+          this.connecting = false
+          if (!this.manualStop) {
+            this.scheduleReconnect()
+          }
         }
-        this.stopLogStream()
       }
     },
     
