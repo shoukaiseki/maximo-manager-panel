@@ -15,6 +15,8 @@
             <el-button type="primary" size="mini" @click="handleExactMatch">maximo精确查找多个值</el-button>
             <el-button type="success" size="mini" @click="handleSqlInString">SQL IN 字符串</el-button>
             <el-button type="warning" size="mini" @click="handleSqlInInt">SQL IN 整数</el-button>
+            <el-button type="danger" size="mini" @click="handleMultiLineConcat">sql转字符串</el-button>
+            <el-button type="danger" plain size="mini" @click="handleSqlToStrWithNewline">sql转字符串(换行符)</el-button>
           </div>
           <el-input
             v-model="inputText"
@@ -76,6 +78,46 @@ export default {
     },
     handleSqlInInt() {
       this.formatSqlIn('')
+    },
+    handleMultiLineConcat() {
+      if (!this.inputText.trim()) {
+        this.$message.warning('请输入数据')
+        return
+      }
+      // 转义特殊字符：反斜杠和双引号
+      const escapeStr = (s) => s.replace(/\\/g, '\\\\').replace(/"/g, '\\"')
+      // 按换行分割，保留每行首尾空格
+      const lines = this.inputText.split(/\r?\n/)
+      const result = lines.map((line, i) => {
+        const escaped = escapeStr(line)
+        if (i === 0) {
+          return '"' + escaped + '"'
+        }
+        // 续行加前导空格，保证拼接后 SQL 完整
+        return '+" ' + escaped + '"'
+      }).join('\n')
+      this.setMonacoValue(result)
+      this.$message.success('处理完成，共 ' + lines.length + ' 行')
+    },
+    handleSqlToStrWithNewline() {
+      if (!this.inputText.trim()) {
+        this.$message.warning('请输入数据')
+        return
+      }
+      // 转义特殊字符：反斜杠和双引号
+      const escapeStr = (s) => s.replace(/\\/g, '\\\\').replace(/"/g, '\\"')
+      // 按换行分割，保留每行尾部空格，去除行首空格（统一 \n 后固定一个空格）
+      const lines = this.inputText.split(/\r?\n/)
+      const result = lines.map((line, i) => {
+        const escaped = escapeStr(line.replace(/^\s+/, ''))
+        if (i === 0) {
+          return '"' + escaped + '"'
+        }
+        // 续行前加 \n 转义换行和空格，保证拼接后 SQL 完整
+        return '+"\\n ' + escaped + '"'
+      }).join('\n')
+      this.setMonacoValue(result)
+      this.$message.success('处理完成，共 ' + lines.length + ' 行')
     },
     formatSqlIn(quote) {
       if (!this.inputText.trim()) {
