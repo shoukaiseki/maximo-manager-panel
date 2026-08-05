@@ -219,6 +219,12 @@ export const constantRoutes = [
                 component: (resolve) => require(['/src/views/maximo/ifacelog/index'], resolve),
                 name: 'IfaceLog',
                 meta: { title: 'IFACE日志', icon: 'log', noCache: false }
+            },
+            {
+                path: 'db2lock',
+                component: (resolve) => require(['/src/views/maximo/db2lock/index'], resolve),
+                name: 'Db2Lock',
+                meta: { title: 'DB2锁表', icon: 'lock', noCache: false }
             }
         ]
     },
