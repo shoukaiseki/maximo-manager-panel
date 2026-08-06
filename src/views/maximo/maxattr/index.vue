@@ -18,6 +18,13 @@
         <el-form-item label="字段描述">
           <el-input v-model="formData.description" placeholder="输入描述关键词..." clearable style="width: 220px;" @keyup.enter.native="handleQuery" />
         </el-form-item>
+        <el-form-item label="持久性">
+          <el-select v-model="formData.persistent" placeholder="全部" clearable style="width: 140px;" @change="handleQuery">
+            <el-option label="全部" value="" />
+            <el-option label="虚拟(0)" value="0" />
+            <el-option label="实体(1)" value="1" />
+          </el-select>
+        </el-form-item>
         <el-form-item>
           <el-button type="cyan" icon="el-icon-search" size="mini" :loading="loading" @click="handleQuery">搜索</el-button>
           <el-button icon="el-icon-refresh" size="mini" @click="resetForm">重置</el-button>
@@ -240,7 +247,8 @@ export default {
       formData: {
         objectname: '',
         attributename: '',
-        description: ''
+        description: '',
+        persistent: ''
       },
       // 字段统计预览
       tableSelection: [],
@@ -346,6 +354,7 @@ export default {
         objectname: this.formData.objectname,
         attributename: this.formData.attributename,
         description: this.formData.description,
+        persistent: this.formData.persistent === '' ? undefined : this.formData.persistent,
         pageNum: this.mainTable.queryParams.pageNum,
         pageSize: this.mainTable.queryParams.pageSize
       }
@@ -378,7 +387,8 @@ export default {
       this.formData = {
         objectname: '',
         attributename: '',
-        description: ''
+        description: '',
+        persistent: ''
       }
       this.hasSearched = false
       this.mainTable.list = []

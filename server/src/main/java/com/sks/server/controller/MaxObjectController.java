@@ -113,9 +113,10 @@ public class MaxObjectController {
     public RestResult<Map<String, Object>> attributeList(String objectname,
                                                          String attributename,
                                                          String description,
+                                                         Integer persistent,
                                                          @Param(defaultValue = "1") int pageNum,
                                                          @Param(defaultValue = "20") int pageSize) {
-        Map<String, Object> data = maxObjectService.queryMaxAttributeList(objectname, attributename, description, pageNum, pageSize);
+        Map<String, Object> data = maxObjectService.queryMaxAttributeList(objectname, attributename, description, persistent, pageNum, pageSize);
         return RestResult.ok(data);
     }
 }

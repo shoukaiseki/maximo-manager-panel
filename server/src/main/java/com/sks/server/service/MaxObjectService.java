@@ -424,6 +424,7 @@ public class MaxObjectService {
      * 支持精确匹配（以=开头）和通配符（%）搜索
      */
     public Map<String, Object> queryMaxAttributeList(String objectname, String attributename, String description,
+                                                      Integer persistent,
                                                       int pageNum, int pageSize) {
         List<Object> params = new ArrayList<>();
         StringBuilder whereSql = new StringBuilder("WHERE 1=1 ");
@@ -440,6 +441,12 @@ public class MaxObjectService {
         if (attrCond != null) {
             whereSql.append("AND ").append(attrCond.getSql());
             params.add(attrCond.getValue());
+        }
+
+        // 持久性过滤（0=虚拟字段, 1=实体字段, null=不过滤）
+        if (persistent != null) {
+            whereSql.append("AND ma.PERSISTENT = ? ");
+            params.add(persistent);
         }
 
         // 描述条件（搜索 L_TITLE 和 TITLE）

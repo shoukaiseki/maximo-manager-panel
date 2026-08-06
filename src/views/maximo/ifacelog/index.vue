@@ -214,7 +214,11 @@ export default {
       getIfaceLogList(params)
         .then(res => {
           if (res.code === 200 && res.data) {
-            this.mainTable.list = res.data.rows || []
+            this.mainTable.list = (res.data.rows || []).map(row => {
+              return Object.assign({}, row, {
+                CHANGEDATE: this.formatDate(row.CHANGEDATE)
+              })
+            })
             this.mainTable.total = res.data.total || 0
             this.total = res.data.total || 0
           } else {
@@ -286,6 +290,7 @@ export default {
     formatDate(date) {
       if (!date) return '-'
       const d = new Date(date)
+      if (isNaN(d.getTime())) return date
       const pad = n => String(n).padStart(2, '0')
       return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) +
         ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes()) + ':' + pad(d.getSeconds())
