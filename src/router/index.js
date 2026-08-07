@@ -179,7 +179,7 @@ export const constantRoutes = [
         redirect: "noRedirect",
         alwaysShow: true,
         meta: {
-            "title": "MaxObject",
+            "title": "Max配置",
             "icon": "table",
             "noCache": false
         },
@@ -207,6 +207,12 @@ export const constantRoutes = [
                 component: (resolve) => require(['/src/views/maximo/relationship/index'], resolve),
                 name: 'MaxRelationship',
                 meta: { title: '关系查询', icon: 'link', noCache: false }
+            },
+            {
+                path: 'domain',
+                component: (resolve) => require(['/src/views/maximo/domain/index'], resolve),
+                name: 'DomainQuery',
+                meta: { title: '域查询', icon: 'link', noCache: false }
             },
             {
                 path: 'maxappxml',

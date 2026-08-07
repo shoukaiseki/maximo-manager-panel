@@ -140,6 +140,18 @@ public class MysqlDbConfig {
                     var_value_type VARCHAR(20) DEFAULT 'default' COMMENT '值类型: default=直接值, system=系统预设',
                     created_at DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间'
                 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='API 环境变量'
+                """,
+            """
+                CREATE TABLE IF NOT EXISTS saved_query (
+                    id BIGINT AUTO_INCREMENT PRIMARY KEY COMMENT '查询ID',
+                    app VARCHAR(50) NOT NULL COMMENT '所属应用(如 DOMAIN)',
+                    queryname VARCHAR(200) NOT NULL COMMENT '查询名称',
+                    whereclause TEXT COMMENT 'WHERE条件',
+                    description VARCHAR(500) DEFAULT '' COMMENT '描述',
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+                    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+                    UNIQUE KEY uk_app_queryname (app, queryname)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='保存的查询'
                 """
         };
 
