@@ -68,7 +68,7 @@
       ></div>
 
       <div class="main-content">
-        <div class="tabs-wrapper">
+        <div class="tabs-wrapper" :style="tabsWrapperStyle">
           <el-tabs v-model="activeTab" type="border-card">
           <el-tab-pane label="参数" name="params">
             <div class="params-header">
@@ -173,9 +173,10 @@
             </div>
           </el-tab-pane>
         </el-tabs>
+        </div>
 
-        <div class="result-divider" @mousedown="startResultResize" :class="{ dragging: resultDragging }">
-          <i class="el-icon-d-arrow-thick"></i>
+        <div class="result-divider" @mousedown="startResultResize" :class="{ dragging: resultDragging }" title="拖动调整上方区域高度">
+          <span class="divider-handle"></span>
         </div>
 
         <div class="result-section" :style="resultSectionStyle">
@@ -207,8 +208,11 @@
             <el-empty description="点击发送按钮执行请求" />
           </div>
         </div>
+
+        <div class="result-divider result-divider-bottom" @mousedown="startResultBottomResize" :class="{ dragging: resultBottomDragging }" title="拖动调整响应结果区域高度">
+          <span class="divider-handle"></span>
+        </div>
       </div>
-    </div>
     </div>
 
     <el-dialog title="项目列表" :visible.sync="showProjectList" width="800px" top="10vh">
@@ -507,9 +511,14 @@ export default {
       resultDragging: false,
       resultViewerMode: 'tree',
       resultAllExpanded: false,
-      resultSectionHeight: 350,
+      tabsWrapperHeight: 260,
+      resultSectionHeight: 300,
       resultStartY: 0,
       resultStartHeight: 0,
+      resultStartResultHeight: 0,
+      resultBottomDragging: false,
+      resultBottomStartY: 0,
+      resultBottomStartHeight: 0,
       sidebarWidth: 260,
       sidebarDragging: false,
       sidebarStartX: 0,
@@ -540,6 +549,9 @@ export default {
       } catch (e) {
         return null
       }
+    },
+    tabsWrapperStyle() {
+      return { height: this.tabsWrapperHeight + 'px' }
     },
     resultSectionStyle() {
       return { height: this.resultSectionHeight + 'px' }
@@ -613,39 +625,80 @@ export default {
   mounted() {
     this.loadProjects()
     this.loadEnvironments()
+    this.$nextTick(this.initSectionHeights)
     document.addEventListener('mousemove', this.doResultResize)
     document.addEventListener('mouseup', this.stopResultResize)
+    document.addEventListener('mousemove', this.doResultBottomResize)
+    document.addEventListener('mouseup', this.stopResultBottomResize)
     document.addEventListener('mousemove', this.doSidebarResize)
     document.addEventListener('mouseup', this.stopSidebarResize)
   },
   beforeDestroy() {
     document.removeEventListener('mousemove', this.doResultResize)
     document.removeEventListener('mouseup', this.stopResultResize)
+    document.removeEventListener('mousemove', this.doResultBottomResize)
+    document.removeEventListener('mouseup', this.stopResultBottomResize)
     document.removeEventListener('mousemove', this.doSidebarResize)
     document.removeEventListener('mouseup', this.stopSidebarResize)
   },
   methods: {
+    // 根据容器高度初始化上下两区高度，使其默认填满 main-content
+    initSectionHeights() {
+      const mainContent = this.$el && this.$el.querySelector('.main-content')
+      if (!mainContent) return
+      const total = mainContent.clientHeight
+      // 两条分隔条及外边距约占 40px
+      const usable = total - 40
+      if (usable <= 0) return
+      // 上区默认占 40%，下区占剩余
+      let top = Math.round(usable * 0.4)
+      top = Math.max(120, Math.min(top, usable - 150))
+      this.tabsWrapperHeight = top
+      this.resultSectionHeight = usable - top
+    },
     startResultResize(e) {
       this.resultDragging = true
       this.resultStartY = e.clientY
-      this.resultStartHeight = this.resultSectionHeight
+      this.resultStartHeight = this.tabsWrapperHeight
+      this.resultStartResultHeight = this.resultSectionHeight
       document.body.style.cursor = 'row-resize'
       document.body.style.userSelect = 'none'
     },
     doResultResize(e) {
       if (!this.resultDragging) return
-      const delta = this.resultStartY - e.clientY
-      const mainContent = this.$el && this.$el.querySelector('.main-content')
-      if (mainContent) {
-        const maxHeight = mainContent.clientHeight - 100
-        let newHeight = this.resultStartHeight + delta
-        newHeight = Math.max(150, Math.min(newHeight, maxHeight))
-        this.resultSectionHeight = newHeight
-      }
+      // 中间拖动条：上区变大则下区同步变小，保持总高不变（不遮挡响应结果）
+      const delta = e.clientY - this.resultStartY
+      const sumHeight = this.resultStartHeight + this.resultStartResultHeight
+      let newTop = this.resultStartHeight + delta
+      newTop = Math.max(100, Math.min(newTop, sumHeight - 120))
+      this.tabsWrapperHeight = newTop
+      this.resultSectionHeight = sumHeight - newTop
     },
     stopResultResize() {
       if (this.resultDragging) {
         this.resultDragging = false
+        document.body.style.cursor = ''
+        document.body.style.userSelect = ''
+      }
+    },
+    startResultBottomResize(e) {
+      this.resultBottomDragging = true
+      this.resultBottomStartY = e.clientY
+      this.resultBottomStartHeight = this.resultSectionHeight
+      document.body.style.cursor = 'row-resize'
+      document.body.style.userSelect = 'none'
+    },
+    doResultBottomResize(e) {
+      if (!this.resultBottomDragging) return
+      // 底部拖动条：单独调整响应结果区高度，向下拖动变大，向上拖动变小
+      const delta = e.clientY - this.resultBottomStartY
+      let newHeight = this.resultBottomStartHeight + delta
+      newHeight = Math.max(120, newHeight)
+      this.resultSectionHeight = newHeight
+    },
+    stopResultBottomResize() {
+      if (this.resultBottomDragging) {
+        this.resultBottomDragging = false
         document.body.style.cursor = ''
         document.body.style.userSelect = ''
       }
@@ -1431,7 +1484,7 @@ export default {
 
 <style scoped>
 .api-caller-container {
-  height: 100%;
+  height: calc(100vh - 84px);
   display: flex;
   flex-direction: column;
   padding: 10px;
@@ -1494,8 +1547,28 @@ export default {
 }
 
 .tabs-wrapper {
-  flex: 1;
+  flex-shrink: 0;
   overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.tabs-wrapper ::v-deep .el-tabs.el-tabs--border-card {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.tabs-wrapper ::v-deep .el-tabs.el-tabs--border-card > .el-tabs__content {
+  flex: 1;
+  overflow: auto;
+  min-height: 0;
+}
+
+.tabs-wrapper ::v-deep .el-tab-pane {
+  height: 100%;
   display: flex;
   flex-direction: column;
   min-height: 0;
@@ -1634,7 +1707,9 @@ export default {
   flex: 1;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
+  overflow-y: auto;
+  overflow-x: hidden;
+  min-height: 0;
 }
 
 .params-header {
@@ -1649,16 +1724,24 @@ export default {
 }
 
 .body-form {
-  height: calc(100% - 40px);
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: auto;
 }
 
 .body-json {
-  height: calc(100% - 40px);
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
 }
 
 .json-textarea {
   width: 100%;
-  height: 100%;
+  flex: 1;
+  min-height: 80px;
   resize: none;
   border: 1px solid #dcdfe6;
   border-radius: 4px;
@@ -1679,18 +1762,19 @@ export default {
   flex-direction: column;
   overflow: hidden;
   flex-shrink: 0;
+  min-height: 120px;
 }
 
 .result-divider {
-  height: 6px;
-  background: #e8eaed;
+  height: 10px;
+  background: #eef0f3;
   cursor: row-resize;
   display: flex;
   align-items: center;
   justify-content: center;
-  margin-top: 10px;
-  margin-bottom: 0;
-  border-radius: 3px;
+  margin-top: 6px;
+  margin-bottom: 6px;
+  border-radius: 4px;
   flex-shrink: 0;
   transition: background 0.15s;
 }
@@ -1700,15 +1784,23 @@ export default {
   background: #409eff;
 }
 
-.result-divider i {
-  font-size: 10px;
-  color: #909399;
-  line-height: 1;
+.result-divider .divider-handle {
+  display: block;
+  width: 40px;
+  height: 4px;
+  border-radius: 2px;
+  background: #b7bcc4;
+  transition: background 0.15s;
 }
 
-.result-divider:hover i,
-.result-divider.dragging i {
-  color: #fff;
+.result-divider:hover .divider-handle,
+.result-divider.dragging .divider-handle {
+  background: #fff;
+}
+
+.result-divider-bottom {
+  margin-top: 6px;
+  margin-bottom: 2px;
 }
 
 .result-header {
@@ -1759,17 +1851,17 @@ export default {
   padding: 0;
 }
 
-.result-body :deep(.vue-json-pretty) {
+.result-body ::v-deep .vue-json-pretty {
   padding: 12px 16px;
   font-size: 13px;
 }
 
-.result-body :deep(.json-viewer) {
+.result-body ::v-deep .json-viewer {
   padding: 12px 16px;
   font-size: 13px;
 }
 
-.result-body :deep(.jv-container) {
+.result-body ::v-deep .jv-container {
   border: none !important;
 }
 
@@ -1850,7 +1942,7 @@ export default {
   margin-top: 10px;
 }
 
-.import-radio-group :deep(.el-radio) {
+.import-radio-group ::v-deep .el-radio {
   margin-right: 20px;
 }
 
