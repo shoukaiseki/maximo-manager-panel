@@ -7,12 +7,13 @@ import request from '@/utils/request'
  * @param {string} keyword 关键词搜索（描述模糊）
  * @param {number} pageNum 页码
  * @param {number} pageSize 每页条数
+ * @param {string} where 自定义 where 条件（可选）
  */
-export function getMaxObjectList(objectname, keyword, pageNum = 1, pageSize = 20) {
+export function getMaxObjectList(objectname, keyword, pageNum = 1, pageSize = 20, where) {
   return solonRequest({
     url: '/maxobject/list',
     method: 'get',
-    params: { objectname, keyword, pageNum, pageSize }
+    params: { objectname, keyword, pageNum, pageSize, where }
   })
 }
 

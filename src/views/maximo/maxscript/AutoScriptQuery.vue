@@ -6,9 +6,12 @@
           <h2>自动化脚本查询</h2>
           <p class="page-summary">支持脚本名称、描述、对象名、字段名、启动点名称查询，诊断模式可智能匹配相关脚本。</p>
         </div>
-        <div class="mode-switch">
-          <span class="mode-label">{{ isDiagMode ? '诊断模式' : '查询模式' }}</span>
-          <el-switch v-model="isDiagMode" active-text="诊断" inactive-text="查询" />
+        <div class="header-actions">
+          <saved-query-panel ref="savedQuery" appname="AUTOSCRIPT" :default-where="savedWhere" @whereChange="handleQuery" />
+          <div class="mode-switch">
+            <span class="mode-label">{{ isDiagMode ? '诊断模式' : '查询模式' }}</span>
+            <el-switch v-model="isDiagMode" active-text="诊断" inactive-text="查询" />
+          </div>
         </div>
       </div>
 
@@ -278,6 +281,7 @@
 import { getAutoScriptList, getAutoScriptDetail, getAutoScriptSource, getAutoScriptHistory, getAutoScriptHistoryDetail } from '@/api/autoscript'
 import { parseTime } from '@/utils/ruoyi'
 import { stringTrim } from '@/utils/sks'
+import SavedQueryPanel from '@/views/components/SavedQueryPanel.vue'
 
 // OBJECTEVENT 位标志 - OBJECT 类型
 const OBJECT_EVENT_BITS = [
@@ -348,6 +352,9 @@ const LPVAR_LABELS = {
 
 export default {
   name: 'AutoScriptQuery',
+  components: {
+    SavedQueryPanel
+  },
   data() {
     return {
       isDiagMode: localStorage.getItem('autoscript-isDiagMode') !== 'false',
@@ -379,7 +386,9 @@ export default {
       diagResultMap: {},
       allDiagData: [],
       rowDetails: {},
-      allExpanded: false
+      allExpanded: false,
+      // 后端返回的本次执行 where 条件，用于保存查询预填
+      savedWhere: ''
     }
   },
   computed: {
@@ -395,6 +404,10 @@ export default {
     }
   },
   methods: {
+    // 当前生效的自定义 where（保存查询选择），未设置返回 ''
+    getCustomWhere() {
+      return this.$refs.savedQuery ? this.$refs.savedQuery.getWhere() : ''
+    },
     handleQuery() {
       this.tableParam.pageNum = 1
       if (this.isDiagMode) {
@@ -418,6 +431,7 @@ export default {
         source: this.isDiagMode ? undefined : trim(this.formData.source),
         mode: this.isDiagMode ? 'diag' : 'query',
         sourceCaseSensitive: this.sourceCaseSensitive,
+        where: this.isDiagMode ? undefined : (this.getCustomWhere() || undefined),
         pageNum: this.isDiagMode ? 1 : this.tableParam.pageNum,
         pageSize: this.isDiagMode ? 9999 : this.tableParam.pageSize
       }
@@ -427,6 +441,7 @@ export default {
         if (res.code === 200 && res.data) {
           const rows = res.data.rows || []
           const total = res.data.total || 0
+          this.savedWhere = res.data.where || ''
           console.log('[AutoScriptQuery] rows:', rows.length, 'total:', total)
 
           if (this.isDiagMode) {
@@ -480,6 +495,8 @@ export default {
       this.allDiagData = []
       this.rowDetails = {}
       this.hasSearched = false
+      this.savedWhere = ''
+      if (this.$refs.savedQuery) this.$refs.savedQuery.clear()
     },
     toggleExpandAll() {
       if (!this.$refs.mainTable) return
@@ -726,6 +743,11 @@ export default {
 .page-summary {
   color: #606266;
   margin: 0;
+}
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 16px;
 }
 .mode-switch {
   display: flex;

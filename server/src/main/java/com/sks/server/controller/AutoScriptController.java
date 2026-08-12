@@ -27,10 +27,11 @@ public class AutoScriptController {
             @Param(defaultValue = "diag") String mode,
             @Param(defaultValue = "1") int pageNum,
             @Param(defaultValue = "20") int pageSize,
-            @Param(defaultValue = "true") boolean sourceCaseSensitive) {
+            @Param(defaultValue = "true") boolean sourceCaseSensitive,
+            String where) {
         Map<String, Object> data = autoScriptService.queryAutoScriptList(
                 autoscript, description, objectname, attributename,
-                launchpointname, source, mode, pageNum, pageSize, sourceCaseSensitive);
+                launchpointname, source, mode, pageNum, pageSize, sourceCaseSensitive, where);
         return RestResult.ok(data);
     }
 

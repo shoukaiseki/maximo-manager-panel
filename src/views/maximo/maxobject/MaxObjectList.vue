@@ -6,6 +6,7 @@
           <h2>MaxObject 查询</h2>
           <p class="page-summary">对象名支持精确匹配(=开头)和通配符(%模糊)，关键词搜索描述。点击行跳转详情。</p>
         </div>
+        <saved-query-panel ref="savedQuery" appname="MAXOBJECT" :default-where="savedWhere" @whereChange="handleQuery" />
       </div>
 
       <el-form :model="formData" ref="queryForm" :inline="true" label-width="90px" @submit.native.prevent>
@@ -60,9 +61,13 @@
 
 <script>
 import { getMaxObjectList } from '@/api/maxobject'
+import SavedQueryPanel from '@/views/components/SavedQueryPanel.vue'
 
 export default {
   name: 'MaxObjectList',
+  components: {
+    SavedQueryPanel
+  },
   data() {
     return {
       loading: false,
@@ -75,19 +80,26 @@ export default {
         objectname: '',
         keyword: ''
       },
-      todoSqlDialog: { visible: false, sql: '', editor: null }
+      todoSqlDialog: { visible: false, sql: '', editor: null },
+      // 后端返回的本次执行 where 条件，用于保存查询预填
+      savedWhere: ''
     }
   },
   methods: {
+    // 当前生效的自定义 where（保存查询选择），未设置返回 ''
+    getCustomWhere() {
+      return this.$refs.savedQuery ? this.$refs.savedQuery.getWhere() : ''
+    },
     handleQuery() {
       this.hasSearched = true
       this.loading = true
       this.pageNum = 1
-      getMaxObjectList(this.formData.objectname, this.formData.keyword, this.pageNum, this.pageSize)
+      getMaxObjectList(this.formData.objectname, this.formData.keyword, this.pageNum, this.pageSize, this.getCustomWhere() || undefined)
         .then(res => {
           if (res.code === 200 && res.data) {
             this.objectList = res.data.rows || []
             this.total = res.data.total || 0
+            this.savedWhere = res.data.where || ''
           } else {
             this.objectList = []
             this.total = 0
@@ -105,11 +117,12 @@ export default {
       this.pageNum = page
       this.pageSize = limit
       this.loading = true
-      getMaxObjectList(this.formData.objectname, this.formData.keyword, page, limit)
+      getMaxObjectList(this.formData.objectname, this.formData.keyword, page, limit, this.getCustomWhere() || undefined)
         .then(res => {
           if (res.code === 200 && res.data) {
             this.objectList = res.data.rows || []
             this.total = res.data.total || 0
+            this.savedWhere = res.data.where || ''
           } else {
             this.objectList = []
             this.total = 0
@@ -130,6 +143,8 @@ export default {
       this.pageNum = 1
       this.pageSize = 20
       this.total = 0
+      this.savedWhere = ''
+      if (this.$refs.savedQuery) this.$refs.savedQuery.clear()
     },
     handleRowClick(row) {
       this.goDetail(row.objectName)

@@ -34,8 +34,9 @@ public class MaxObjectController {
     public RestResult<Map<String, Object>> list(String objectname,
                                                  String keyword,
                                                  @Param(defaultValue = "1") int pageNum,
-                                                 @Param(defaultValue = "20") int pageSize) {
-        Map<String, Object> data = maxObjectService.queryMaxObjectList(objectname, keyword, pageNum, pageSize);
+                                                 @Param(defaultValue = "20") int pageSize,
+                                                 String where) {
+        Map<String, Object> data = maxObjectService.queryMaxObjectList(objectname, keyword, pageNum, pageSize, where);
         return RestResult.ok(data);
     }
 

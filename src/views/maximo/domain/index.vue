@@ -101,7 +101,33 @@
       </el-descriptions>
 
       <el-tabs v-model="activeTab" type="border-card" class="json-tabs">
-        <el-tab-pane label="域精简" name="domainSimple">
+        <el-tab-pane label="域值" name="domainValues">
+          <div class="subtable-header">
+            <span class="subtable-tip" v-if="valueTable">子表: {{ valueTable }}</span>
+            <div class="subtable-actions">
+              <el-tooltip :content="valueShowAllColumn ? '隐藏多余列' : '显示所有列'" placement="top">
+                <el-button size="mini" circle :type="valueShowAllColumn ? 'success' : 'info'" icon="el-icon-menu" @click="toggleValueShowAllColumn" />
+              </el-tooltip>
+              <el-tooltip :content="valueShowPropName ? '隐藏属性名' : '显示属性名'" placement="top">
+                <el-button size="mini" circle :type="valueShowPropName ? 'success' : 'info'" icon="el-icon-s-flag" @click="valueShowPropName = !valueShowPropName" />
+              </el-tooltip>
+            </div>
+          </div>
+          <el-table :data="domainValues" border stripe size="small" v-loading="subtableLoading" max-height="420" style="width: 100%">
+            <el-table-column v-for="col in valueDisplayColumns" :key="col" :prop="col" :label="valueShowPropName ? col : valueColumnLabel(col)" :show-overflow-tooltip="col !== '_TRANSLATIONS'" :min-width="col === '_TRANSLATIONS' ? 320 : 130">
+              <template slot-scope="scope">
+                <el-table v-if="col === '_TRANSLATIONS' && scope.row._TRANSLATIONS && scope.row._TRANSLATIONS.length" :data="scope.row._TRANSLATIONS" size="mini" border style="width: 100%" :show-header="false">
+                  <el-table-column prop="LANGCODE" label="语言" width="110" />
+                  <el-table-column prop="DESCRIPTION" label="描述" show-overflow-tooltip />
+                </el-table>
+                <span v-else-if="col === '_TRANSLATIONS'" class="cell-trans-empty">-</span>
+                <span v-else>{{ scope.row[col] }}</span>
+              </template>
+            </el-table-column>
+          </el-table>
+          <el-empty v-if="!subtableLoading && domainValues.length === 0" description="无域值数据" />
+        </el-tab-pane>
+        <el-tab-pane label="域精简json" name="domainSimple">
           <div class="json-toolbar">
             <el-button type="primary" size="mini" icon="el-icon-document-copy" @click="copyDomainSimpleJson">复制域精简JSON</el-button>
           </div>
@@ -109,13 +135,20 @@
             <div ref="domainSimpleMonacoRef" class="monaco-container"></div>
           </div>
         </el-tab-pane>
-        <el-tab-pane label="域完整" name="domainFull">
+        <el-tab-pane label="域完整json" name="domainFull">
           <div class="json-toolbar">
             <el-button type="primary" size="mini" icon="el-icon-document" @click="copyDomainFullJson">复制域完整JSON</el-button>
           </div>
           <div v-loading="detailLoading" element-loading-text="加载中..." class="monaco-wrapper">
             <div ref="domainFullMonacoRef" class="monaco-container"></div>
           </div>
+        </el-tab-pane>
+        <el-tab-pane label="本地化" name="domainTrans">
+          <el-table :data="domainTranslations" border stripe size="small" v-loading="subtableLoading" max-height="420" style="width: 100%">
+            <el-table-column prop="LANGCODE" label="语言" width="120" />
+            <el-table-column prop="DESCRIPTION" label="本地化描述" show-overflow-tooltip />
+          </el-table>
+          <el-empty v-if="!subtableLoading && domainTranslations.length === 0" description="无本地化数据" />
         </el-tab-pane>
       </el-tabs>
 
@@ -128,7 +161,7 @@
 
 <script>
 import { sksPageMixin } from "sks-plugin-el-erp/lib/sks-page";
-import { exportDomains } from '@/api/domain'
+import { exportDomains, getDomainSubtables } from '@/api/domain'
 import SavedQueryPanel from '@/views/components/SavedQueryPanel.vue'
 
 export default {
@@ -160,11 +193,20 @@ export default {
       currentRow: null,
       apiSimpleDomains: [],
       apiFullDomains: [],
-      activeTab: 'domainSimple',
+      activeTab: 'domainValues',
       domainSimpleEditor: null,
       domainFullEditor: null,
       monacoLoaded: false,
-      _monaco: null
+      _monaco: null,
+      // 子表信息
+      subtableLoading: false,
+      domainValues: [],
+      valueTable: '',
+      allValueColumns: [],
+      valueDisplayColumns: [],
+      valueShowAllColumn: false,
+      valueShowPropName: false,
+      domainTranslations: []
     }
   },
   watch: {
@@ -223,6 +265,30 @@ export default {
     // === SQL 条件构建 ===
     escapeSql(v) {
       return String(v || '').replace(/'/g, "''")
+    },
+    // 域值动态列标题映射（默认显示友好名称，"显示属性名"后显示字段名）
+    valueColumnLabel(col) {
+      const map = { VALUE: '值', DESCRIPTION: '描述', MAXVALUE: '最大值', DEFAULTS: '默认值', _TRANSLATIONS: '多语言' }
+      return map[col] || col
+    },
+    // 域值次要技术字段默认隐藏
+    isHiddenValueColumn(col) {
+      if (['SITEID', 'ORGID', 'ROWSTAMP', 'VALUEID', 'MAXVALUE', 'DEFAULTS'].includes(col)) return true
+      // 各类型子表主键 ID（ALNDOMAINID 等），DOMAINID/VALUEID 除外
+      if (col.endsWith('ID') && col !== 'DOMAINID' && col !== 'VALUEID') return true
+      return false
+    },
+    // 根据显示所有列开关计算当前展示列
+    applyValueColumns() {
+      if (this.valueShowAllColumn) {
+        this.valueDisplayColumns = this.allValueColumns.slice()
+      } else {
+        this.valueDisplayColumns = this.allValueColumns.filter(c => !this.isHiddenValueColumn(c))
+      }
+    },
+    toggleValueShowAllColumn() {
+      this.valueShowAllColumn = !this.valueShowAllColumn
+      this.applyValueColumns()
     },
     likeCond(field, input) {
       const val = this.escapeSql(input.trim())
@@ -358,13 +424,48 @@ export default {
     // === 详情 ===
     handleRowClick(row) {
       this.currentRow = row
-      this.activeTab = 'domainSimple'
+      this.activeTab = 'domainValues'
       this.dialogVisible = true
       this.detailLoading = true
       this.apiSimpleDomains = []
       this.apiFullDomains = []
+      this.domainValues = []
+      this.domainTranslations = []
+      this.allValueColumns = []
+      this.valueDisplayColumns = []
+      this.valueShowAllColumn = false
+      this.valueShowPropName = false
 
       const whereClause = "DOMAINID = '" + this.escapeSql(row.domainid) + "'"
+
+      // 加载子表信息（域值 + 本地化）
+      this.subtableLoading = true
+      getDomainSubtables(row.domainid, row.domaintype).then(res => {
+        if (res.code === 200 && res.data) {
+          this.domainValues = res.data.values || []
+          this.valueTable = res.data.valueTable || ''
+          this.domainTranslations = res.data.translations || []
+          if (this.domainValues.length > 0) {
+            const keys = Object.keys(this.domainValues[0])
+            const cols = []
+            keys.forEach(k => {
+              // 多语言翻译用单元格内嵌子表展示，不作为原始字段列
+              if (k === '_TRANSLATIONS') return
+              cols.push(k)
+              // 多语言列显示在 DESCRIPTION 右边
+              if (k === 'DESCRIPTION') cols.push('_TRANSLATIONS')
+            })
+            this.allValueColumns = cols
+            this.applyValueColumns()
+          }
+        } else {
+          this.$message.error('获取子表信息失败: ' + (res.message || '未知错误'))
+        }
+      }).catch(err => {
+        this.$message.error('获取子表信息失败: ' + (err.message || String(err)))
+      }).finally(() => {
+        this.subtableLoading = false
+      })
 
       Promise.all([
         exportDomains({
@@ -610,6 +711,25 @@ export default {
 }
 .json-tabs {
   margin-top: 16px;
+}
+.subtable-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+.subtable-tip {
+  color: #909399;
+  font-size: 12px;
+  margin: 0;
+}
+.subtable-actions {
+  display: flex;
+  gap: 4px;
+}
+.cell-trans-empty {
+  color: #909399;
+  font-size: 12px;
 }
 .json-toolbar {
   margin-bottom: 8px;

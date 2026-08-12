@@ -15,39 +15,42 @@ public class MaxObjectService {
     private DataSource dataSource;
 
     /**
-     * 查询 MAXOBJECT 列表（支持分页 + objectname 精确/模糊搜索 + keyword 描述模糊搜索）
+     * 查询 MAXOBJECT 列表（支持分页 + objectname 精确/模糊搜索 + keyword 描述模糊搜索 + 自定义 where）
      */
-    public Map<String, Object> queryMaxObjectList(String objectname, String keyword, int pageNum, int pageSize) {
-        // 构建 objectname 搜索条件（支持 =精确 和 %模糊）
-        LikeCondition objCond = buildLikeCondition(objectname, "OBJECTNAME");
+    public Map<String, Object> queryMaxObjectList(String objectname, String keyword, int pageNum, int pageSize, String where) {
+        // 自定义 where：前端已拼好完整条件（含表单+自定义组合），直接使用
+        String customWhere = (where != null && !where.trim().isEmpty()) ? where.trim() : null;
 
-        // 构建 keyword 描述模糊搜索
-        String keywordPattern = "%" + (keyword != null ? keyword.trim().toUpperCase() : "") + "%";
-
-        // 1. 总数查询
-        StringBuilder countSqlBuilder = new StringBuilder("SELECT COUNT(*) AS total FROM MAXOBJECT WHERE ");
+        // 1. 构建查询条件
         List<String> conditions = new ArrayList<>();
         List<String> params = new ArrayList<>();
 
-        if (objCond != null) {
-            conditions.add(objCond.getSql());
-            params.add(objCond.getValue());
-        }
-        if (keyword != null && !keyword.trim().isEmpty()) {
-            conditions.add("MAXOBJECT.DESCRIPTION LIKE ?");
-            params.add(keywordPattern);
-        }
-
-        // 如果没有任何条件，查询所有
-        if (conditions.isEmpty()) {
-            countSqlBuilder = new StringBuilder("SELECT COUNT(*) AS total FROM MAXOBJECT");
+        String whereSql = "";
+        if (customWhere != null) {
+            whereSql = " WHERE (" + customWhere + ")";
         } else {
-            countSqlBuilder.append(String.join(" OR ", conditions));
+            // 后端参数构建表单条件（支持 =精确 和 %模糊）
+            LikeCondition objCond = buildLikeCondition(objectname, "OBJECTNAME");
+            String keywordPattern = "%" + (keyword != null ? keyword.trim().toUpperCase() : "") + "%";
+
+            if (objCond != null) {
+                conditions.add(objCond.getSql());
+                params.add(objCond.getValue());
+            }
+            if (keyword != null && !keyword.trim().isEmpty()) {
+                conditions.add("MAXOBJECT.DESCRIPTION LIKE ?");
+                params.add(keywordPattern);
+            }
+            if (!conditions.isEmpty()) {
+                whereSql = " WHERE " + String.join(" OR ", conditions);
+            }
         }
 
+        // 2. 总数查询
+        String countSql = "SELECT COUNT(*) AS total FROM MAXOBJECT" + whereSql;
         int total = 0;
         try (Connection conn = dataSource.getConnection();
-             PreparedStatement ps = conn.prepareStatement(countSqlBuilder.toString())) {
+             PreparedStatement ps = conn.prepareStatement(countSql)) {
             for (int i = 0; i < params.size(); i++) {
                 ps.setString(i + 1, params.get(i));
             }
@@ -60,24 +63,19 @@ public class MaxObjectService {
             throw new RuntimeException("查询 MAXOBJECT 总数失败: " + e.getMessage(), e);
         }
 
-        // 2. 分页数据查询（DB2 分页语法）
-        StringBuilder dataSqlBuilder = new StringBuilder(
+        // 3. 分页数据查询（DB2 分页语法）
+        String dataSql =
             "SELECT l.DESCRIPTION AS l_description, OBJECTNAME, MAXOBJECT.DESCRIPTION " +
             "FROM MAXOBJECT " +
-            "LEFT JOIN L_MAXOBJECT AS l ON (MAXOBJECTID = l.OWNERID AND l.LANGCODE = 'ZH') ");
-
-        if (conditions.isEmpty()) {
-            dataSqlBuilder.append("ORDER BY OBJECTNAME OFFSET ? ROWS FETCH NEXT ? ROWS ONLY");
-        } else {
-            dataSqlBuilder.append("WHERE ").append(String.join(" OR ", conditions))
-                .append(" ORDER BY OBJECTNAME OFFSET ? ROWS FETCH NEXT ? ROWS ONLY");
-        }
+            "LEFT JOIN L_MAXOBJECT AS l ON (MAXOBJECTID = l.OWNERID AND l.LANGCODE = 'ZH') " +
+            whereSql +
+            " ORDER BY OBJECTNAME OFFSET ? ROWS FETCH NEXT ? ROWS ONLY";
 
         int offset = (pageNum - 1) * pageSize;
         List<MaxObjectInfo> rows = new ArrayList<>();
 
         try (Connection conn = dataSource.getConnection();
-             PreparedStatement ps = conn.prepareStatement(dataSqlBuilder.toString())) {
+             PreparedStatement ps = conn.prepareStatement(dataSql)) {
             for (int i = 0; i < params.size(); i++) {
                 ps.setString(i + 1, params.get(i));
             }
@@ -101,7 +99,32 @@ public class MaxObjectService {
         result.put("total", total);
         result.put("pageNum", pageNum);
         result.put("pageSize", pageSize);
+        // 本次实际执行的 where 条件（字面量，供前端保存查询预填）
+        result.put("where", customWhere != null ? customWhere : buildWhereLiteral(objectname, keyword));
         return result;
+    }
+
+    /**
+     * 由 objectname/keyword 构建可复用的 where 字面量片段（用于保存查询预填）
+     */
+    private String buildWhereLiteral(String objectname, String keyword) {
+        List<String> conds = new ArrayList<>();
+        if (objectname != null && !objectname.trim().isEmpty()) {
+            String val = objectname.trim();
+            if (val.startsWith("=")) {
+                conds.add("OBJECTNAME = '" + escapeSql(val.substring(1).trim().toUpperCase()) + "'");
+            } else {
+                conds.add("OBJECTNAME LIKE '%" + escapeSql(val.replace("%", "").toUpperCase()) + "%'");
+            }
+        }
+        if (keyword != null && !keyword.trim().isEmpty()) {
+            conds.add("MAXOBJECT.DESCRIPTION LIKE '%" + escapeSql(keyword.trim().toUpperCase()) + "%'");
+        }
+        return String.join(" OR ", conds);
+    }
+
+    private String escapeSql(String v) {
+        return v == null ? "" : v.replace("'", "''");
     }
 
     /**

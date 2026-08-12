@@ -19,7 +19,7 @@ public class AutoScriptService {
     public Map<String, Object> queryAutoScriptList(
             String autoscript, String description, String objectname,
             String attributename, String launchpointname, String source,
-            String mode, int pageNum, int pageSize, boolean sourceCaseSensitive) {
+            String mode, int pageNum, int pageSize, boolean sourceCaseSensitive, String where) {
 
         boolean isDiagMode = !"query".equalsIgnoreCase(mode);
 
@@ -87,6 +87,22 @@ public class AutoScriptService {
             if (!isDiagMode && source != null && !source.trim().isEmpty() && sourceCaseSensitive) {
                 whereSql.append(" AND a.SOURCE LIKE ?");
                 params.add("%" + source.trim() + "%");
+            }
+        }
+
+        // 用户自定义 where：查询模式下前端已拼好完整条件，直接使用；诊断模式追加到现有条件
+        String customWhere = (where != null && !where.trim().isEmpty()) ? where.trim() : null;
+        if (customWhere != null) {
+            if (isDiagMode) {
+                if (whereSql.length() == 0) {
+                    whereSql.append(" WHERE ").append(customWhere);
+                } else {
+                    whereSql.append(" AND (").append(customWhere).append(")");
+                }
+            } else {
+                whereSql = new StringBuilder(" WHERE (").append(customWhere).append(")");
+                // 查询模式下自定义 where 完全替换表单条件，清空已收集的参数，避免参数与占位符数量不匹配
+                params.clear();
             }
         }
 
@@ -232,7 +248,47 @@ public class AutoScriptService {
         result.put("total", total);
         result.put("pageNum", pageNum);
         result.put("pageSize", pageSize);
+        // 本次实际执行的 where 条件（字面量，供前端保存查询预填）
+        result.put("where", buildWhereLiteral(autoscript, description, objectname, attributename, launchpointname, source, isDiagMode, customWhere, sourceCaseSensitive));
         return result;
+    }
+
+    /**
+     * 由查询参数构建可复用的 where 字面量片段（用于保存查询预填）
+     */
+    private String buildWhereLiteral(String autoscript, String description, String objectname,
+                                     String attributename, String launchpointname, String source,
+                                     boolean isDiagMode, String customWhere, boolean sourceCaseSensitive) {
+        if (customWhere != null) {
+            return customWhere;
+        }
+        if (isDiagMode) {
+            return "";
+        }
+        List<String> conds = new ArrayList<>();
+        if (autoscript != null && !autoscript.trim().isEmpty()) {
+            conds.add("a.AUTOSCRIPT LIKE '%" + esc(autoscript.trim().toUpperCase()) + "%'");
+        }
+        if (description != null && !description.trim().isEmpty()) {
+            conds.add("a.DESCRIPTION LIKE '%" + esc(description.trim()) + "%'");
+        }
+        if (objectname != null && !objectname.trim().isEmpty()) {
+            conds.add("EXISTS (SELECT 1 FROM SCRIPTLAUNCHPOINT sl WHERE sl.AUTOSCRIPT = a.AUTOSCRIPT AND sl.OBJECTNAME = '" + esc(objectname.trim().toUpperCase()) + "')");
+        }
+        if (attributename != null && !attributename.trim().isEmpty()) {
+            conds.add("EXISTS (SELECT 1 FROM SCRIPTLAUNCHPOINT sl3 WHERE sl3.AUTOSCRIPT = a.AUTOSCRIPT AND sl3.ATTRIBUTENAME = '" + esc(attributename.trim().toUpperCase()) + "')");
+        }
+        if (launchpointname != null && !launchpointname.trim().isEmpty()) {
+            conds.add("EXISTS (SELECT 1 FROM SCRIPTLAUNCHPOINT sl2 WHERE sl2.AUTOSCRIPT = a.AUTOSCRIPT AND sl2.LAUNCHPOINTNAME LIKE '%" + esc(launchpointname.trim().toUpperCase()) + "%')");
+        }
+        if (source != null && !source.trim().isEmpty() && sourceCaseSensitive) {
+            conds.add("a.SOURCE LIKE '%" + esc(source.trim()) + "%'");
+        }
+        return String.join(" AND ", conds);
+    }
+
+    private String esc(String v) {
+        return v == null ? "" : v.replace("'", "''");
     }
 
     /**
