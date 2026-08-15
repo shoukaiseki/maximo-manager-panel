@@ -114,13 +114,17 @@
             </div>
           </div>
           <el-table :data="domainValues" border stripe size="small" v-loading="subtableLoading" max-height="420" style="width: 100%">
-            <el-table-column v-for="col in valueDisplayColumns" :key="col" :prop="col" :label="valueShowPropName ? col : valueColumnLabel(col)" :show-overflow-tooltip="col !== '_TRANSLATIONS'" :min-width="col === '_TRANSLATIONS' ? 320 : 130">
+            <el-table-column v-for="col in valueDisplayColumns" :key="col" :prop="col === '_TRANSLATIONS' ? '' : col" :label="valueShowPropName ? col : valueColumnLabel(col)" :show-overflow-tooltip="col !== '_TRANSLATIONS'" :min-width="col === '_TRANSLATIONS' ? 320 : 130">
               <template slot-scope="scope">
-                <el-table v-if="col === '_TRANSLATIONS' && scope.row._TRANSLATIONS && scope.row._TRANSLATIONS.length" :data="scope.row._TRANSLATIONS" size="mini" border style="width: 100%" :show-header="false">
-                  <el-table-column prop="LANGCODE" label="语言" width="110" />
-                  <el-table-column prop="DESCRIPTION" label="描述" show-overflow-tooltip />
-                </el-table>
-                <span v-else-if="col === '_TRANSLATIONS'" class="cell-trans-empty">-</span>
+                <div v-if="col === '_TRANSLATIONS'" class="trans-cell">
+                  <template v-if="scope.row._TRANSLATIONS && scope.row._TRANSLATIONS.length">
+                    <div v-for="(t, ti) in scope.row._TRANSLATIONS" :key="ti" class="trans-cell-row">
+                      <span class="trans-cell-lang">{{ t.LANGCODE }}</span>
+                      <span class="trans-cell-desc">{{ t.DESCRIPTION }}</span>
+                    </div>
+                  </template>
+                  <span v-else class="cell-trans-empty">-</span>
+                </div>
                 <span v-else>{{ scope.row[col] }}</span>
               </template>
             </el-table-column>
@@ -446,15 +450,42 @@ export default {
           this.valueTable = res.data.valueTable || ''
           this.domainTranslations = res.data.translations || []
           if (this.domainValues.length > 0) {
-            const keys = Object.keys(this.domainValues[0])
+            // 遍历所有行求字段并集（某些行可能缺失 DESCRIPTION 等字段，只看首行会漏列）
+            const orderedKeys = []
+            const seen = {}
+            let hasTranslations = false
+            this.domainValues.forEach(row => {
+              Object.keys(row).forEach(k => {
+                if (k === '_TRANSLATIONS') {
+                  if (Array.isArray(row._TRANSLATIONS) && row._TRANSLATIONS.length) hasTranslations = true
+                  return
+                }
+                if (!seen[k]) {
+                  seen[k] = true
+                  orderedKeys.push(k)
+                }
+              })
+            })
+            // 确保 DESCRIPTION 列一定存在（即使所有行首次出现时都缺失该字段）
+            if (!seen['DESCRIPTION']) {
+              seen['DESCRIPTION'] = true
+              const valueIdx = orderedKeys.indexOf('VALUE')
+              if (valueIdx >= 0) {
+                orderedKeys.splice(valueIdx + 1, 0, 'DESCRIPTION')
+              } else {
+                orderedKeys.push('DESCRIPTION')
+              }
+            }
             const cols = []
-            keys.forEach(k => {
-              // 多语言翻译用单元格内嵌子表展示，不作为原始字段列
-              if (k === '_TRANSLATIONS') return
+            orderedKeys.forEach(k => {
               cols.push(k)
               // 多语言列显示在 DESCRIPTION 右边
-              if (k === 'DESCRIPTION') cols.push('_TRANSLATIONS')
+              if (k === 'DESCRIPTION' && hasTranslations) cols.push('_TRANSLATIONS')
             })
+            // 若存在多语言但没有 DESCRIPTION 列承接，则追加到末尾
+            if (hasTranslations && cols.indexOf('_TRANSLATIONS') === -1) {
+              cols.push('_TRANSLATIONS')
+            }
             this.allValueColumns = cols
             this.applyValueColumns()
           }
@@ -730,6 +761,27 @@ export default {
 .cell-trans-empty {
   color: #909399;
   font-size: 12px;
+}
+.trans-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.trans-cell-row {
+  display: flex;
+  align-items: center;
+  line-height: 20px;
+}
+.trans-cell-lang {
+  flex: 0 0 60px;
+  color: #909399;
+  font-size: 12px;
+  padding-right: 8px;
+}
+.trans-cell-desc {
+  flex: 1;
+  color: #303133;
+  word-break: break-all;
 }
 .json-toolbar {
   margin-bottom: 8px;
