@@ -115,4 +115,30 @@ public class AutoScriptController {
         Map<String, Object> data = autoScriptService.queryAutoScriptHistoryDetail(id);
         return RestResult.ok(data);
     }
+
+    /**
+     * A_AUTOSCRIPT 审计记录列表（按 EAUDITTRANSID 倒序）
+     * GET /autoscript/audit/list?autoscript=&source=&pageNum=1&pageSize=20
+     */
+    @Mapping(value = "/autoscript/audit/list", method = MethodType.GET)
+    public RestResult<Map<String, Object>> auditList(
+            String autoscript, String source,
+            @Param(defaultValue = "1") int pageNum,
+            @Param(defaultValue = "20") int pageSize) {
+        Map<String, Object> data = autoScriptService.queryAuditList(autoscript, source, pageNum, pageSize);
+        return RestResult.ok(data);
+    }
+
+    /**
+     * A_AUTOSCRIPT 审计记录详情（按 EAUDITTRANSID，含 SOURCE）
+     * GET /autoscript/audit/detail?eaudittransid=xxx
+     */
+    @Mapping(value = "/autoscript/audit/detail", method = MethodType.GET)
+    public RestResult<Map<String, Object>> auditDetail(String eaudittransid) {
+        if (eaudittransid == null || eaudittransid.trim().isEmpty()) {
+            return RestResult.error("EAUDITTRANSID不能为空");
+        }
+        Map<String, Object> data = autoScriptService.queryAuditDetail(eaudittransid);
+        return RestResult.ok(data);
+    }
 }

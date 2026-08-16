@@ -143,11 +143,12 @@
               <el-tag v-for="tag in (scope.row._matchType || '').split(', ')" :key="tag" size="mini" :type="matchTypeTag(tag)" style="margin-right:4px">{{ tag }}</el-tag>
             </template>
           </el-table-column>
-          <el-table-column label="操作" width="240" fixed="right">
+          <el-table-column label="操作" width="300" fixed="right">
             <template slot-scope="scope">
               <el-button type="text" size="small" @click="showDetail(scope.row)">详情</el-button>
               <el-button type="text" size="small" @click="showHistory(scope.row)">历史记录</el-button>
               <el-button type="text" size="small" @click="showSource(scope.row)">源码</el-button>
+              <el-button type="text" size="small" @click="showAuditList(scope.row)">审计记录</el-button>
             </template>
           </el-table-column>
         </el-table>
@@ -274,6 +275,13 @@
         </div>
       </div>
     </el-dialog>
+
+    <!-- 审计记录弹窗 -->
+    <el-dialog :title="'脚本审计记录: ' + auditDialog.autoscript" :visible.sync="auditDialog.visible" width="90%" top="3vh" :close-on-click-modal="false" append-to-body destroy-on-close>
+      <div style="max-height:82vh;overflow-y:auto">
+        <AutoScriptAuditPanel v-if="auditDialog.visible" :autoscript="auditDialog.autoscript" embedded />
+      </div>
+    </el-dialog>
   </section>
 </template>
 
@@ -282,6 +290,7 @@ import { getAutoScriptList, getAutoScriptDetail, getAutoScriptSource, getAutoScr
 import { parseTime } from '@/utils/ruoyi'
 import { stringTrim } from '@/utils/sks'
 import SavedQueryPanel from '@/views/components/SavedQueryPanel.vue'
+import AutoScriptAuditPanel from './AutoScriptAuditPanel.vue'
 
 // OBJECTEVENT 位标志 - OBJECT 类型
 const OBJECT_EVENT_BITS = [
@@ -353,7 +362,8 @@ const LPVAR_LABELS = {
 export default {
   name: 'AutoScriptQuery',
   components: {
-    SavedQueryPanel
+    SavedQueryPanel,
+    AutoScriptAuditPanel
   },
   data() {
     return {
@@ -382,6 +392,7 @@ export default {
         visible: false, name: '', loading: false,
         mainInfo: {}, launchPoints: [], vars: []
       },
+      auditDialog: { visible: false, autoscript: '' },
       // 诊断模式去重
       diagResultMap: {},
       allDiagData: [],
@@ -574,6 +585,10 @@ export default {
       }).finally(() => {
         this.historyDialog.loading = false
       })
+    },
+    showAuditList(row) {
+      this.auditDialog.autoscript = row.AUTOSCRIPT
+      this.auditDialog.visible = true
     },
     showHistoryDetail(row) {
       this.historySourceDialog.visible = true

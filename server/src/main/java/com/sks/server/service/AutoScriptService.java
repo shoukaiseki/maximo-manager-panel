@@ -506,6 +506,111 @@ public class AutoScriptService {
         return result;
     }
 
+    // ========== A_AUTOSCRIPT 审计记录 ==========
+
+    /**
+     * 查询脚本审计记录列表（按 EAUDITTRANSID 倒序，支持 AUTOSCRIPT/SOURCE 模糊过滤）
+     */
+    public Map<String, Object> queryAuditList(String autoscript, String source, int pageNum, int pageSize) {
+        StringBuilder whereSql = new StringBuilder(" WHERE 1=1");
+        List<Object> params = new ArrayList<>();
+
+        if (autoscript != null && !autoscript.trim().isEmpty()) {
+            whereSql.append(" AND a.AUTOSCRIPT LIKE ?");
+            params.add("%" + autoscript.trim().toUpperCase() + "%");
+        }
+        if (source != null && !source.trim().isEmpty()) {
+            whereSql.append(" AND a.SOURCE LIKE ?");
+            params.add("%" + source.trim() + "%");
+        }
+
+        String whereStr = whereSql.toString();
+
+        // 总数查询
+        String countSql = "SELECT COUNT(*) AS total FROM A_AUTOSCRIPT a" + whereStr;
+        int total = 0;
+        try (Connection conn = dataSource.getConnection();
+             PreparedStatement ps = conn.prepareStatement(countSql)) {
+            for (int i = 0; i < params.size(); i++) {
+                ps.setObject(i + 1, params.get(i));
+            }
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) {
+                    total = rs.getInt("total");
+                }
+            }
+        } catch (SQLException e) {
+            throw new RuntimeException("查询 A_AUTOSCRIPT 审计总数失败: " + e.getMessage(), e);
+        }
+
+        // 分页数据查询（不包含 SOURCE/BINARYSCRIPTSOURCE 大字段，其余字段全部返回以支持"显示所有列"）
+        String dataSql = "SELECT a.EAUDITTRANSID, a.EAUDITUSERNAME, a.EAUDITTIMESTAMP, a.EAUDITTYPE, " +
+                "a.ESIGTRANSID, a.AUTOSCRIPT, a.AUTOSCRIPTID, a.VERSION, a.DESCRIPTION, " +
+                "a.SCRIPTLANGUAGE, a.STATUS, a.SCHEDULEDSTATUS, a.ACTIVE, a.USERDEFINED, " +
+                "a.LOGLEVEL, a.OWNERID, a.OWNERNAME, a.OWNERPHONE, a.OWNEREMAIL, a.OWNER, " +
+                "a.CREATEDBYID, a.CREATEDBYNAME, a.CREATEDBYPHONE, a.CREATEDBYEMAIL, a.CREATEDBY, " +
+                "a.CREATEDDATE, a.CHANGEBY, a.CHANGEDATE, a.STATUSDATE, a.COMMENTS, a.CATEGORY, " +
+                "a.INTERFACE, a.HASLD, a.LANGCODE, a.ORGID, a.SITEID, a.ACTION, " +
+                "a.IBM_PACKAGEPATH, a.ROWSTAMP " +
+                "FROM A_AUTOSCRIPT a " +
+                whereStr +
+                " ORDER BY a.EAUDITTRANSID DESC " +
+                "OFFSET ? ROWS FETCH NEXT ? ROWS ONLY";
+
+        int offset = (pageNum - 1) * pageSize;
+        List<Map<String, Object>> rows = new ArrayList<>();
+        try (Connection conn = dataSource.getConnection();
+             PreparedStatement ps = conn.prepareStatement(dataSql)) {
+            for (int i = 0; i < params.size(); i++) {
+                ps.setObject(i + 1, params.get(i));
+            }
+            ps.setInt(params.size() + 1, offset);
+            ps.setInt(params.size() + 2, pageSize);
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    rows.add(rowToMap(rs));
+                }
+            }
+        } catch (SQLException e) {
+            throw new RuntimeException("查询 A_AUTOSCRIPT 审计列表失败: " + e.getMessage(), e);
+        }
+
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("rows", rows);
+        result.put("total", total);
+        result.put("pageNum", pageNum);
+        result.put("pageSize", pageSize);
+        return result;
+    }
+
+    /**
+     * 查询脚本审计记录详情（按 EAUDITTRANSID，含 SOURCE，排除 BINARYSCRIPTSOURCE）
+     */
+    public Map<String, Object> queryAuditDetail(String eaudittransid) {
+        String sql = "SELECT a.EAUDITTRANSID, a.EAUDITUSERNAME, a.EAUDITTIMESTAMP, a.EAUDITTYPE, " +
+                "a.ESIGTRANSID, a.AUTOSCRIPT, a.AUTOSCRIPTID, a.VERSION, a.DESCRIPTION, " +
+                "a.SCRIPTLANGUAGE, a.STATUS, a.SCHEDULEDSTATUS, a.ACTIVE, a.USERDEFINED, " +
+                "a.LOGLEVEL, a.OWNERID, a.OWNERNAME, a.OWNERPHONE, a.OWNEREMAIL, a.OWNER, " +
+                "a.CREATEDBYID, a.CREATEDBYNAME, a.CREATEDBYPHONE, a.CREATEDBYEMAIL, a.CREATEDBY, " +
+                "a.CREATEDDATE, a.CHANGEBY, a.CHANGEDATE, a.STATUSDATE, a.COMMENTS, a.CATEGORY, " +
+                "a.INTERFACE, a.HASLD, a.LANGCODE, a.ORGID, a.SITEID, a.ACTION, " +
+                "a.IBM_PACKAGEPATH, a.ROWSTAMP, a.SOURCE " +
+                "FROM A_AUTOSCRIPT a WHERE a.EAUDITTRANSID = ?";
+
+        try (Connection conn = dataSource.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setString(1, eaudittransid.trim());
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) {
+                    return rowToMap(rs);
+                }
+            }
+        } catch (SQLException e) {
+            throw new RuntimeException("查询审计详情失败: " + e.getMessage(), e);
+        }
+        return Collections.emptyMap();
+    }
+
     // ========== 工具方法 ==========
 
     private Map<String, Object> rowToMap(ResultSet rs) throws SQLException {

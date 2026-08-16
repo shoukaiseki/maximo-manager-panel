@@ -65,3 +65,25 @@ export function getAutoScriptHistoryDetail(id) {
     params: { id: id }
   })
 }
+
+/**
+ * 查询 A_AUTOSCRIPT 审计记录列表
+ */
+export function getAutoScriptAuditList(params) {
+  return solonRequest({
+    url: '/autoscript/audit/list',
+    method: 'get',
+    params: params
+  })
+}
+
+/**
+ * 查询 A_AUTOSCRIPT 审计记录详情（含 SOURCE）
+ */
+export function getAutoScriptAuditDetail(eaudittransid) {
+  return solonRequest({
+    url: '/autoscript/audit/detail',
+    method: 'get',
+    params: { eaudittransid: eaudittransid }
+  })
+}
