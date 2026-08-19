@@ -174,6 +174,12 @@ export const constantRoutes = [
                 component: (resolve) => require(['/src/views/maximo/maslog/MasLogMarker'], resolve),
                 name: 'MasLogMarker',
                 meta: { title: '日志标记', icon: 'mark', noCache: false }
+            },
+            {
+                path: 'loggerLevel',
+                component: (resolve) => require(['/src/views/maximo/maslog/LoggerLevelManager'], resolve),
+                name: 'LoggerLevelManager',
+                meta: { title: '日志级别', icon: 'edit', noCache: false }
             }
         ]
     },
@@ -225,6 +231,12 @@ export const constantRoutes = [
                 component: (resolve) => require(['/src/views/maximo/maxappxml/index'], resolve),
                 name: 'MaxAppXml',
                 meta: { title: '应用XML', icon: 'document', noCache: false }
+            },
+            {
+                path: 'maxappxmlaudit',
+                component: (resolve) => require(['/src/views/maximo/maxappxml/audit'], resolve),
+                name: 'MaxAppXmlAudit',
+                meta: { title: '应用XML审计记录', icon: 'log', noCache: false }
             },
             {
                 path: 'ifacelog',

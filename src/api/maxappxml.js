@@ -44,3 +44,30 @@ export function getMaxAppXmlDetail(params) {
     params
   })
 }
+
+/**
+ * 查询 A_MAXPRESENTATION 审计记录列表
+ * @param {Object} params
+ * @param {string} params.app APP（支持 =精确 / %模糊）
+ * @param {number} params.pageNum
+ * @param {number} params.pageSize
+ */
+export function getMaxAppXmlAuditList(params) {
+  return solonRequest({
+    url: '/maxappxml/audit/list',
+    method: 'get',
+    params
+  })
+}
+
+/**
+ * 查询 A_MAXPRESENTATION 审计记录详情（含 PRESENTATION 源码）
+ * @param {string} eaudittransid 审计交易ID
+ */
+export function getMaxAppXmlAuditDetail(eaudittransid) {
+  return solonRequest({
+    url: '/maxappxml/audit/detail',
+    method: 'get',
+    params: { eaudittransid }
+  })
+}

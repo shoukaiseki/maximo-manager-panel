@@ -152,6 +152,69 @@ public class MysqlDbConfig {
                     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
                     UNIQUE KEY uk_app_queryname (app, queryname)
                 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='保存的查询'
+                """,
+            """
+                CREATE TABLE IF NOT EXISTS logger_level_config (
+                    id BIGINT AUTO_INCREMENT PRIMARY KEY COMMENT '配置ID',
+                    logger_name VARCHAR(300) NOT NULL COMMENT '日志器名称(如 maximo.script)',
+                    log_level VARCHAR(20) NOT NULL DEFAULT 'INFO' COMMENT '日志级别: DEBUG/INFO/WARN/ERROR',
+                    ignored TINYINT(1) NOT NULL DEFAULT 0 COMMENT '是否忽略(更新到Maximo时跳过)',
+                    description VARCHAR(500) DEFAULT '' COMMENT '描述',
+                    sort_order INT DEFAULT 0 COMMENT '排序',
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+                    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+                    UNIQUE KEY uk_logger_name (logger_name)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='日志级别配置'
+                """,
+            """
+                CREATE TABLE IF NOT EXISTS logger_level_group (
+                    id BIGINT AUTO_INCREMENT PRIMARY KEY COMMENT '分组ID',
+                    name VARCHAR(200) NOT NULL COMMENT '分组名称',
+                    description VARCHAR(500) DEFAULT '' COMMENT '分组描述',
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+                    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+                    UNIQUE KEY uk_name (name)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='日志级别分组'
+                """,
+            """
+                CREATE TABLE IF NOT EXISTS logger_level_group_item (
+                    id BIGINT AUTO_INCREMENT PRIMARY KEY COMMENT '条目ID',
+                    group_id BIGINT NOT NULL COMMENT '所属分组ID',
+                    logger_name VARCHAR(300) NOT NULL COMMENT '日志器名称',
+                    log_level VARCHAR(20) NOT NULL DEFAULT 'INFO' COMMENT '日志级别: DEBUG/INFO/WARN/ERROR',
+                    ignored TINYINT(1) NOT NULL DEFAULT 0 COMMENT '是否忽略(更新到Maximo时跳过)',
+                    description VARCHAR(500) DEFAULT '' COMMENT '描述',
+                    sort_order INT DEFAULT 0 COMMENT '排序',
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+                    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+                    UNIQUE KEY uk_group_logger (group_id, logger_name)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='日志级别分组条目'
+                """,
+            """
+                CREATE TABLE IF NOT EXISTS logger_mx_config (
+                    id BIGINT AUTO_INCREMENT PRIMARY KEY COMMENT '配置ID',
+                    group_id BIGINT DEFAULT NULL COMMENT '所属组ID(为NULL为旧数据)',
+                    parent_id BIGINT DEFAULT NULL COMMENT '父级ID(顶层为NULL)',
+                    logger VARCHAR(300) NOT NULL COMMENT '日志器节点名称(如 sql)',
+                    log_level VARCHAR(20) NOT NULL DEFAULT 'ERROR' COMMENT '日志级别: DEBUG/INFO/WARN/ERROR',
+                    active TINYINT(1) NOT NULL DEFAULT 1 COMMENT '是否启用(active)',
+                    remark VARCHAR(500) DEFAULT '' COMMENT '备注(sks:remark)',
+                    sort_order INT DEFAULT 0 COMMENT '排序',
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+                    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+                    KEY idx_group (group_id),
+                    KEY idx_parent (parent_id)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='MXLogger日志管理配置'
+                """,
+            """
+                CREATE TABLE IF NOT EXISTS logger_mx_group (
+                    id BIGINT AUTO_INCREMENT PRIMARY KEY COMMENT '组ID',
+                    name VARCHAR(200) NOT NULL COMMENT '组名称',
+                    description VARCHAR(500) DEFAULT '' COMMENT '组描述',
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+                    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+                    UNIQUE KEY uk_name (name)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='MXLogger日志管理组'
                 """
         };
 
@@ -174,6 +237,15 @@ public class MysqlDbConfig {
                     if (!rs.next()) {
                         System.out.println("[MySQL] Adding var_value_type column to api_env_variable...");
                         stmt.execute("ALTER TABLE api_env_variable ADD COLUMN var_value_type VARCHAR(20) DEFAULT 'default' COMMENT '值类型: default=直接值, system=系统预设' AFTER var_value");
+                    }
+                }
+
+                // 检查并添加 logger_mx_config.group_id 列（兼容升级前已存在表）
+                try (var rs = stmt.executeQuery("SHOW COLUMNS FROM logger_mx_config LIKE 'group_id'")) {
+                    if (!rs.next()) {
+                        System.out.println("[MySQL] Adding group_id column to logger_mx_config...");
+                        stmt.execute("ALTER TABLE logger_mx_config ADD COLUMN group_id BIGINT DEFAULT NULL COMMENT '所属组ID(为NULL为旧数据)' AFTER id");
+                        stmt.execute("ALTER TABLE logger_mx_config ADD KEY idx_group (group_id)");
                     }
                 }
 

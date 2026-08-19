@@ -39,10 +39,11 @@
           @rowClickAfter="handleRowClick"
           @refresh="fetchList">
           <template slot="tableColumnList-after">
-            <el-table-column label="操作" width="180" fixed="right">
+            <el-table-column label="操作" width="230" fixed="right">
               <template slot-scope="scope">
                 <el-button type="text" size="small" @click.stop="showSource(scope.row)">查看源码</el-button>
                 <el-button type="text" size="small" @click.stop="showDetail(scope.row)">查看详情</el-button>
+                <el-button type="text" size="small" @click.stop="showAudit(scope.row)">审计记录</el-button>
               </template>
             </el-table-column>
           </template>
@@ -63,6 +64,13 @@
       <span slot="footer" class="dialog-footer">
         <el-button @click="sourceDialog.visible = false">关 闭</el-button>
       </span>
+    </el-dialog>
+
+    <!-- 审计记录弹窗 -->
+    <el-dialog :title="'应用XML审计记录: ' + auditDialog.app" :visible.sync="auditDialog.visible" width="90%" top="3vh" :close-on-click-modal="false" append-to-body destroy-on-close>
+      <div style="max-height:82vh;overflow-y:auto">
+        <AuditPanel v-if="auditDialog.visible" :app="auditDialog.app" embedded />
+      </div>
     </el-dialog>
 
     <!-- 详情弹窗 -->
@@ -95,11 +103,13 @@
 
 <script>
 import { getMaxAppXmlList, getMaxAppXmlSource, getMaxAppXmlDetail } from '@/api/maxappxml'
+import AuditPanel from './AuditPanel.vue'
 import { sksPageMixin } from "sks-plugin-el-erp/lib/sks-page";
 
 export default {
   name: 'MaxAppXmlList',
   mixins: [sksPageMixin],
+  components: { AuditPanel },
   data() {
     return {
       loading: false,
@@ -125,6 +135,11 @@ export default {
       },
       detailLoading: false,
       detailRow: null,
+      // 审计记录弹窗
+      auditDialog: {
+        visible: false,
+        app: ''
+      },
       monacoLoaded: false
     }
   },
@@ -325,6 +340,11 @@ export default {
         this.sourceEditor.dispose()
         this.sourceEditor = null
       }
+    },
+    // === 审计记录 ===
+    showAudit(row) {
+      this.auditDialog.app = row.APP
+      this.auditDialog.visible = true
     },
     // === 查看详情 ===
     showDetail(row) {

@@ -250,6 +250,124 @@ public class MaxAppXmlService {
         return row;
     }
 
+    // ========== A_MAXPRESENTATION 审计记录 ==========
+
+    /**
+     * 查询应用XML审计记录列表（按 EAUDITTRANSID 倒序，支持 APP 精确/模糊过滤）
+     */
+    public Map<String, Object> queryAuditList(String app, int pageNum, int pageSize) {
+        StringBuilder whereSql = new StringBuilder(" WHERE 1=1");
+        List<Object> params = new ArrayList<>();
+
+        if (app != null && !app.trim().isEmpty()) {
+            String appStr = app.trim();
+            if (appStr.startsWith("=")) {
+                whereSql.append(" AND a.APP = ?");
+                params.add(appStr.substring(1));
+            } else {
+                whereSql.append(" AND a.APP LIKE ?");
+                params.add("%" + appStr.toUpperCase() + "%");
+            }
+        }
+
+        String whereStr = whereSql.toString();
+
+        // 总数查询
+        String countSql = "SELECT COUNT(*) AS total FROM A_MAXPRESENTATION a" + whereStr;
+        int total = 0;
+        try (Connection conn = dataSource.getConnection();
+             PreparedStatement ps = conn.prepareStatement(countSql)) {
+            for (int i = 0; i < params.size(); i++) {
+                ps.setObject(i + 1, params.get(i));
+            }
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) {
+                    total = rs.getInt("total");
+                }
+            }
+        } catch (SQLException e) {
+            throw new RuntimeException("查询 A_MAXPRESENTATION 审计总数失败: " + e.getMessage(), e);
+        }
+
+        // 分页数据查询（不包含 PRESENTATION 大字段）
+        String dataSql = "SELECT a.APP, a.MAXPRESENTATIONID, a.EAUDITTRANSID, " +
+                "a.EAUDITUSERNAME, a.EAUDITTIMESTAMP, a.EAUDITTYPE, a.ESIGTRANSID, a.ROWSTAMP " +
+                "FROM A_MAXPRESENTATION a " +
+                whereStr +
+                " ORDER BY a.EAUDITTIMESTAMP DESC " +
+                "OFFSET ? ROWS FETCH NEXT ? ROWS ONLY";
+
+        int offset = (pageNum - 1) * pageSize;
+        List<Map<String, Object>> rows = new ArrayList<>();
+        try (Connection conn = dataSource.getConnection();
+             PreparedStatement ps = conn.prepareStatement(dataSql)) {
+            for (int i = 0; i < params.size(); i++) {
+                ps.setObject(i + 1, params.get(i));
+            }
+            ps.setInt(params.size() + 1, offset);
+            ps.setInt(params.size() + 2, pageSize);
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    rows.add(rowToAuditMap(rs, false));
+                }
+            }
+        } catch (SQLException e) {
+            throw new RuntimeException("查询 A_MAXPRESENTATION 审计列表失败: " + e.getMessage(), e);
+        }
+
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("rows", rows);
+        result.put("total", total);
+        result.put("pageNum", pageNum);
+        result.put("pageSize", pageSize);
+        return result;
+    }
+
+    /**
+     * 查询应用XML审计记录详情（按 EAUDITTRANSID，含 PRESENTATION 源码）
+     */
+    public Map<String, Object> queryAuditDetail(String eaudittransid) {
+        String sql = "SELECT a.APP, a.MAXPRESENTATIONID, a.EAUDITTRANSID, " +
+                "a.EAUDITUSERNAME, a.EAUDITTIMESTAMP, a.EAUDITTYPE, a.ESIGTRANSID, a.ROWSTAMP, " +
+                "a.PRESENTATION " +
+                "FROM A_MAXPRESENTATION a WHERE a.EAUDITTRANSID = ?";
+
+        try (Connection conn = dataSource.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setString(1, eaudittransid.trim());
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) {
+                    return rowToAuditMap(rs, true);
+                }
+            }
+        } catch (SQLException e) {
+            throw new RuntimeException("查询 A_MAXPRESENTATION 审计详情失败: " + e.getMessage(), e);
+        }
+        return Collections.emptyMap();
+    }
+
+    private Map<String, Object> rowToAuditMap(ResultSet rs, boolean withPresentation) throws SQLException {
+        Map<String, Object> row = new LinkedHashMap<>();
+        row.put("APP", rs.getString("APP"));
+        row.put("MAXPRESENTATIONID", rs.getObject("MAXPRESENTATIONID"));
+        row.put("EAUDITTRANSID", rs.getString("EAUDITTRANSID"));
+        row.put("EAUDITUSERNAME", rs.getString("EAUDITUSERNAME"));
+        row.put("EAUDITTIMESTAMP", rs.getObject("EAUDITTIMESTAMP"));
+        row.put("EAUDITTYPE", rs.getString("EAUDITTYPE"));
+        row.put("ESIGTRANSID", rs.getObject("ESIGTRANSID"));
+        row.put("ROWSTAMP", rs.getObject("ROWSTAMP"));
+        // 列表查询不 SELECT PRESENTATION（避免 JDBC -4460 未知列），仅详情查询读取
+        if (withPresentation) {
+            Clob clob = rs.getClob("PRESENTATION");
+            if (clob != null) {
+                row.put("PRESENTATION", clob.getSubString(1, (int) clob.length()));
+            } else {
+                row.put("PRESENTATION", rs.getString("PRESENTATION"));
+            }
+        }
+        return row;
+    }
+
     private String getPresentationContent(String app) {
         String sql = "SELECT PRESENTATION FROM MAXPRESENTATION WHERE APP = ?";
         try (Connection conn = dataSource.getConnection();

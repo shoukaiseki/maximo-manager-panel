@@ -58,4 +58,30 @@ public class MaxAppXmlController {
         }
         return RestResult.ok(detail);
     }
+
+    /**
+     * A_MAXPRESENTATION 审计记录列表（按 EAUDITTRANSID 倒序）
+     * GET /solonapi/maxappxml/audit/list?app=&pageNum=1&pageSize=20
+     */
+    @Mapping(value = "/maxappxml/audit/list", method = MethodType.GET)
+    public RestResult<Map<String, Object>> auditList(
+            String app,
+            @Param(defaultValue = "1") int pageNum,
+            @Param(defaultValue = "20") int pageSize) {
+        Map<String, Object> data = maxAppXmlService.queryAuditList(app, pageNum, pageSize);
+        return RestResult.ok(data);
+    }
+
+    /**
+     * A_MAXPRESENTATION 审计记录详情（按 EAUDITTRANSID，含 PRESENTATION 源码）
+     * GET /solonapi/maxappxml/audit/detail?eaudittransid=xxx
+     */
+    @Mapping(value = "/maxappxml/audit/detail", method = MethodType.GET)
+    public RestResult<Map<String, Object>> auditDetail(String eaudittransid) {
+        if (eaudittransid == null || eaudittransid.trim().isEmpty()) {
+            return RestResult.error("EAUDITTRANSID不能为空");
+        }
+        Map<String, Object> data = maxAppXmlService.queryAuditDetail(eaudittransid);
+        return RestResult.ok(data);
+    }
 }
