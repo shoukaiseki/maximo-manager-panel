@@ -272,12 +272,16 @@ export default {
     },
     // 域值动态列标题映射（默认显示友好名称，"显示属性名"后显示字段名）
     valueColumnLabel(col) {
-      const map = { VALUE: '值', DESCRIPTION: '描述', MAXVALUE: '最大值', DEFAULTS: '默认值', _TRANSLATIONS: '多语言' }
+      const map = { VALUE: '值', DESCRIPTION: '描述', MAXVALUE: '内部值', DEFAULTS: '默认值', _TRANSLATIONS: '多语言' }
       return map[col] || col
     },
     // 域值次要技术字段默认隐藏
     isHiddenValueColumn(col) {
-      if (['SITEID', 'ORGID', 'ROWSTAMP', 'VALUEID', 'MAXVALUE', 'DEFAULTS'].includes(col)) return true
+      if (['SITEID', 'ORGID', 'ROWSTAMP', 'VALUEID', 'DEFAULTS'].includes(col)) return true
+      // SYNONYM 类型域值的"最大值"列默认显示
+      if (col === 'MAXVALUE') {
+        return !(this.currentRow && this.currentRow.domaintype === 'SYNONYM')
+      }
       // 各类型子表主键 ID（ALNDOMAINID 等），DOMAINID/VALUEID 除外
       if (col.endsWith('ID') && col !== 'DOMAINID' && col !== 'VALUEID') return true
       return false

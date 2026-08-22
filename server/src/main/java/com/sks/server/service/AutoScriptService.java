@@ -509,7 +509,7 @@ public class AutoScriptService {
     // ========== A_AUTOSCRIPT 审计记录 ==========
 
     /**
-     * 查询脚本审计记录列表（按 EAUDITTRANSID 倒序，支持 AUTOSCRIPT/SOURCE 模糊过滤）
+     * 查询脚本审计记录列表（按审计时间 EAUDITTIMESTAMP 倒序，支持 AUTOSCRIPT/SOURCE 模糊过滤）
      */
     public Map<String, Object> queryAuditList(String autoscript, String source, int pageNum, int pageSize) {
         StringBuilder whereSql = new StringBuilder(" WHERE 1=1");
@@ -554,7 +554,7 @@ public class AutoScriptService {
                 "a.IBM_PACKAGEPATH, a.ROWSTAMP " +
                 "FROM A_AUTOSCRIPT a " +
                 whereStr +
-                " ORDER BY a.EAUDITTRANSID DESC " +
+                " ORDER BY a.EAUDITTIMESTAMP DESC, a.EAUDITTRANSID DESC " +
                 "OFFSET ? ROWS FETCH NEXT ? ROWS ONLY";
 
         int offset = (pageNum - 1) * pageSize;

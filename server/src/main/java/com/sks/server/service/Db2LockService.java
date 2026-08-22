@@ -23,11 +23,11 @@ public class Db2LockService {
         StringBuilder whereSql = new StringBuilder();
         List<Object> params = new ArrayList<>();
 
-        whereSql.append(" WHERE lh.TABSCHEMA = 'MAXIMO'");
+        whereSql.append(" WHERE RTRIM(lh.TABSCHEMA) = 'MAXIMO'");
         if (tabName != null && !tabName.trim().isEmpty()) {
             String v = tabName.trim();
             if (v.startsWith("=")) {
-                whereSql.append(" AND lh.TABNAME = ?");
+                whereSql.append(" AND RTRIM(lh.TABNAME) = ?");
                 params.add(v.substring(1));
             } else {
                 whereSql.append(" AND UPPER(lh.TABNAME) LIKE ?");

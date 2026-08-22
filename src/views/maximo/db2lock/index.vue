@@ -314,7 +314,7 @@ export default {
     },
     showSqlDialog(rows) {
       const sqlLines = rows.map(row => {
-        return "CALL SYSPROC.ADMIN_CMD('force application (" + row.AGENT_ID + ")')"
+        return "CALL SYSPROC.ADMIN_CMD('force application (" + row.AGENT_ID + ")')" + ';'
       })
       this.sqlText = sqlLines.join('\n')
       this.sqlDialog.count = rows.length
