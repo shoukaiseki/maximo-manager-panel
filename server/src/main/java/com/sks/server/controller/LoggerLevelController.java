@@ -72,15 +72,18 @@ public class LoggerLevelController {
     }
 
     /**
-     * 增量导入日志级别配置到默认表（已存在的跳过）
+     * 增量导入日志级别配置：
+     * - 默认表（logger_level_config）：已存在的跳过
+     * - 若 body 带 groupId：同时导入到该分组，级别取 JSON 中的级别（组内已存在的更新级别）
      * POST /solonapi/loggerlevel/import
-     * body: { loggers: [{ loggerName, level, ignored, description? }] }
-     * 返回: { added, skipped, total }
+     * body: { groupId?, loggers: [{ loggerName, level, ignored, description? }] }
+     * 返回: { added, skipped, groupAdded, groupUpdated, total }
      */
     @Mapping(value = "/loggerlevel/import", method = MethodType.POST)
     public RestResult<java.util.Map<String, Object>> importConfigs(@Body LoggerLevelSaveReq req) {
         try {
-            return RestResult.ok(loggerLevelService.importConfigs(req == null ? null : req.getLoggers()));
+            return RestResult.ok(loggerLevelService.importConfigs(req == null ? null : req.getLoggers(),
+                    req == null ? null : req.getGroupId()));
         } catch (Exception e) {
             return RestResult.error("导入日志级别配置失败: " + e.getMessage());
         }

@@ -82,11 +82,11 @@ export function deleteLoggerConfig(id) {
  * @param {Array} loggers - [{ loggerName, level, ignored?, description? }]
  * 返回: { added, skipped, total }
  */
-export function importLoggerConfig(loggers) {
+export function importLoggerConfig(loggers, groupId) {
   return solonRequest({
     url: '/loggerlevel/import',
     method: 'post',
-    data: { loggers: loggers || [] }
+    data: { groupId: groupId != null ? groupId : null, loggers: loggers || [] }
   })
 }
 

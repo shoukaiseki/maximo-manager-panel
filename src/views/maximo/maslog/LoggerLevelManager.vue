@@ -66,10 +66,8 @@
             <el-button icon="el-icon-refresh" size="mini" :loading="currentGroupLoading" @click="reloadCurrentGroup">重新加载</el-button>
             <el-button icon="el-icon-share" size="mini" @click="openCrossGroupDialog">跨组添加</el-button>
             <el-button icon="el-icon-sort" size="mini" :disabled="tableSelection.length === 0" @click="openBatchLevelDialog">批量改级别</el-button>
-            <!-- 默认分组：导入 JSON -->
-            <el-upload v-if="isDefaultGroup" :auto-upload="false" :show-file-list="false" accept=".json" :on-change="onImportFile" action="" style="display:inline-block;margin-left:8px">
-              <el-button icon="el-icon-upload2" size="mini">导入JSON(增量)</el-button>
-            </el-upload>
+            <!-- 导入 JSON（增量）：默认分组或用户分组均可导入 -->
+            <el-button icon="el-icon-upload2" size="mini" @click="openImportConfigDialog">导入JSON(增量)</el-button>
             <!-- 用户分组：重命名 -->
             <el-button v-if="!isDefaultGroup" icon="el-icon-edit" size="mini" @click="openGroupEditDialog(activeGroup)">重命名</el-button>
           </div>
@@ -240,7 +238,20 @@
       </el-table>
     </el-dialog>
 
-    <!-- 分组新建/重命名弹窗 -->
+    <!-- 日志级别配置 JSON 导入弹窗 -->
+    <el-dialog title="导入 JSON（增量）" :visible.sync="importConfigDialog.visible" width="680px" append-to-body>
+      <p style="margin:0 0 8px;color:#606266;font-size:13px">
+        粘贴 JSON：<code>{"loggers":[{"loggerName":"maximo.sql","level":"ERROR","ignore":false}]}</code>。
+        默认配置按 loggerName 去重，已存在的跳过；<template v-if="!isDefaultGroup">当前分组<b>{{ currentGroupLabel }}</b>以 JSON 中的级别导入（已存在的更新级别），若默认配置中不存在该日志器则先自动补齐默认配置。</template><template v-else>导入到默认配置。</template>
+      </p>
+      <el-input v-model="importConfigDialog.text" type="textarea" :rows="12" placeholder='{"loggers":[{"loggerName":"maximo.sql","level":"ERROR","ignore":false},{"loggerName":"maximo.script","level":"DEBUG","ignore":false}]}' />
+      <p style="margin:8px 0 0;color:#f56c6c;font-size:12px" v-if="importConfigDialog.error">{{ importConfigDialog.error }}</p>
+      <div slot="footer">
+        <el-button size="mini" @click="importConfigDialog.visible = false">取消</el-button>
+        <el-button type="primary" size="mini" :loading="importConfigDialog.loading" @click="submitImportConfigDialog">导入</el-button>
+      </div>
+    </el-dialog>
+
     <el-dialog :title="groupEditDialog.mode === 'create' ? '新建分组' : '重命名分组'" :visible.sync="groupEditDialog.visible" width="460px" append-to-body>
       <el-form label-width="80px">
         <el-form-item label="分组名称">
@@ -472,6 +483,7 @@ export default {
       pushResult: { visible: false, rows: [] },
 
       // 弹窗
+      importConfigDialog: { visible: false, text: '', error: '', loading: false },
       groupEditDialog: { visible: false, mode: 'create', id: null, name: '', description: '', loading: false },
       crossGroupDialog: {
         visible: false,
@@ -1413,44 +1425,56 @@ export default {
     },
 
     // ============ 导入 JSON（默认分组，增量） ============
-    onImportFile(file) {
-      const reader = new FileReader()
-      reader.onload = e => {
-        let parsed
-        try {
-          parsed = JSON.parse(e.target.result)
-        } catch (err) {
-          this.$message.error('JSON 解析失败: ' + err.message)
-          return
-        }
-        if (!Array.isArray(parsed)) {
-          this.$message.error('JSON 必须是数组')
-          return
-        }
-        const loggers = parsed.map(p => ({
-          loggerName: (p.loggerName || '').trim(),
-          level: (p.level || 'INFO').toUpperCase(),
-          ignored: !!p.ignored,
-          description: p.description || ''
-        })).filter(l => l.loggerName)
-        if (loggers.length === 0) {
-          this.$message.warning('文件中没有有效的日志器')
-          return
-        }
-        this.saveLoading = true
-        importLoggerConfig(loggers).then(res => {
-          if (res && res.code === 200) {
-            const d = res.data || {}
-            this.$message.success('已增量导入，新增 ' + (d.added || 0) + ' 条，跳过 ' + (d.skipped || 0) + ' 条已存在')
-            this.loadDefaultItems()
-          } else {
-            this.$message.error((res && res.message) || '导入失败')
-          }
-        }).catch(err => {
-          this.$message.error('导入失败: ' + (err.message || String(err)))
-        }).finally(() => { this.saveLoading = false })
+    openImportConfigDialog() {
+      this.importConfigDialog = { visible: true, text: '', error: '', loading: false }
+    },
+    submitImportConfigDialog() {
+      const d = this.importConfigDialog
+      const text = (d.text || '').trim()
+      if (!text) { d.error = '请粘贴 JSON 内容'; return }
+      let parsed
+      try {
+        parsed = JSON.parse(text)
+      } catch (err) {
+        d.error = 'JSON 解析失败: ' + err.message
+        return
       }
-      reader.readAsText(file.raw)
+      // 支持 {loggers:[...]} 或直接数组
+      const list = Array.isArray(parsed) ? parsed : (parsed && Array.isArray(parsed.loggers) ? parsed.loggers : null)
+      if (!list) { d.error = 'JSON 格式不正确，应为 {"loggers":[...]} 或数组'; return }
+      const loggers = list.map(p => ({
+        loggerName: (p.loggerName || '').trim(),
+        level: (p.level || 'INFO').toUpperCase(),
+        ignored: !!(p.ignore !== undefined ? p.ignore : p.ignored),
+        description: p.description || ''
+      })).filter(l => l.loggerName)
+      if (loggers.length === 0) {
+        d.error = '没有有效的日志器（loggerName 不能为空）'
+        return
+      }
+      d.loading = true
+      d.error = ''
+      const groupId = this.isDefaultGroup ? null : (this.activeGroup ? this.activeGroup.id : null)
+      importLoggerConfig(loggers, groupId).then(res => {
+        if (res && res.code === 200) {
+          const r = res.data || {}
+          const parts = []
+          if (r.added || r.skipped) parts.push('默认配置 新增 ' + (r.added || 0) + ' 条，跳过 ' + (r.skipped || 0) + ' 条')
+          if (!this.isDefaultGroup) {
+            parts.push('分组新增 ' + (r.groupAdded || 0) + ' 条，更新 ' + (r.groupUpdated || 0) + ' 条')
+          }
+          this.$message.success('导入完成：' + (parts.join('；') || '无变化'))
+          d.visible = false
+          this.loadDefaultItems()
+          if (!this.isDefaultGroup && this.activeGroup) {
+            this.loadGroupItems(this.activeGroup)
+          }
+        } else {
+          this.$message.error((res && res.message) || '导入失败')
+        }
+      }).catch(err => {
+        this.$message.error('导入失败: ' + (err.message || String(err)))
+      }).finally(() => { d.loading = false })
     },
 
     // ============ 分组新建/重命名 ============

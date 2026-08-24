@@ -160,10 +160,13 @@ public class LoggerLevelService {
     }
 
     /**
-     * 增量导入配置到默认表（logger_level_config）：
-     * 已存在的 logger_name 跳过，仅插入不存在的。返回 {added, skipped, total}
+     * 增量导入配置：
+     * 1. 默认表 logger_level_config：已存在的 logger_name 跳过，仅插入不存在的
+     * 2. 若 groupId 非空：同时导入到该分组 logger_level_group_item（级别取 JSON 中的级别）
+     *    - 组内不存在 → 插入；已存在 → 更新级别/忽略/描述
+     * 返回 {added, skipped, groupAdded, groupUpdated, total}
      */
-    public Map<String, Object> importConfigs(List<LoggerLevelConfig> loggers) {
+    public Map<String, Object> importConfigs(List<LoggerLevelConfig> loggers, Long groupId) {
         Map<String, Object> result = new LinkedHashMap<>();
         if (loggers == null) {
             loggers = Collections.emptyList();
@@ -194,38 +197,40 @@ public class LoggerLevelService {
         if (inputCount == 0) {
             result.put("added", 0);
             result.put("skipped", 0);
+            result.put("groupAdded", 0);
+            result.put("groupUpdated", 0);
             result.put("total", listConfigs().size());
             return result;
         }
 
         try (Connection conn = mysqlDataSource.getConnection()) {
-            // 查已存在的 logger_name
-            Set<String> existing = new HashSet<>();
-            String querySql = "SELECT logger_name FROM logger_level_config WHERE logger_name IN (" +
-                    String.join(",", Collections.nCopies(inputCount, "?")) + ")";
-            try (PreparedStatement ps = conn.prepareStatement(querySql)) {
-                int idx = 1;
-                for (String name : toCheck.keySet()) {
-                    ps.setString(idx++, name);
-                }
-                try (ResultSet rs = ps.executeQuery()) {
-                    while (rs.next()) {
-                        existing.add(rs.getString("logger_name"));
+            conn.setAutoCommit(false);
+            try {
+                // 1. 查默认配置已存在的 logger_name
+                Set<String> existing = new HashSet<>();
+                String querySql = "SELECT logger_name FROM logger_level_config WHERE logger_name IN (" +
+                        String.join(",", Collections.nCopies(inputCount, "?")) + ")";
+                try (PreparedStatement ps = conn.prepareStatement(querySql)) {
+                    int idx = 1;
+                    for (String name : toCheck.keySet()) {
+                        ps.setString(idx++, name);
+                    }
+                    try (ResultSet rs = ps.executeQuery()) {
+                        while (rs.next()) {
+                            existing.add(rs.getString("logger_name"));
+                        }
                     }
                 }
-            }
 
-            // 差集 = 入参中不存在的
-            List<LoggerLevelConfig> toInsert = new ArrayList<>();
-            for (Map.Entry<String, LoggerLevelConfig> e : toCheck.entrySet()) {
-                if (!existing.contains(e.getKey())) {
-                    toInsert.add(e.getValue());
+                // 2. 插入默认配置缺失项（级别取 JSON 中的级别）
+                int addedDefault = 0;
+                List<LoggerLevelConfig> toInsert = new ArrayList<>();
+                for (Map.Entry<String, LoggerLevelConfig> e : toCheck.entrySet()) {
+                    if (!existing.contains(e.getKey())) {
+                        toInsert.add(e.getValue());
+                    }
                 }
-            }
-
-            if (!toInsert.isEmpty()) {
-                conn.setAutoCommit(false);
-                try {
+                if (!toInsert.isEmpty()) {
                     String insertSql = "INSERT INTO logger_level_config (logger_name, log_level, ignored, description, sort_order) " +
                             "VALUES (?, ?, ?, ?, ?)";
                     try (PreparedStatement ps = conn.prepareStatement(insertSql)) {
@@ -240,22 +245,87 @@ public class LoggerLevelService {
                         }
                         ps.executeBatch();
                     }
-                    conn.commit();
-                } catch (Exception e) {
-                    conn.rollback();
-                    throw e;
-                } finally {
-                    conn.setAutoCommit(true);
+                    addedDefault = toInsert.size();
                 }
-            }
 
-            result.put("added", toInsert.size());
-            result.put("skipped", inputCount - toInsert.size());
-            result.put("total", listConfigs().size());
+                // 3. 导入到分组（级别取 JSON 中的级别）
+                int groupAdded = 0, groupUpdated = 0;
+                if (groupId != null) {
+                    if (!groupExists(conn, groupId)) {
+                        throw new RuntimeException("分组不存在: id=" + groupId);
+                    }
+                    // 查组内已存在
+                    Set<String> groupExisting = new HashSet<>();
+                    String gq = "SELECT logger_name FROM logger_level_group_item WHERE group_id = ? AND logger_name IN (" +
+                            String.join(",", Collections.nCopies(inputCount, "?")) + ")";
+                    try (PreparedStatement ps = conn.prepareStatement(gq)) {
+                        int idx = 1;
+                        ps.setLong(idx++, groupId);
+                        for (String name : toCheck.keySet()) {
+                            ps.setString(idx++, name);
+                        }
+                        try (ResultSet rs = ps.executeQuery()) {
+                            while (rs.next()) {
+                                groupExisting.add(rs.getString("logger_name"));
+                            }
+                        }
+                    }
+                    String gInsert = "INSERT INTO logger_level_group_item (group_id, logger_name, log_level, ignored, description, sort_order) " +
+                            "VALUES (?, ?, ?, ?, ?, ?)";
+                    String gUpdate = "UPDATE logger_level_group_item SET log_level = ?, ignored = ?, description = ? WHERE group_id = ? AND logger_name = ?";
+                    try (PreparedStatement psI = conn.prepareStatement(gInsert);
+                         PreparedStatement psU = conn.prepareStatement(gUpdate)) {
+                        int order = 0;
+                        for (LoggerLevelConfig c : toCheck.values()) {
+                            if (groupExisting.contains(c.getLoggerName())) {
+                                psU.setString(1, c.getLevel());
+                                psU.setInt(2, Boolean.TRUE.equals(c.getIgnored()) ? 1 : 0);
+                                psU.setString(3, c.getDescription());
+                                psU.setLong(4, groupId);
+                                psU.setString(5, c.getLoggerName());
+                                psU.addBatch();
+                                groupUpdated++;
+                            } else {
+                                psI.setLong(1, groupId);
+                                psI.setString(2, c.getLoggerName());
+                                psI.setString(3, c.getLevel());
+                                psI.setInt(4, Boolean.TRUE.equals(c.getIgnored()) ? 1 : 0);
+                                psI.setString(5, c.getDescription());
+                                psI.setInt(6, order++);
+                                psI.addBatch();
+                                groupAdded++;
+                            }
+                        }
+                        psI.executeBatch();
+                        psU.executeBatch();
+                    }
+                }
+
+                conn.commit();
+                result.put("added", addedDefault);
+                result.put("skipped", inputCount - addedDefault);
+                result.put("groupAdded", groupAdded);
+                result.put("groupUpdated", groupUpdated);
+                result.put("total", listConfigs().size());
+            } catch (Exception e) {
+                conn.rollback();
+                throw e;
+            } finally {
+                conn.setAutoCommit(true);
+            }
         } catch (Exception e) {
             throw new RuntimeException("导入日志级别配置失败: " + e.getMessage(), e);
         }
         return result;
+    }
+
+    private boolean groupExists(Connection conn, Long groupId) throws SQLException {
+        try (PreparedStatement ps = conn.prepareStatement("SELECT 1 FROM logger_level_group WHERE id = ?")) {
+            ps.setLong(1, groupId);
+            try (ResultSet rs = ps.executeQuery()) {
+                return rs.next();
+            }
+        }
     }
 
     private Map<String, Object> mapRow(ResultSet rs) throws SQLException {
