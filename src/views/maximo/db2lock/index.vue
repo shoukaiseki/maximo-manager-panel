@@ -35,7 +35,8 @@
           @refresh="fetchList"
           @selectionChangeAfter="handleTableSelectionChange">
           <template slot="tableColumnList-before">
-            <el-table-column type="selection" width="45" align="center" :reserve-selection="true" />
+            <!-- 不加 reserve-selection: 刷新/搜索后勾选自动清除(参考插件示例 Page40) -->
+            <el-table-column type="selection" width="45" align="center" />
           </template>
           <template slot="default">
           </template>
