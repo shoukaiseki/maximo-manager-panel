@@ -249,6 +249,12 @@ export const constantRoutes = [
                 component: (resolve) => require(['/src/views/maximo/db2lock/index'], resolve),
                 name: 'Db2Lock',
                 meta: { title: 'DB2锁表', icon: 'lock', noCache: false }
+            },
+            {
+                path: 'tablestats',
+                component: (resolve) => require(['/src/views/maximo/tablestats/index'], resolve),
+                name: 'TableStats',
+                meta: { title: '表数据统计', icon: 'data-analysis', noCache: false }
             }
         ]
     },
