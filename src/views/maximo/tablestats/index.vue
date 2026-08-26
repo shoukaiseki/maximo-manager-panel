@@ -6,6 +6,7 @@
           <h2>表数据统计</h2>
           <p class="page-summary">统计 Maximo 所有持久化实体表（排除视图）的数据行数。共 {{ total }} 张表。</p>
         </div>
+        <saved-query-panel ref="savedQuery" appname="TABLESTATS" @whereChange="handleWhereChange" />
       </div>
 
       <el-form :model="formData" :inline="true" label-width="90px" @submit.native.prevent>
@@ -80,9 +81,13 @@
 
 <script>
 import { getTableStatsList } from '@/api/tablestats'
+import SavedQueryPanel from '@/views/components/SavedQueryPanel.vue'
 
 export default {
   name: 'TableStats',
+  components: {
+    SavedQueryPanel
+  },
   data() {
     return {
       loading: false,
@@ -138,12 +143,18 @@ export default {
   },
   methods: {
     handleQuery() {
-      if (!this.rows.length) {
+      const where = this.$refs.savedQuery ? this.$refs.savedQuery.getWhere() : ''
+      if (!this.rows.length || where) {
+        // 无数据或设置了自定义where条件时重新请求后端
         this.fetchList()
       } else if (this.$refs.tableRef) {
         // 已有统计结果：本地重排即可
         this.$refs.tableRef.sort(this.formData.sortField, this.formData.sortOrder)
       }
+    },
+    handleWhereChange() {
+      // 选择/设置/清除保存的查询时重新请求后端
+      this.fetchList()
     },
     handleSelectionChange(selectedRows) {
       this.selectedRows = selectedRows
@@ -304,12 +315,9 @@ export default {
       }
     },
     fetchList() {
-      if (this.rows.length > 0) {
-        // 已有统计结果则直接使用（本地排序），不重复请求
-        return
-      }
       this.loading = true
-      getTableStatsList()
+      const where = this.$refs.savedQuery ? this.$refs.savedQuery.getWhere() : ''
+      getTableStatsList(where ? { where } : {})
         .then(res => {
           if (res.code === 200 && Array.isArray(res.data)) {
             this.rows = res.data

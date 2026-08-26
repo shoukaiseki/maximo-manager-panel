@@ -18,14 +18,14 @@ public class TableStatsController {
 
     /**
      * 表数据统计列表
-     * GET /solonapi/tablestats/list
+     * GET /solonapi/tablestats/list?where=自定义where条件(可选)
      * 返回全部表的表名/英文描述/中文描述/数据行数(COUNT, 统计失败为 null)
      * 排序在前端本地完成（切换排序方式不重新统计）
      */
     @Mapping(value = "/tablestats/list", method = MethodType.GET)
-    public RestResult<List<Map<String, Object>>> list() {
+    public RestResult<List<Map<String, Object>>> list(String where) {
         try {
-            List<Map<String, Object>> rows = tableStatsService.listTables();
+            List<Map<String, Object>> rows = tableStatsService.listTables(where);
             List<String> names = new ArrayList<>();
             for (Map<String, Object> row : rows) {
                 names.add((String) row.get("OBJECTNAME"));

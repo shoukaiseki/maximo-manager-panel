@@ -7,7 +7,6 @@ import javax.sql.DataSource;
 import java.sql.*;
 import java.util.*;
 import java.util.concurrent.*;
-import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * 表数据统计服务
@@ -33,11 +32,17 @@ public class TableStatsService {
 
     /**
      * 查询所有待统计的表（含英文/中文描述）
+     * @param where 自定义 where 条件（不含 WHERE 关键字），为空则返回全部表
      */
-    public List<Map<String, Object>> listTables() {
+    public List<Map<String, Object>> listTables(String where) {
+        StringBuilder sb = new StringBuilder(TABLE_LIST_SQL);
+        if (where != null && !where.trim().isEmpty()) {
+            sb.append(" AND (").append(where.trim()).append(") ");
+        }
+        sb.append("ORDER BY OBJECTNAME");
         List<Map<String, Object>> rows = new ArrayList<>();
         try (Connection conn = dataSource.getConnection();
-             PreparedStatement ps = conn.prepareStatement(TABLE_LIST_SQL + "ORDER BY OBJECTNAME");
+             PreparedStatement ps = conn.prepareStatement(sb.toString());
              ResultSet rs = ps.executeQuery()) {
             while (rs.next()) {
                 Map<String, Object> row = new LinkedHashMap<>();

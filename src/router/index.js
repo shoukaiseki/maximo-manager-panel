@@ -272,6 +272,27 @@ export const constantRoutes = [
         ]
     },
     {
+        path: '/inventory',
+        name: "inventory",
+        component: Layout,
+        hidden: false,
+        redirect: "noRedirect",
+        alwaysShow: true,
+        meta: {
+            "title": "库存管理",
+            "icon": "shopping",
+            "noCache": false
+        },
+        children: [
+            {
+                path: 'wpmaterialstock',
+                component: (resolve) => require(['/src/views/maximo/wpmaterialstock/index'], resolve),
+                name: 'WpMaterialStock',
+                meta: { title: '工单库存余量分析', icon: 'list', noCache: false }
+            }
+        ]
+    },
+    {
         path: '/tools',
         name: 'tools',
         component: Layout,

@@ -91,8 +91,13 @@ new Vue({
 
 
 
-//el-dialog 拖拽
+// el-dialog 拖拽
 import '@/directive/component/dialogDrag'
+
+// 全局 el-dialog 最大化按钮: 包装原生 Dialog, 标题栏默认带最大化/还原按钮
+// (注意: 必须放在 Vue.use(Element) 之后注册, 才能覆盖默认的 ElDialog)
+import MaximizableDialog from '@/components/MaximizableDialog'
+Vue.component('ElDialog', MaximizableDialog)
 import 'xe-utils'
 import VXETable from 'vxe-table'
 import 'vxe-table/lib/style.css'
