@@ -447,6 +447,7 @@ public class MaxObjectService {
      * 支持精确匹配（以=开头）和通配符（%）搜索
      */
     public Map<String, Object> queryMaxAttributeList(String objectname, String attributename, String description,
+                                                      String sameasattribute, String sameasobject,
                                                       Integer persistent,
                                                       int pageNum, int pageSize) {
         List<Object> params = new ArrayList<>();
@@ -464,6 +465,20 @@ public class MaxObjectService {
         if (attrCond != null) {
             whereSql.append("AND ").append(attrCond.getSql());
             params.add(attrCond.getValue());
+        }
+
+        // 等同属性条件（SAMEASATTRIBUTE）
+        LikeCondition sameAsAttrCond = buildLikeCondition(sameasattribute, "ma.SAMEASATTRIBUTE");
+        if (sameAsAttrCond != null) {
+            whereSql.append("AND ").append(sameAsAttrCond.getSql());
+            params.add(sameAsAttrCond.getValue());
+        }
+
+        // 等同对象条件（SAMEASOBJECT）
+        LikeCondition sameAsObjCond = buildLikeCondition(sameasobject, "ma.SAMEASOBJECT");
+        if (sameAsObjCond != null) {
+            whereSql.append("AND ").append(sameAsObjCond.getSql());
+            params.add(sameAsObjCond.getValue());
         }
 
         // 持久性过滤（0=虚拟字段, 1=实体字段, null=不过滤）

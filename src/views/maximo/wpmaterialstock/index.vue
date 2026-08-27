@@ -273,6 +273,7 @@ export default {
             { prop: 'ITEMQTY', label: '需求数量', minWidth: 110, align: 'right' },
             { prop: 'CURBAL', label: '当前库存余量', minWidth: 130, align: 'right' },
             { prop: 'RESERVEDQTY', label: '预约数量', minWidth: 110, align: 'right' },
+            { prop: 'THISRESERVEDQTY', label: '当前工单预留数量', minWidth: 140, align: 'right' },
             { prop: 'V_STATUS', label: '状态', width: 100, align: 'center', htmlType: 'none', fixed: 'right' }
           ]),
         queryParamsColumnListEnable: false,

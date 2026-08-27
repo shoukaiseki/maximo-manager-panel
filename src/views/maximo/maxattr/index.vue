@@ -18,6 +18,12 @@
         <el-form-item label="字段描述">
           <el-input v-model="formData.description" placeholder="输入描述关键词..." clearable style="width: 220px;" @keyup.enter.native="handleQuery" />
         </el-form-item>
+        <el-form-item label="等同对象">
+          <el-input v-model="formData.sameasobject" placeholder="SAMEASOBJECT" clearable style="width: 220px;" @keyup.enter.native="handleQuery" />
+        </el-form-item>
+        <el-form-item label="等同属性">
+          <el-input v-model="formData.sameasattribute" placeholder="SAMEASATTRIBUTE" clearable style="width: 220px;" @keyup.enter.native="handleQuery" />
+        </el-form-item>
         <el-form-item label="持久性">
           <el-select v-model="formData.persistent" placeholder="全部" clearable style="width: 140px;" @change="handleQuery">
             <el-option label="全部" value="" />
@@ -248,6 +254,8 @@ export default {
         objectname: '',
         attributename: '',
         description: '',
+        sameasattribute: '',
+        sameasobject: '',
         persistent: ''
       },
       // 字段统计预览
@@ -354,6 +362,8 @@ export default {
         objectname: this.formData.objectname,
         attributename: this.formData.attributename,
         description: this.formData.description,
+        sameasattribute: this.formData.sameasattribute,
+        sameasobject: this.formData.sameasobject,
         persistent: this.formData.persistent === '' ? undefined : this.formData.persistent,
         pageNum: this.mainTable.queryParams.pageNum,
         pageSize: this.mainTable.queryParams.pageSize
@@ -388,6 +398,8 @@ export default {
         objectname: '',
         attributename: '',
         description: '',
+        sameasattribute: '',
+        sameasobject: '',
         persistent: ''
       }
       this.hasSearched = false

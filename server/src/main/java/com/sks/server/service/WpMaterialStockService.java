@@ -24,11 +24,15 @@ public class WpMaterialStockService {
      * 关联 INVRESERVE 求预约数量；仅统计未完工工单（排除 CAN/CLOSE/HISTEDIT 状态）
      */
     private static final String BASE_SQL =
-            "SELECT t1.siteid, t1.wonum, t1.LOCATION, t1.itemnum, item.DESCRIPTION AS DESCRIPTION, t1.itemqty, t1.curbal, t1.RESERVEDQTY " +
+            "SELECT t1.siteid, t1.wonum, t1.LOCATION, t1.itemnum, item.DESCRIPTION AS DESCRIPTION, t1.itemqty, t1.curbal, t1.RESERVEDQTY, t1.THISRESERVEDQTY " +
             "FROM (" +
             "  SELECT siteid, wonum, itemnum, LOCATION, SUM(ITEMQTY) AS itemqty, " +
             "    (SELECT SUM(INVBALANCES.CURBAL) FROM INVBALANCES " +
             "      WHERE INVBALANCES.ITEMNUM = WPMATERIAL.ITEMNUM AND INVBALANCES.LOCATION = WPMATERIAL.LOCATION) AS curbal, " +
+            "    COALESCE((SELECT SUM(INVRESERVE.RESERVEDQTY) FROM INVRESERVE " +
+            "      WHERE INVRESERVE.siteid = WPMATERIAL.siteid " +
+            "      AND INVRESERVE.ITEMNUM = WPMATERIAL.ITEMNUM " +
+            "      AND INVRESERVE.WONUM = WPMATERIAL.WONUM), 0) AS THISRESERVEDQTY, " +
             "    COALESCE((SELECT SUM(INVRESERVE.RESERVEDQTY) FROM INVRESERVE " +
             "      WHERE INVRESERVE.siteid = WPMATERIAL.siteid " +
             "      AND INVRESERVE.ITEMNUM = WPMATERIAL.ITEMNUM " +
@@ -89,7 +93,7 @@ public class WpMaterialStockService {
         }
 
         // 分页数据
-        String dataSql = "SELECT t1.siteid, t1.wonum, t1.LOCATION, t1.itemnum, t1.DESCRIPTION, t1.itemqty, t1.curbal, t1.RESERVEDQTY " +
+        String dataSql = "SELECT t1.siteid, t1.wonum, t1.LOCATION, t1.itemnum, t1.DESCRIPTION, t1.itemqty, t1.curbal, t1.RESERVEDQTY, t1.THISRESERVEDQTY " +
                 "FROM (" + BASE_SQL + ") t1" + where +
                 " ORDER BY t1.wonum, t1.itemnum " +
                 "OFFSET ? ROWS FETCH NEXT ? ROWS ONLY";
@@ -114,6 +118,7 @@ public class WpMaterialStockService {
                     row.put("ITEMQTY", rs.getBigDecimal("ITEMQTY"));
                     row.put("CURBAL", rs.getBigDecimal("CURBAL"));
                     row.put("RESERVEDQTY", rs.getBigDecimal("RESERVEDQTY"));
+                    row.put("THISRESERVEDQTY", rs.getBigDecimal("THISRESERVEDQTY"));
                     // 状态: 需求数量+预约数量<=当前库存余量 显示充足,否则不足
                     BigDecimal itemqty = rs.getBigDecimal("ITEMQTY");
                     BigDecimal reserved = rs.getBigDecimal("RESERVEDQTY");
