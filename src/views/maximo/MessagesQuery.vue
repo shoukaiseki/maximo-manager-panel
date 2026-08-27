@@ -326,10 +326,10 @@ export default {
           exportMessages({
           _langcode: 'ZH',
           apiType: 'exp',
+          ignoreDefVal: 'true',
           }, {
             filterMode: 'where',
             where: whereClause,
-            ignoreDefVal: true
           }),
           exportMessages({
           _langcode: 'ZH',
@@ -483,9 +483,11 @@ export default {
           apiType: 'exp',
         }
         const [simpleRes, fullRes] = await Promise.all([
-          exportMessages(params, {
-            ...body,
-            ignoreDefVal: true
+          exportMessages({
+          ...params,
+          ignoreDefVal: 'true',
+          }, {
+            ...body
           }),
           exportMessages(params, body)
         ])
