@@ -227,6 +227,12 @@ export const constantRoutes = [
                 meta: { title: '域查询', icon: 'link', noCache: false }
             },
             {
+                path: 'maxprop',
+                component: (resolve) => require(['/src/views/maximo/maxprop/index'], resolve),
+                name: 'MaxPropQuery',
+                meta: { title: '属性查询', icon: 'link', noCache: false }
+            },
+            {
                 path: 'maxappxml',
                 component: (resolve) => require(['/src/views/maximo/maxappxml/index'], resolve),
                 name: 'MaxAppXml',
