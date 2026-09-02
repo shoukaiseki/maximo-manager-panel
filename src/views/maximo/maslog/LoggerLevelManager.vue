@@ -55,11 +55,11 @@
         <!-- ============ Tab2: 日志级别配置（分组） ============ -->
         <el-tab-pane label="日志级别配置" name="config">
           <el-alert type="warning" :closable="false" show-icon style="margin-bottom:12px"
-            title="配置按分组持久化到数据库。“默认配置”为系统默认记录器，不可删除且不可下发；“更新到 Maximo”仅下发当前选中用户分组的未忽略条目；Maximo 重启后运行时级别会恢复。" />
+            title="配置按分组持久化到数据库。“默认配置”为系统默认记录器，不可删除；“更新到 Maximo”下发当前选中分组（含默认配置）的未忽略条目；Maximo 重启后运行时级别会恢复。" />
 
           <!-- 当前分组工具栏 -->
           <div class="toolbar">
-            <el-button type="success" icon="el-icon-upload2" size="mini" :loading="pushLoading" :disabled="isDefaultGroup" @click="updateToMaximo">更新到 Maximo</el-button>
+            <el-button type="success" icon="el-icon-upload2" size="mini" :loading="pushLoading" @click="updateToMaximo">更新到 Maximo</el-button>
             <span v-if="saveLoading" class="count-tip"><i class="el-icon-loading"></i> 自动保存中...</span>
             <!-- 仅默认配置可添加行；其他组引用默认配置 -->
             <el-button v-if="isDefaultGroup" icon="el-icon-plus" size="mini" @click="addRow">添加行</el-button>
@@ -851,7 +851,7 @@ export default {
             ;(r.children || []).forEach(c => {
               rows.push({
                 loggerName: '  └ 子级: ' + c.logger,
-                level: '',
+                level: c.loglevel || '',
                 status: c.status || 'success',
                 reason: c.message || ''
               })
@@ -1278,7 +1278,7 @@ export default {
       updateLoggerLevel(loggers).then(res => {
         const data = res.data || res
         if (data && data.success) {
-          this.pushResult.rows = data.result || []
+          this.pushResult.rows = this.mapPushResultRows(data.result || [])
           this.pushResult.visible = true
           this.$message.success(data.message || ('已更新 ' + loggers.length + ' 条日志器级别为 ' + level))
           d.visible = false
@@ -1398,11 +1398,21 @@ export default {
       })
     },
 
-    // ============ 更新到 Maximo（仅当前用户分组） ============
+    // 将更新接口返回行映射为结果弹窗表格行（返回行自带 loglevel 时显示到"级别"列）
+    mapPushResultRows(result) {
+      return (result || []).map(r => ({
+        loggerName: r.loggerName || r.logger || '',
+        level: r.loglevel || r.level || '',
+        status: r.status || 'success',
+        reason: r.message || ''
+      }))
+    },
+
+    // ============ 更新到 Maximo（当前分组，含默认配置） ============
     updateToMaximo() {
-      if (this.isDefaultGroup) return
-      const g = this.activeGroup
-      const items = (g ? g.items : []).filter(i => i.loggerName && !i.ignored).map(i => ({ loggerName: i.loggerName, level: i.level }))
+      const g = this.isDefaultGroup ? null : this.activeGroup
+      const source = g ? g.items : this.defaultItems
+      const items = (source || []).filter(i => i.loggerName && !i.ignored).map(i => ({ loggerName: i.loggerName, level: i.level }))
       if (items.length === 0) {
         this.$message.warning('当前分组没有可下发的未忽略条目，请先添加（编辑即自动保存）')
         return
@@ -1411,7 +1421,7 @@ export default {
       updateLoggerLevel(items).then(res => {
         const data = res.data || res
         if (data && data.success) {
-          this.pushResult.rows = data.result || []
+          this.pushResult.rows = this.mapPushResultRows(data.result || [])
           this.pushResult.visible = true
           this.$message.success(data.message || '更新完成')
         } else {
