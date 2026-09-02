@@ -233,6 +233,12 @@ export const constantRoutes = [
                 meta: { title: '属性查询', icon: 'link', noCache: false }
             },
             {
+                path: 'condition',
+                component: (resolve) => require(['/src/views/maximo/condition/index'], resolve),
+                name: 'ConditionList',
+                meta: { title: '条件表达式', icon: 'link', noCache: false }
+            },
+            {
                 path: 'maxappxml',
                 component: (resolve) => require(['/src/views/maximo/maxappxml/index'], resolve),
                 name: 'MaxAppXml',

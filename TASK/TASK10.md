@@ -103,3 +103,10 @@ left join maxpropvalue on (maxprop.PROPNAME=maxpropvalue.PROPNAME)
 我想要将查询,导入,导出都写到这个脚本中,导出要支持精简模式,脚本也要你写
 
  可参考 E:/gitwork/wushiling/jsproject/masscript/cn/shoukaiseki/tools/SKS_EXPORT_DOMAIN.js E:/gitwork/wushiling/jsproject/masscript/cn/shoukaiseki/tools/SKS_EXPORT_MESSAGES.js  E:/gitwork/wushiling/jsproject/masscript/cn/shoukaiseki/tools/SKS_DEPLOY_DOMAIN.js
+
+
+
+# 6 ✅
+增加一个条件表达式管理器的页面,表名称是CONDITION
+
+新建脚本 E:/gitwork/wushiling/jsproject/masscript/cn/shoukaiseki/tools/SKS_CONDITION_MANAGE.js
