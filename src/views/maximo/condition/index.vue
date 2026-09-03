@@ -70,7 +70,7 @@
 
     <!-- 导入 JSON 弹窗 -->
     <el-dialog title="导入条件定义" :visible.sync="importDialog.visible" width="800px" top="3vh" :close-on-click-modal="true">
-      <p style="margin:0 0 8px;color:#909399;font-size:12px;">粘贴 JSON（数组 或 {"conditions": [...]}），支持精简模式导出结果直接导入；按 conditionnum 匹配更新或创建；描述支持 en_description / zh_description 多语言。</p>
+      <p style="margin:0 0 8px;color:#909399;font-size:12px;">粘贴 JSON（数组 或 {"conditions": [...]}），支持精简模式导出结果直接导入；按 conditionnum 匹配更新或创建，描述支持 description / en_description。</p>
       <el-input v-model="importDialog.text" type="textarea" :rows="12" placeholder='[{"conditionnum":"COND1","type":"EXPRESSION","expression":"status = '"'"'APPR'"'"'","description":"示例条件"}]' />
       <p style="margin:8px 0 0;color:#f56c6c;font-size:12px" v-if="importDialog.error">{{ importDialog.error }}</p>
       <div v-if="importDialog.summary" class="import-summary">
@@ -92,7 +92,7 @@
     </el-dialog>
 
     <!-- 条件详情弹窗 -->
-    <el-dialog :title="'条件详情 - ' + (currentRow ? currentRow.conditionnum : '')" :visible.sync="dialogVisible" width="700px" top="3vh" :close-on-click-modal="true">
+    <el-dialog :title="'条件详情 - ' + (currentRow ? currentRow.conditionnum : '')" :visible.sync="dialogVisible" width="900px" top="3vh" :close-on-click-modal="true">
       <el-descriptions :column="2" border v-if="currentRow" class="detail-desc" size="small">
         <el-descriptions-item label="条件名称">
           <el-input :value="currentRow.conditionnum || '-'" readonly size="small" />
@@ -102,9 +102,6 @@
         </el-descriptions-item>
         <el-descriptions-item label="描述">
           <el-input :value="currentRow.description || '-'" readonly size="small" />
-        </el-descriptions-item>
-        <el-descriptions-item label="中文描述">
-          <el-input :value="currentRow.zh_description || '-'" readonly size="small" />
         </el-descriptions-item>
         <el-descriptions-item label="条件类" :span="2">
           <el-input :value="currentRow.classname || '-'" readonly size="small" />
@@ -119,6 +116,15 @@
           <el-input type="textarea" :value="currentRow.expression || '-'" readonly :autosize="{ minRows: 3, maxRows: 10 }" />
         </el-descriptions-item>
       </el-descriptions>
+
+      <div class="detail-toolbar" v-if="detailJson">
+        <span style="color:#606266;line-height:32px;">单个条件导出 JSON</span>
+        <el-button type="primary" size="mini" icon="el-icon-document-copy" @click="copyToClipboard(detailJson, '详情JSON')">复制 JSON</el-button>
+      </div>
+      <div v-loading="detailLoading" element-loading-text="加载中..." class="monaco-wrapper">
+        <div ref="detailMonacoRef" v-show="detailJson" class="monaco-container detail-monaco"></div>
+      </div>
+      <el-empty v-if="!detailLoading && !detailJson" description="无数据" />
 
       <span slot="footer" class="dialog-footer">
         <el-button @click="dialogVisible = false">关 闭</el-button>
@@ -162,13 +168,21 @@ export default {
       importDialog: { visible: false, text: '', error: '', loading: false, summary: null, result: [] },
       // 详情
       dialogVisible: false,
-      currentRow: null
+      currentRow: null,
+      detailJson: '',
+      detailLoading: false,
+      detailEditor: null
     }
   },
   watch: {
     exportDialogVisible(val) {
       if (!val) {
         this.disposeExportEditor()
+      }
+    },
+    dialogVisible(val) {
+      if (!val) {
+        this.disposeDetailEditor()
       }
     }
   },
@@ -196,7 +210,8 @@ export default {
             { prop: 'type', label: '类型', width: 110 },
             { prop: 'expression', label: '表达式', minWidth: 260, showOverflowTooltip: true },
             { prop: 'classname', label: '条件类', minWidth: 160 },
-            { prop: 'nocaching', label: '总是判定', width: 90 }
+            { prop: 'nocaching', label: '总是判定', width: 90 },
+            { prop: 'conditionid', label: '唯一标识', minWidth: 130 }
           ]),
         queryParamsColumnListEnable: false,
         queryParamsColumnList: []
@@ -377,7 +392,9 @@ export default {
     },
     // === 详情 ===
     handleRowClick(row) {
-      this.currentRow = null
+      this.currentRow = row
+      this.detailJson = ''
+      this.detailLoading = true
       this.dialogVisible = true
       const whereClause = "c.CONDITIONNUM = '" + this.escapeSql(row.conditionnum) + "'"
       exportConditions({
@@ -395,11 +412,13 @@ export default {
         const list = data.conditions || []
         if (list.length > 0) {
           this.currentRow = Object.assign({}, row, list[0])
-        } else {
-          this.currentRow = row
+          this.detailJson = JSON.stringify(list[0], null, 2)
+          this.$nextTick(() => this.initDetailEditor())
         }
       }).catch(err => {
         this.$message.error('获取详情失败: ' + (err.message || String(err)))
+      }).finally(() => {
+        this.detailLoading = false
       })
     },
     // === Monaco Editor ===
@@ -442,6 +461,48 @@ export default {
       if (this.exportEditor) {
         this.exportEditor.dispose()
         this.exportEditor = null
+      }
+    },
+    // === 详情 Monaco Editor ===
+    initDetailEditor() {
+      if (!this.detailJson) return
+      if (!this.exportMonacoLoaded) {
+        import(/* webpackChunkName: "monaco" */ 'monaco-editor').then(monaco => {
+          this.exportMonacoLoaded = true
+          this._exportMonaco = monaco
+          this.createDetailEditor()
+        }).catch(err => {
+          console.error('Monaco Editor 加载失败:', err)
+        })
+      } else {
+        this.createDetailEditor()
+      }
+    },
+    createDetailEditor() {
+      const monaco = this._exportMonaco
+      if (this.$refs.detailMonacoRef && !this.detailEditor) {
+        this.detailEditor = monaco.editor.create(this.$refs.detailMonacoRef, {
+          value: this.detailJson,
+          language: 'json',
+          readOnly: true,
+          theme: 'vs',
+          automaticLayout: true,
+          minimap: { enabled: false },
+          scrollBeyondLastLine: false,
+          fontSize: 13,
+          wordWrap: 'on',
+          folding: true,
+          lineNumbers: 'on',
+          renderLineHighlight: 'none'
+        })
+      } else if (this.detailEditor) {
+        this.detailEditor.setValue(this.detailJson)
+      }
+    },
+    disposeDetailEditor() {
+      if (this.detailEditor) {
+        this.detailEditor.dispose()
+        this.detailEditor = null
       }
     },
     copyToClipboard(text, label) {
@@ -523,7 +584,16 @@ export default {
   border-radius: 4px;
 }
 .detail-desc {
-  margin-bottom: 16px;
+  margin-bottom: 8px;
+}
+.detail-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin: 16px 0 8px;
+}
+.detail-monaco {
+  height: 320px;
 }
 .import-summary {
   margin-top: 12px;
