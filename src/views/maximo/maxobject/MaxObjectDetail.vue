@@ -294,11 +294,18 @@ export default {
   },
   created() {
     this.objectName = this.$route.params.objectname || ''
+    this.setPageTitle()
     if (this.objectName) {
       this.fetchDetail()
     }
   },
   methods: {
+    setPageTitle() {
+      this.$store.dispatch('tagsView/updateVisitedView', {
+        path: this.$route.path,
+        title: `对象[${this.objectName || ''}]详情`
+      })
+    },
     fetchDetail() {
       this.loading = true
       getMaxObjectDetail(this.objectName)
@@ -371,6 +378,7 @@ export default {
     '$route.params.objectname'(val) {
       if (val && val !== this.objectName) {
         this.objectName = val
+        this.setPageTitle()
         this.fetchDetail()
       }
     }
