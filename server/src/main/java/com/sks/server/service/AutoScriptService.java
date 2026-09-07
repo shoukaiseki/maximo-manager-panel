@@ -442,25 +442,87 @@ public class AutoScriptService {
     /**
      * 查询脚本历史记录
      */
-    public List<Map<String, Object>> queryAutoScriptHistory(String autoscript) {
-        String sql = "SELECT H.IBM_AUTOSCRIPT_HISTORYID, H.AUTOSCRIPT, H.VERSION, H.DESCRIPTION, " +
-                "H.ALIASNAME, H.HOSTNAME, H.CREATEPERSON, H.CREATETIME, H.HASLD " +
-                "FROM IBM_AUTOSCRIPT_HISTORY H " +
-                "WHERE H.AUTOSCRIPT = ? " +
-                "ORDER BY H.IBM_AUTOSCRIPT_HISTORYID DESC";
+    /**
+     * 查询脚本历史记录列表（支持脚本名/描述/创建人模糊过滤 + 分页）
+     */
+    public Map<String, Object> queryAutoScriptHistory(String autoscript, String description, String createperson, String source, int pageNum, int pageSize, String where) {
+        StringBuilder whereSql = new StringBuilder(" WHERE 1=1");
+        List<Object> params = new ArrayList<>();
 
-        List<Map<String, Object>> result = new ArrayList<>();
+        if (autoscript != null && !autoscript.trim().isEmpty()) {
+            whereSql.append(" AND H.AUTOSCRIPT LIKE ?");
+            params.add("%" + autoscript.trim().toUpperCase() + "%");
+        }
+        if (description != null && !description.trim().isEmpty()) {
+            whereSql.append(" AND H.DESCRIPTION LIKE ?");
+            params.add("%" + description.trim() + "%");
+        }
+        if (createperson != null && !createperson.trim().isEmpty()) {
+            whereSql.append(" AND H.CREATEPERSON LIKE ?");
+            params.add("%" + createperson.trim() + "%");
+        }
+        if (source != null && !source.trim().isEmpty()) {
+            whereSql.append(" AND H.SOURCE LIKE ?");
+            params.add("%" + source.trim() + "%");
+        }
+
+        // 用户自定义 where：完全替换表单条件
+        String customWhere = (where != null && !where.trim().isEmpty()) ? where.trim() : null;
+        if (customWhere != null) {
+            whereSql = new StringBuilder(" WHERE (").append(customWhere).append(")");
+            params.clear();
+        }
+
+        String whereStr = whereSql.toString();
+
+        // 总数查询
+        String countSql = "SELECT COUNT(*) AS total FROM IBM_AUTOSCRIPT_HISTORY H" + whereStr;
+        int total = 0;
         try (Connection conn = dataSource.getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql)) {
-            ps.setString(1, autoscript.trim().toUpperCase());
+             PreparedStatement ps = conn.prepareStatement(countSql)) {
+            for (int i = 0; i < params.size(); i++) {
+                ps.setObject(i + 1, params.get(i));
+            }
             try (ResultSet rs = ps.executeQuery()) {
-                while (rs.next()) {
-                    result.add(rowToMap(rs));
+                if (rs.next()) {
+                    total = rs.getInt("total");
                 }
             }
         } catch (SQLException e) {
-            throw new RuntimeException("查询脚本历史记录失败: " + e.getMessage(), e);
+            throw new RuntimeException("查询脚本历史总数失败: " + e.getMessage(), e);
         }
+
+        // 分页数据查询（不包含 SOURCE 大字段）
+        String dataSql = "SELECT H.IBM_AUTOSCRIPT_HISTORYID, H.AUTOSCRIPT, H.VERSION, H.DESCRIPTION, " +
+                "H.ALIASNAME, H.HOSTNAME, H.CREATEPERSON, H.CREATETIME, H.HASLD " +
+                "FROM IBM_AUTOSCRIPT_HISTORY H " +
+                whereStr +
+                " ORDER BY H.IBM_AUTOSCRIPT_HISTORYID DESC " +
+                "OFFSET ? ROWS FETCH NEXT ? ROWS ONLY";
+
+        int offset = (pageNum - 1) * pageSize;
+        List<Map<String, Object>> rows = new ArrayList<>();
+        try (Connection conn = dataSource.getConnection();
+             PreparedStatement ps = conn.prepareStatement(dataSql)) {
+            for (int i = 0; i < params.size(); i++) {
+                ps.setObject(i + 1, params.get(i));
+            }
+            ps.setInt(params.size() + 1, offset);
+            ps.setInt(params.size() + 2, pageSize);
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    rows.add(rowToMap(rs));
+                }
+            }
+        } catch (SQLException e) {
+            throw new RuntimeException("查询脚本历史列表失败: " + e.getMessage(), e);
+        }
+
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("rows", rows);
+        result.put("total", total);
+        result.put("pageNum", pageNum);
+        result.put("pageSize", pageSize);
         return result;
     }
 

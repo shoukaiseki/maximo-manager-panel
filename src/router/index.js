@@ -131,6 +131,12 @@ export const constantRoutes = [
                 meta: { title: '脚本审计记录', icon: 'log', noCache: false }
             },
             {
+                path: 'maxscripthistory',
+                component: (resolve) => require(['/src/views/maximo/maxscript/AutoScriptHistory'], resolve),
+                name: 'AutoScriptHistory',
+                meta: { title: '脚本历史记录', icon: 'time', noCache: false }
+            },
+            {
                 path: 'maxmenu',
                 component: (resolve) => require(['/src/views/maximo/maxmenu/MaxMenuTree'], resolve),
                 name: 'MaxMenuTree',

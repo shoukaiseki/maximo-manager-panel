@@ -45,13 +45,14 @@ export function getAutoScriptLaunchPoints(name) {
 }
 
 /**
- * 查询脚本历史记录列表
+ * 查询脚本历史记录列表（支持脚本名/描述/创建人模糊过滤 + 分页）
+ * @param {Object} params { autoscript, description, createperson, pageNum, pageSize }
  */
-export function getAutoScriptHistory(name) {
+export function getAutoScriptHistory(params) {
   return solonRequest({
     url: '/autoscript/history',
     method: 'get',
-    params: { name: name }
+    params: params
   })
 }
 

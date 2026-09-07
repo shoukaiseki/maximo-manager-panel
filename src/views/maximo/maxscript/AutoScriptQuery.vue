@@ -193,7 +193,13 @@
             </template>
           </el-table-column>
         </el-table>
-        <el-empty v-else description="暂无历史记录" />
+        <pagination v-show="historyDialog.total > 0"
+          :total="historyDialog.total"
+          :page.sync="historyDialog.pageNum"
+          :limit.sync="historyDialog.pageSize"
+          @pagination="loadHistory"
+        />
+        <el-empty v-if="historyDialog.list.length === 0 && !historyDialog.loading" description="暂无历史记录" />
       </div>
     </el-dialog>
 
@@ -386,7 +392,7 @@ export default {
       },
       sourceDialog: { visible: false, name: '', loading: false, editor: null, fullscreen: false },
       sourceCaseSensitive: true,
-      historyDialog: { visible: false, name: '', loading: false, list: [] },
+      historyDialog: { visible: false, name: '', loading: false, list: [], total: 0, pageNum: 1, pageSize: 20 },
       historySourceDialog: { visible: false, name: '', loading: false, source: '', editor: null },
       detailDialog: {
         visible: false, name: '', loading: false,
@@ -569,14 +575,20 @@ export default {
     showHistory(row) {
       this.historyDialog.visible = true
       this.historyDialog.name = row.AUTOSCRIPT
+      this.historyDialog.pageNum = 1
+      this.loadHistory()
+    },
+    loadHistory() {
       this.historyDialog.loading = true
       this.historyDialog.list = []
-
-      getAutoScriptHistory(row.AUTOSCRIPT).then(res => {
-        if (res.code === 200) {
-          let list = res.data || []
-          list.sort((a, b) => (b.IBM_AUTOSCRIPT_HISTORYID || 0) - (a.IBM_AUTOSCRIPT_HISTORYID || 0))
-          this.historyDialog.list = list
+      getAutoScriptHistory({
+        autoscript: this.historyDialog.name,
+        pageNum: this.historyDialog.pageNum,
+        pageSize: this.historyDialog.pageSize
+      }).then(res => {
+        if (res.code === 200 && res.data) {
+          this.historyDialog.list = res.data.rows || []
+          this.historyDialog.total = res.data.total || 0
         } else {
           this.$message.error(res.message || '获取历史记录失败')
         }
@@ -620,7 +632,19 @@ export default {
     },
     initMonaco(code, language, containerName = 'monacoContainer', editorKey = 'editor') {
       const container = this.$refs[containerName]
-      if (!container) return
+      if (!container) {
+        // 容器可能还未渲染（v-if + el-dialog 过渡），延迟重试
+        setTimeout(() => {
+          const retry = this.$refs[containerName]
+          if (retry) {
+            this.doInitMonaco(retry, code, language, containerName, editorKey)
+          }
+        }, 200)
+        return
+      }
+      this.doInitMonaco(container, code, language, containerName, editorKey)
+    },
+    doInitMonaco(container, code, language, containerName, editorKey) {
       // 动态加载 monaco
       import(/* webpackChunkName: "monaco" */ 'monaco-editor').then(monaco => {
         const dialog = containerName === 'monacoContainer' ? this.sourceDialog : this.historySourceDialog

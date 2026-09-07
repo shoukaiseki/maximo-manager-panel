@@ -91,15 +91,17 @@ public class AutoScriptController {
     }
 
     /**
-     * 脚本历史记录列表
-     * GET /autoscript/history?name=xxx
+     * 脚本历史记录列表（支持脚本名/描述/创建人/脚本内容模糊过滤 + 分页 + 自定义where）
+     * GET /autoscript/history?autoscript=&description=&createperson=&source=&pageNum=1&pageSize=20&where=
      */
     @Mapping(value = "/autoscript/history", method = MethodType.GET)
-    public RestResult<List<Map<String, Object>>> history(String name) {
-        if (name == null || name.trim().isEmpty()) {
-            return RestResult.error("脚本名称不能为空");
-        }
-        List<Map<String, Object>> data = autoScriptService.queryAutoScriptHistory(name);
+    public RestResult<Map<String, Object>> history(
+            String autoscript, String description, String createperson, String source,
+            @Param(defaultValue = "1") int pageNum,
+            @Param(defaultValue = "20") int pageSize,
+            String where) {
+        Map<String, Object> data = autoScriptService.queryAutoScriptHistory(
+                autoscript, description, createperson, source, pageNum, pageSize, where);
         return RestResult.ok(data);
     }
 
