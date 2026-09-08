@@ -302,6 +302,18 @@
               </div>
             </div>
           </el-tab-pane>
+          <el-tab-pane label="MAXAPPINFO导出" name="maxappinfo">
+            <div class="menu-list-tab">
+              <div style="margin-bottom:10px">
+                <el-checkbox v-model="maxAppInfoIgnoreDefVal" @change="loadMaxAppInfo(true)">精简模式(省略空值/默认值)</el-checkbox>
+                <el-button type="primary" size="mini" plain style="margin-left:10px" @click="loadMaxAppInfo(true)">刷新导出</el-button>
+              </div>
+              <div v-loading="maxAppInfoLoading">
+                <div ref="maxAppInfoMonaco" style="height:60vh;border:1px solid #dcdfe6"></div>
+                <el-empty v-if="!maxAppInfoLoading && !maxAppInfoJson" description="暂无数据" />
+              </div>
+            </div>
+          </el-tab-pane>
         </el-tabs>
       </div>
     </el-dialog>
@@ -309,7 +321,7 @@
 </template>
 
 <script>
-import { getMaxMenuFullTree, getMaxMenuList, getSigOption, getCtrlGroup } from '@/api/maxmenu'
+import { getMaxMenuFullTree, getMaxMenuList, getSigOption, getCtrlGroup, exportMaxAppInfo } from '@/api/maxmenu'
 
 export default {
   name: 'MaxMenuTree',
@@ -337,6 +349,12 @@ export default {
       ctrlGroupList: [],
       ctrlGroupExpanded: [],
       ctrlConditionExpanded: [],
+      // MAXAPPINFO 导出
+      maxAppInfoLoading: false,
+      maxAppInfoJson: '',
+      maxAppInfoEditor: null,
+      maxAppInfoIgnoreDefVal: false,
+      maxAppInfoLoaded: false,
       // MAXMENU 全字段定义（来自 MAXATTRIBUTE）
       menuFields: [
         { attr: 'MENUTYPE', title: '菜单类型', maxtype: 'UPPER' },
@@ -431,7 +449,9 @@ export default {
   },
   watch: {
     detailVisible(val) {
-      console.log('detailVisible changed:', val)
+      if (!val) {
+        this.disposeMaxAppInfoMonaco()
+      }
     },
     selectedNode(val) {
       console.log('selectedNode changed:', val ? val.MODULEAPP : null)
@@ -449,6 +469,8 @@ export default {
         this.loadSigOption()
       } else if (val === 'ctrlgroup' && this.ctrlGroupList.length === 0) {
         this.loadCtrlGroup()
+      } else if (val === 'maxappinfo' && !this.maxAppInfoLoaded) {
+        this.loadMaxAppInfo()
       }
     }
   },
@@ -678,7 +700,10 @@ export default {
       this.searchMenuList = []
       this.appToolList = []
       this.sigOptionList = []
-      this.ctrlGroupList = []
+        this.ctrlGroupList = []
+        this.maxAppInfoJson = ''
+        this.maxAppInfoLoaded = false
+        this.disposeMaxAppInfoMonaco()
         console.log('selectedNode set:', this.selectedNode.MODULEAPP, this.selectedNode.ELEMENTTYPE)
       }
     },
@@ -838,7 +863,84 @@ export default {
     },
 
     filterMenuList() {
+    },
+
+    loadMaxAppInfo(force) {
+      const app = this.selectedNode._isModule ? this.selectedNode.MODULE : this.selectedNode.KEYVALUE
+      if (!app) {
+        this.$message.warning('无法获取模块或应用信息')
+        return
+      }
+      if (force) {
+        this.maxAppInfoLoaded = false
+      }
+      this.maxAppInfoLoading = true
+      this.maxAppInfoJson = ''
+      this.disposeMaxAppInfoMonaco()
+      exportMaxAppInfo(app, this.maxAppInfoIgnoreDefVal).then(res => {
+        const data = res.data || res
+        if (data.status === 'error') {
+          this.$message.error(data.message || '导出失败')
+          return
+        }
+        this.maxAppInfoJson = JSON.stringify(data, null, 2)
+        this.maxAppInfoLoaded = true
+        this.$nextTick(() => {
+          setTimeout(() => { this.initMaxAppInfoMonaco() }, 200)
+        })
+      }).catch(err => {
+        this.$message.error('导出失败: ' + (err.message || String(err)))
+      }).finally(() => {
+        this.maxAppInfoLoading = false
+      })
+    },
+
+    initMaxAppInfoMonaco() {
+      const container = this.$refs.maxAppInfoMonaco
+      if (!container) {
+        setTimeout(() => {
+          if (this.$refs.maxAppInfoMonaco) {
+            this.doInitMaxAppInfoMonaco(this.$refs.maxAppInfoMonaco)
+          }
+        }, 200)
+        return
+      }
+      this.doInitMaxAppInfoMonaco(container)
+    },
+
+    doInitMaxAppInfoMonaco(container) {
+      import(/* webpackChunkName: "monaco" */ 'monaco-editor').then(monaco => {
+        this.disposeMaxAppInfoMonaco()
+        this.maxAppInfoEditor = monaco.editor.create(container, {
+          value: this.maxAppInfoJson || '',
+          language: 'json',
+          readOnly: true,
+          theme: 'vs',
+          automaticLayout: true,
+          minimap: { enabled: true },
+          scrollBeyondLastLine: false,
+          fontSize: 13,
+          wordWrap: 'on'
+        })
+      }).catch(err => {
+        console.error('Monaco Editor 加载失败:', err)
+        container.innerHTML = '<pre style="padding:10px;max-height:60vh;overflow:auto;font-family:monospace;font-size:13px;white-space:pre-wrap;word-break:break-all">' + this.escapeHtml(this.maxAppInfoJson || '') + '</pre>'
+      })
+    },
+
+    disposeMaxAppInfoMonaco() {
+      if (this.maxAppInfoEditor) {
+        this.maxAppInfoEditor.dispose()
+        this.maxAppInfoEditor = null
+      }
+    },
+
+    escapeHtml(str) {
+      return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
     }
+  },
+  beforeDestroy() {
+    this.disposeMaxAppInfoMonaco()
   }
 }
 </script>

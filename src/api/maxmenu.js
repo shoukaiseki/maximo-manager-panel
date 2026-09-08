@@ -1,4 +1,5 @@
 import solonRequest from '@/api/solonapi'
+import request from '@/utils/request'
 
 /**
  * 查询所有模块列表
@@ -95,5 +96,20 @@ export function getCtrlGroup(app) {
     url: '/maxmenu/ctrlgroup',
     method: 'get',
     params: { app }
+  })
+}
+
+/**
+ * 导出 MAXAPPINFO (SIGOPTION + SIGOPTFLAG + MAXMENU) 为 JSON
+ * 调用 Maximo 自动化脚本 SKS_EXP_MAXAPPINFO
+ * @param {string} app 应用名称
+ * @param {boolean} ignoreDefVal 精简模式(省略空值/默认值)
+ */
+export function exportMaxAppInfo(app, ignoreDefVal) {
+  return request({
+    url: '/api/script/SKS_EXP_MAXAPPINFO',
+    method: 'post',
+    params: { app: app, ignoreDefVal: ignoreDefVal ? 'true' : 'false' },
+    data: {}
   })
 }
