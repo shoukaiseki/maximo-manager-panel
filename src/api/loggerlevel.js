@@ -90,6 +90,20 @@ export function importLoggerConfig(loggers, groupId) {
   })
 }
 
+/**
+ * 临时设置级别（写入默认配置，不下发到 Maximo）
+ * - 不存在的日志器 → 新增配置；已存在 → 仅更新级别（保留忽略/描述/排序）
+ * @param {Array} loggers - [{ loggerName, level }]
+ * 返回: { added, updated, skipped, total }
+ */
+export function upsertLoggerConfig(loggers) {
+  return solonRequest({
+    url: '/loggerlevel/upsert',
+    method: 'post',
+    data: { loggers: loggers || [] }
+  })
+}
+
 // ======== 日志级别分组（用户自建分组） ========
 
 /**

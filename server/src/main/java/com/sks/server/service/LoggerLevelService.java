@@ -319,6 +319,108 @@ public class LoggerLevelService {
         return result;
     }
 
+    /**
+     * 增量设置级别（upsert 默认配置，不下发到 Maximo）：
+     * - logger_name 不存在 → 插入（级别取入参，ignored=0，description 留空）
+     * - 已存在 → 仅更新 log_level（保留 ignored/description/sort_order）
+     * 返回 {added, updated, skipped, total}
+     */
+    public Map<String, Object> upsertConfigs(List<LoggerLevelConfig> loggers) {
+        Map<String, Object> result = new LinkedHashMap<>();
+        if (loggers == null) {
+            loggers = Collections.emptyList();
+        }
+
+        // 规整 + 去重入参
+        LinkedHashMap<String, String> toSet = new LinkedHashMap<>();
+        for (LoggerLevelConfig c : loggers) {
+            String name = c.getLoggerName() == null ? "" : c.getLoggerName().trim();
+            if (name.isEmpty()) {
+                continue;
+            }
+            String level = c.getLevel() == null ? "INFO" : c.getLevel().trim().toUpperCase();
+            if (!VALID_LEVELS.contains(level)) {
+                throw new RuntimeException("不支持的日志级别: " + c.getLevel() + " (logger: " + name + ")");
+            }
+            toSet.put(name, level);
+        }
+
+        int inputCount = toSet.size();
+        if (inputCount == 0) {
+            result.put("added", 0);
+            result.put("updated", 0);
+            result.put("skipped", 0);
+            result.put("total", listConfigs().size());
+            return result;
+        }
+
+        try (Connection conn = mysqlDataSource.getConnection()) {
+            conn.setAutoCommit(false);
+            try {
+                // 1. 查已存在的 logger_name 及当前级别
+                // existing: logger_name -> 当前 log_level
+                Map<String, String> existing = new HashMap<>();
+                String querySql = "SELECT logger_name, log_level FROM logger_level_config WHERE logger_name IN (" +
+                        String.join(",", Collections.nCopies(inputCount, "?")) + ")";
+                try (PreparedStatement ps = conn.prepareStatement(querySql)) {
+                    int idx = 1;
+                    for (String name : toSet.keySet()) {
+                        ps.setString(idx++, name);
+                    }
+                    try (ResultSet rs = ps.executeQuery()) {
+                        while (rs.next()) {
+                            existing.put(rs.getString("logger_name"), rs.getString("log_level"));
+                        }
+                    }
+                }
+
+                int added = 0, updated = 0, skipped = 0;
+                String insertSql = "INSERT INTO logger_level_config (logger_name, log_level, ignored, description, sort_order) " +
+                        "VALUES (?, ?, 0, '', 0)";
+                String updateSql = "UPDATE logger_level_config SET log_level = ? WHERE logger_name = ?";
+                try (PreparedStatement psI = conn.prepareStatement(insertSql);
+                     PreparedStatement psU = conn.prepareStatement(updateSql)) {
+                    for (Map.Entry<String, String> e : toSet.entrySet()) {
+                        String name = e.getKey();
+                        String level = e.getValue();
+                        if (existing.containsKey(name)) {
+                            // 级别相同 → 跳过；不同 → 更新
+                            if (level.equalsIgnoreCase(existing.get(name))) {
+                                skipped++;
+                            } else {
+                                psU.setString(1, level);
+                                psU.setString(2, name);
+                                psU.addBatch();
+                                updated++;
+                            }
+                        } else {
+                            psI.setString(1, name);
+                            psI.setString(2, level);
+                            psI.addBatch();
+                            added++;
+                        }
+                    }
+                    if (added > 0) psI.executeBatch();
+                    if (updated > 0) psU.executeBatch();
+                }
+
+                conn.commit();
+                result.put("added", added);
+                result.put("updated", updated);
+                result.put("skipped", skipped);
+                result.put("total", listConfigs().size());
+            } catch (Exception e) {
+                conn.rollback();
+                throw e;
+            } finally {
+                conn.setAutoCommit(true);
+            }
+        } catch (Exception e) {
+            throw new RuntimeException("设置日志级别配置失败: " + e.getMessage(), e);
+        }
+        return result;
+    }
+
     private boolean groupExists(Connection conn, Long groupId) throws SQLException {
         try (PreparedStatement ps = conn.prepareStatement("SELECT 1 FROM logger_level_group WHERE id = ?")) {
             ps.setLong(1, groupId);

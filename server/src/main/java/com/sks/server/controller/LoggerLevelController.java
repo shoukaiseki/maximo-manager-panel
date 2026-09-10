@@ -88,4 +88,20 @@ public class LoggerLevelController {
             return RestResult.error("导入日志级别配置失败: " + e.getMessage());
         }
     }
+
+    /**
+     * 临时设置级别（写入默认配置，不下发到 Maximo）
+     * - 不存在的日志器 → 新增配置；已存在 → 仅更新级别（保留忽略/描述/排序）
+     * POST /solonapi/loggerlevel/upsert
+     * body: { loggers: [{ loggerName, level }] }
+     * 返回: { added, updated, skipped, total }
+     */
+    @Mapping(value = "/loggerlevel/upsert", method = MethodType.POST)
+    public RestResult<java.util.Map<String, Object>> upsertConfigs(@Body LoggerLevelSaveReq req) {
+        try {
+            return RestResult.ok(loggerLevelService.upsertConfigs(req == null ? null : req.getLoggers()));
+        } catch (Exception e) {
+            return RestResult.error("设置日志级别配置失败: " + e.getMessage());
+        }
+    }
 }

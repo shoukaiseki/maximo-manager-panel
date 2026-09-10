@@ -143,6 +143,12 @@ export const constantRoutes = [
                 meta: { title: '菜单管理', icon: 'tree', noCache: false }
             },
             {
+                path: 'mafappdata',
+                component: (resolve) => require(['/src/views/maximo/mafappdata/index'], resolve),
+                name: 'MafAppData',
+                meta: { title: 'MAF应用包', icon: 'upload', noCache: false }
+            },
+            {
                 path: 'maxsession',
                 component: (resolve) => require(['/src/views/maximo/maxsession/MaxSession'], resolve),
                 name: 'MaxSession',

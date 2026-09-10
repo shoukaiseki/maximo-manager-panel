@@ -22,6 +22,7 @@
               <el-option v-for="lv in queryLevelOptions" :key="lv" :label="lv" :value="lv" />
             </el-select>
             <el-button type="warning" icon="el-icon-edit-outline" size="mini" :disabled="!querySelection.length" @click="openQueryBatchLevelDialog">设置级别({{ querySelection.length }})</el-button>
+            <el-button type="info" plain icon="el-icon-document-add" size="mini" :disabled="!querySelection.length" @click="openQueryTempLevelDialog">临时设置级别({{ querySelection.length }})</el-button>
             <el-button type="success" icon="el-icon-folder-add" size="mini" :disabled="!querySelection.length" @click="openAddToGroupDialog(querySelection.map(r => r.loggerName))">加入分组({{ querySelection.length }})</el-button>
             <span class="count-tip" v-if="queryLoggers.length">共 {{ filteredQueryLoggers.length }} / {{ queryLoggers.length }} 条</span>
           </div>
@@ -38,7 +39,7 @@
             </el-table-column>
             <el-table-column label="更改级别" width="140" align="center">
               <template slot-scope="scope">
-                <el-select :value="scope.row.level" size="mini" @change="val => changeLoggerLevel(scope.row, val)" :disabled="!isSettableLevel(scope.row.level)">
+                <el-select :value="isSettableLevel(scope.row.level) ? scope.row.level : ''" size="mini" :placeholder="scope.row.level || '选择级别'" @change="val => changeLoggerLevel(scope.row, val)">
                   <el-option v-for="lv in levelOptions" :key="lv" :label="lv" :value="lv" />
                 </el-select>
               </template>
@@ -401,10 +402,12 @@
       </div>
     </el-dialog>
 
-    <!-- 查询页多选设置级别弹窗（直接调用 Maximo 更新接口） -->
+    <!-- 查询页多选设置级别弹窗（直接调用 Maximo 运行时更新接口） -->
     <el-dialog title="设置日志级别" :visible.sync="queryBatchLevelDialog.visible" width="480px" append-to-body>
+      <el-alert type="warning" :closable="false" show-icon style="margin-bottom:10px"
+        title="直接更新 Maximo 运行时级别（立即生效，Maximo 重启后恢复）；INHERITED（继承）的日志器设置后将变为显式级别。" />
       <p style="margin:0 0 8px;color:#606266;font-size:13px">
-        将查询结果中勾选的 <b>{{ querySelection.length }}</b> 条日志器（其中可设置级别 <b>{{ querySettableCount }}</b> 条，继承/未设置的将跳过）统一更新为：
+        将勾选的 <b>{{ querySelection.length }}</b> 条日志器统一更新为：
       </p>
       <el-select v-model="queryBatchLevelDialog.level" placeholder="选择级别" style="width:100%">
         <el-option v-for="lv in levelOptions" :key="lv" :label="lv" :value="lv" />
@@ -414,13 +417,29 @@
         <el-button type="primary" size="mini" :loading="queryBatchLevelDialog.loading" @click="submitQueryBatchLevelDialog">确定并更新</el-button>
       </div>
     </el-dialog>
+
+    <!-- 查询页多选临时设置级别弹窗（写入“日志级别配置”默认配置，不下发 Maximo） -->
+    <el-dialog title="临时设置日志级别（写入配置）" :visible.sync="queryTempLevelDialog.visible" width="480px" append-to-body>
+      <el-alert type="info" :closable="false" show-icon style="margin-bottom:10px"
+        title="仅写入“日志级别配置”页签的默认配置（新增缺失项、更新已存在项的级别），不直接下发到 Maximo；之后可在“日志级别配置”页签点击“更新到 Maximo”统一生效。" />
+      <p style="margin:0 0 8px;color:#606266;font-size:13px">
+        将勾选的 <b>{{ querySelection.length }}</b> 条日志器级别记录为：
+      </p>
+      <el-select v-model="queryTempLevelDialog.level" placeholder="选择级别" style="width:100%">
+        <el-option v-for="lv in levelOptions" :key="lv" :label="lv" :value="lv" />
+      </el-select>
+      <div slot="footer">
+        <el-button size="mini" @click="queryTempLevelDialog.visible = false">取消</el-button>
+        <el-button type="primary" size="mini" :loading="queryTempLevelDialog.loading" @click="submitQueryTempLevelDialog">确定并写入配置</el-button>
+      </div>
+    </el-dialog>
   </section>
 </template>
 
 <script>
 import {
   queryLoggerLevel, updateLoggerLevel,
-  listLoggerConfig, saveLoggerConfig, importLoggerConfig,
+  listLoggerConfig, saveLoggerConfig, importLoggerConfig, upsertLoggerConfig,
   listLoggerGroups, createLoggerGroup, updateLoggerGroup, deleteLoggerGroup,
   listLoggerGroupItems, saveLoggerGroupItems, addLoggerToGroup,
   listLoggerMx, saveLoggerMx, pushLoggerMxToMaximo,
@@ -455,8 +474,10 @@ export default {
       tableSelection: [],
       // 批量更改日志级别弹窗
       batchLevelDialog: { visible: false, items: [], level: 'INFO', loading: false },
-      // 查询页多选设置级别弹窗
+      // 查询页多选设置级别弹窗（运行时更新）
       queryBatchLevelDialog: { visible: false, level: 'INFO', loading: false },
+      // 查询页多选临时设置级别弹窗（写入配置，不下发 Maximo）
+      queryTempLevelDialog: { visible: false, level: 'INFO', loading: false },
 
       // ===== MXLogger 日志管理 tab =====
       mxLoading: false,
@@ -509,10 +530,6 @@ export default {
     // 跨组添加弹窗：当前勾选中可实际添加（不在当前组）的数量
     crossAddableCount() {
       return this.crossGroupDialog.selected.filter(r => !r.inCurrent).length
-    },
-    // 查询页多选日志器中可设置级别（非继承/未设置）的数量
-    querySettableCount() {
-      return this.querySelection.filter(r => this.isSettableLevel(r.level)).length
     },
     filteredQueryLoggers() {
       let list = this.queryLoggers
@@ -1259,7 +1276,7 @@ export default {
       }
     },
 
-    // ============ 查询页多选设置级别（直接调 Maximo 更新接口） ============
+    // ============ 查询页多选设置级别（直接调 Maximo 运行时更新接口） ============
     openQueryBatchLevelDialog() {
       if (!this.querySelection.length) { this.$message.warning('请先选择日志器'); return }
       this.queryBatchLevelDialog = { visible: true, level: 'INFO', loading: false }
@@ -1269,11 +1286,11 @@ export default {
       if (!this.querySelection.length) { this.$message.warning('请先选择日志器'); return }
       const level = (d.level || '').toUpperCase()
       if (!this.isSettableLevel(level)) { this.$message.warning('请选择有效的日志级别'); return }
-      // 过滤出可设置级别（继承/未设置的不传，服务端会跳过）
+      // 全部勾选日志器（含 INHERITED 继承级别）都可设置显式级别
       const loggers = this.querySelection
-        .filter(r => this.isSettableLevel(r.level) && r.loggerName)
+        .filter(r => r.loggerName)
         .map(r => ({ loggerName: r.loggerName, level: level }))
-      if (!loggers.length) { this.$message.warning('所选日志器中无可设置级别的条目（继承/未设置的已忽略）'); return }
+      if (!loggers.length) { this.$message.warning('所选日志器无效'); return }
       d.loading = true
       updateLoggerLevel(loggers).then(res => {
         const data = res.data || res
@@ -1289,6 +1306,38 @@ export default {
         }
       }).catch(err => {
         this.$message.error('更新失败: ' + (err.message || String(err)))
+      }).finally(() => {
+        d.loading = false
+      })
+    },
+
+    // ============ 查询页多选临时设置级别（写入“日志级别配置”默认配置，不下发 Maximo） ============
+    openQueryTempLevelDialog() {
+      if (!this.querySelection.length) { this.$message.warning('请先选择日志器'); return }
+      this.queryTempLevelDialog = { visible: true, level: 'INFO', loading: false }
+    },
+    submitQueryTempLevelDialog() {
+      const d = this.queryTempLevelDialog
+      if (!this.querySelection.length) { this.$message.warning('请先选择日志器'); return }
+      const level = (d.level || '').toUpperCase()
+      if (!this.isSettableLevel(level)) { this.$message.warning('请选择有效的日志级别'); return }
+      const loggers = this.querySelection
+        .filter(r => r.loggerName)
+        .map(r => ({ loggerName: r.loggerName, level: level }))
+      if (!loggers.length) { this.$message.warning('所选日志器无效'); return }
+      d.loading = true
+      upsertLoggerConfig(loggers).then(res => {
+        if (res && res.code === 200) {
+          const r = res.data || {}
+          this.$message.success('已写入配置：新增 ' + (r.added || 0) + ' 条，更新 ' + (r.updated || 0) + ' 条，级别相同跳过 ' + (r.skipped || 0) + ' 条（未下发 Maximo）')
+          d.visible = false
+          // 同步刷新“日志级别配置”页签的默认配置
+          this.loadDefaultItems()
+        } else {
+          this.$message.error((res && res.message) || '写入配置失败')
+        }
+      }).catch(err => {
+        this.$message.error('写入配置失败: ' + (err.message || String(err)))
       }).finally(() => {
         d.loading = false
       })
