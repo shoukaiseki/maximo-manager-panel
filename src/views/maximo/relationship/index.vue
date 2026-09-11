@@ -56,10 +56,16 @@
           <el-input :value="currentRow.NAME" readonly size="small" @keydown.native="handleKeyDown($event, {prop: 'NAME', label: '关系名'})" />
         </el-descriptions-item>
         <el-descriptions-item label="父对象">
-          <el-input :value="currentRow.PARENT" readonly size="small" @keydown.native="handleKeyDown($event, {prop: 'PARENT', label: '父对象'})" />
+          <div style="display:flex;align-items:center">
+            <el-input :value="currentRow.PARENT" readonly size="small" @keydown.native="handleKeyDown($event, {prop: 'PARENT', label: '父对象'})" />
+            <i class="el-icon-arrow-right" title="跳转到对象详情" style="margin-left:6px;cursor:pointer;color:#409eff;font-size:18px" @click="goObjectDetail(currentRow.PARENT)"></i>
+          </div>
         </el-descriptions-item>
         <el-descriptions-item label="子对象">
-          <el-input :value="currentRow.CHILD" readonly size="small" @keydown.native="handleKeyDown($event, {prop: 'CHILD', label: '子对象'})" />
+          <div style="display:flex;align-items:center">
+            <el-input :value="currentRow.CHILD" readonly size="small" @keydown.native="handleKeyDown($event, {prop: 'CHILD', label: '子对象'})" />
+            <i class="el-icon-arrow-right" title="跳转到对象详情" style="margin-left:6px;cursor:pointer;color:#409eff;font-size:18px" @click="goObjectDetail(currentRow.CHILD)"></i>
+          </div>
         </el-descriptions-item>
         <el-descriptions-item label="基数">
           <el-input :value="currentRow.CARDINALITY || '-'" readonly size="small" @keydown.native="handleKeyDown($event, {prop: 'CARDINALITY', label: '基数'})" />
@@ -331,6 +337,13 @@ export default {
           })
         }
       }
+    },
+    goObjectDetail(objectName) {
+      if (!objectName) {
+        this.$message.warning('对象名称为空')
+        return
+      }
+      this.$router.push({ path: `/maxobject-detail/index/${objectName}` })
     },
     handleRowClick(row) {
       this.currentRow = row

@@ -90,7 +90,14 @@
 
     <!-- LOCK_MODE 说明弹窗 -->
     <el-dialog title="LOCK_MODE 锁说明" :visible.sync="helpDialogVisible" width="1100px" :close-on-click-modal="true">
-      <div class="md-content" v-html="helpMarkdownHtml"></div>
+      <el-tabs v-model="helpActiveTab" type="border-card">
+        <el-tab-pane label="LOCK_MODE 锁说明" name="lockmode">
+          <div class="md-content" v-html="helpMarkdownHtml"></div>
+        </el-tab-pane>
+        <el-tab-pane label="Maximo优化说明" name="maximo">
+          <div class="md-content" v-html="maximoHelpMarkdownHtml"></div>
+        </el-tab-pane>
+      </el-tabs>
       <span slot="footer" class="dialog-footer">
         <el-button @click="helpDialogVisible = false">关 闭</el-button>
       </span>
@@ -164,6 +171,22 @@ const LOCK_MODE_HELP_MD = [
   ''
 ].join('\n')
 
+// Maximo 优化说明 markdown 内容
+const MAXIMO_HELP_MD = [
+  '# Maximo 优化说明',
+  '',
+  '## 长连接不释放',
+  '',
+  '开启 Maximo 长连接自动回收（7.5.0.3+）：',
+  '',
+  '```',
+  'mxe.db.closelongrunconn=true（默认true,启用长连接自动关闭）',
+  'mxe.db.longruntimelimit=80（分钟,默认180，可按实际调小，比如 30–60）',
+  'mxe.db.detectlongrunconninterval=30（检查频率，最小30）[检查长时间运行的连接的间隔（分钟）。默认值=0。（0，30]中的值被视为30。]',
+  '```',
+  ''
+].join('\n')
+
 export default {
   name: 'Db2LockList',
   mixins: [sksPageMixin],
@@ -188,7 +211,9 @@ export default {
       monacoLoaded: false,
       sqlEditor: null,
       helpDialogVisible: false,
-      helpMarkdownHtml: ''
+      helpActiveTab: 'lockmode',
+      helpMarkdownHtml: '',
+      maximoHelpMarkdownHtml: ''
     }
   },
   watch: {
@@ -488,6 +513,7 @@ export default {
       }
     }
     this.helpMarkdownHtml = this.renderMarkdown(LOCK_MODE_HELP_MD)
+    this.maximoHelpMarkdownHtml = this.renderMarkdown(MAXIMO_HELP_MD)
   }
 }
 </script>
