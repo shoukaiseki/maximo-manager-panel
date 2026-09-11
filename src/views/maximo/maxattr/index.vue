@@ -61,97 +61,7 @@
     </el-card>
 
     <!-- 字段详情弹窗 -->
-    <el-dialog :title="'字段详情 - ' + (currentRow ? currentRow.ATTRIBUTENAME : '')" :visible.sync="dialogVisible" width="1500px" :close-on-click-modal="true" @opened="onDialogOpened">
-      <el-descriptions :column="3" border v-if="currentRow">
-        <el-descriptions-item label="对象名">{{ currentRow.OBJECTNAME }}</el-descriptions-item>
-        <el-descriptions-item label="属性名">{{ currentRow.ATTRIBUTENAME }}</el-descriptions-item>
-        <el-descriptions-item label="标题">{{ currentRow.L_TITLE }}</el-descriptions-item>
-        <el-descriptions-item label="英文标题">{{ currentRow.TITLE }}</el-descriptions-item>
-        <el-descriptions-item label="别名">{{ currentRow.ALIAS }}</el-descriptions-item>
-        <el-descriptions-item label="数据类型">{{ currentRow.MAXTYPE }}</el-descriptions-item>
-        <el-descriptions-item label="长度">{{ currentRow.LENGTH }}</el-descriptions-item>
-        <el-descriptions-item label="小数位数">{{ currentRow.SCALE }}</el-descriptions-item>
-        <el-descriptions-item label="持久性">{{ currentRow.PERSISTENT }}</el-descriptions-item>
-        <el-descriptions-item label="自动编号">{{ currentRow.CANAUTONUM }}</el-descriptions-item>
-        <el-descriptions-item label="Java 类" :span="2">{{ currentRow.CLASSNAME }}</el-descriptions-item>
-        <el-descriptions-item label="列名">{{ currentRow.COLUMNNAME }}</el-descriptions-item>
-        <el-descriptions-item label="属性号">{{ currentRow.ATTRIBUTENO }}</el-descriptions-item>
-        <el-descriptions-item label="域">{{ currentRow.DOMAINID }}</el-descriptions-item>
-        <el-descriptions-item label="默认值">{{ currentRow.DEFAULTVALUE }}</el-descriptions-item>
-        <el-descriptions-item label="必需">{{ currentRow.REQUIRED }}</el-descriptions-item>
-        <el-descriptions-item label="主键列序列">{{ currentRow.PRIMARYKEYCOLSEQ }}</el-descriptions-item>
-        <el-descriptions-item label="搜索类型">{{ currentRow.SEARCHTYPE }}</el-descriptions-item>
-        <el-descriptions-item label="长文本所有者">{{ currentRow.ISLDOWNER }}</el-descriptions-item>
-        <el-descriptions-item label="必须">{{ currentRow.MUSTBE }}</el-descriptions-item>
-        <el-descriptions-item label="正向">{{ currentRow.ISPOSITIVE }}</el-descriptions-item>
-        <el-descriptions-item label="限制">{{ currentRow.RESTRICTED }}</el-descriptions-item>
-        <el-descriptions-item label="可本地化">{{ currentRow.LOCALIZABLE }}</el-descriptions-item>
-        <el-descriptions-item label="用户定义">{{ currentRow.USERDEFINED }}</el-descriptions-item>
-        <el-descriptions-item label="多语言支持">{{ currentRow.MLSUPPORTED }}</el-descriptions-item>
-        <el-descriptions-item label="多语言使用中">{{ currentRow.MLINUSE }}</el-descriptions-item>
-        <el-descriptions-item label="审计启用">{{ currentRow.EAUDITENABLED }}</el-descriptions-item>
-        <el-descriptions-item label="电子签名启用">{{ currentRow.ESIGENABLED }}</el-descriptions-item>
-        <el-descriptions-item label="实体">{{ currentRow.ENTITYNAME }}</el-descriptions-item>
-        <el-descriptions-item label="等同属性">{{ currentRow.SAMEASATTRIBUTE }}</el-descriptions-item>
-        <el-descriptions-item label="等同对象">{{ currentRow.SAMEASOBJECT }}</el-descriptions-item>
-        <el-descriptions-item label="自动键名">{{ currentRow.AUTOKEYNAME }}</el-descriptions-item>
-        <el-descriptions-item label="属性 ID">{{ currentRow.MAXATTRIBUTEID }}</el-descriptions-item>
-        <el-descriptions-item label="行戳">{{ currentRow.ROWSTAMP }}</el-descriptions-item>
-        <el-descriptions-item label="备注" :span="2">
-          <div style="white-space: pre-wrap; word-break: break-word;">{{ currentRow.L_REMARKS }}</div>
-        </el-descriptions-item>
-        <el-descriptions-item label="英文备注" :span="2">
-          <div style="white-space: pre-wrap; word-break: break-word;">{{ currentRow.REMARKS }}</div>
-        </el-descriptions-item>
-      </el-descriptions>
-
-      <el-tabs v-model="activeTab" type="border-card" class="json-tabs">
-        <el-tab-pane label="字段精简" name="fieldSimple">
-          <div class="json-toolbar">
-            <el-button type="primary" size="mini" icon="el-icon-document-copy" @click="copyFieldSimpleJson">复制字段精简JSON</el-button>
-          </div>
-          <div v-loading="detailLoading" element-loading-text="加载中..." class="monaco-wrapper">
-            <div ref="fieldSimpleMonacoRef" class="monaco-container"></div>
-          </div>
-        </el-tab-pane>
-        <el-tab-pane label="字段完整" name="fieldFull">
-          <div class="json-toolbar">
-            <el-button type="primary" size="mini" icon="el-icon-document" @click="copyFieldFullJson">复制字段完整JSON</el-button>
-          </div>
-          <div v-loading="detailLoading" element-loading-text="加载中..." class="monaco-wrapper">
-            <div ref="fieldFullMonacoRef" class="monaco-container"></div>
-          </div>
-        </el-tab-pane>
-        <el-tab-pane label="对象精简" name="objSimple">
-          <div class="json-toolbar">
-            <el-button type="primary" size="mini" icon="el-icon-document-copy" @click="copyObjSimpleJson">复制对象精简JSON</el-button>
-          </div>
-          <div v-loading="detailLoading" element-loading-text="加载中..." class="monaco-wrapper">
-            <div ref="objSimpleMonacoRef" class="monaco-container"></div>
-          </div>
-        </el-tab-pane>
-        <el-tab-pane label="对象完整" name="objFull">
-          <div class="json-toolbar">
-            <el-button type="primary" size="mini" icon="el-icon-document" @click="copyObjFullJson">复制对象完整JSON</el-button>
-          </div>
-          <div v-loading="detailLoading" element-loading-text="加载中..." class="monaco-wrapper">
-            <div ref="objFullMonacoRef" class="monaco-container"></div>
-          </div>
-        </el-tab-pane>
-        <el-tab-pane label="对象不更改主信息" name="objNoChangeMain">
-          <div class="json-toolbar">
-            <el-button type="primary" size="mini" icon="el-icon-document" @click="copyObjNoChangeMainJson">复制对象不更改主信息JSON</el-button>
-          </div>
-          <div class="monaco-wrapper">
-            <div ref="objNoChangeMainMonacoRef" class="monaco-container"></div>
-          </div>
-        </el-tab-pane>
-      </el-tabs>
-
-      <span slot="footer" class="dialog-footer">
-        <el-button @click="dialogVisible = false">关 闭</el-button>
-      </span>
-    </el-dialog>
+    <max-attribute-info-dialog :visible.sync="dialogVisible" :row="currentRow" />
 
     <!-- 字段统计预览弹窗 -->
     <el-dialog title="字段统计预览" :visible.sync="fieldPreviewDialogVisible" width="1200px" :close-on-click-modal="true" @opened="onFieldPreviewOpened">
@@ -224,13 +134,17 @@
 
 <script>
 import {sksPageMixin} from "sks-plugin-el-erp/lib/sks-page";
-import { getMaxAttributeList, exportDbConfig } from '@/api/maxobject'
+import { getMaxAttributeList } from '@/api/maxobject'
+import MaxAttributeInfoDialog from '@/views/maximo/maxattr/MaxAttributeInfoDialog.vue'
 
 export default {
   name: 'MaxAttrList',
   mixins: [
     sksPageMixin,
   ],
+  components: {
+    MaxAttributeInfoDialog
+  },
   data() {
     return {
       loading: false,
@@ -238,18 +152,6 @@ export default {
       total: 0,
       dialogVisible: false,
       currentRow: null,
-      simpleAttrData: null,     // 精简模式的字段数据
-      simpleObjectData: null,   // 精简模式的对象数据
-      fullAttrData: null,       // 完整模式的字段数据
-      fullObjectData: null,     // 完整模式的对象数据
-      detailLoading: false,     // 详情加载状态
-      activeTab: 'fieldSimple',
-      fieldSimpleEditor: null,
-      fieldFullEditor: null,
-      objSimpleEditor: null,
-      objFullEditor: null,
-      objNoChangeMainEditor: null,
-      monacoLoaded: false,
       formData: {
         objectname: '',
         attributename: '',
@@ -272,20 +174,6 @@ export default {
     }
   },
   watch: {
-    dialogVisible(val) {
-      if (val && this.currentRow) {
-        this.$nextTick(() => {
-          this.initMonacoEditors()
-        })
-      } else {
-        this.disposeEditors()
-      }
-    },
-    activeTab() {
-      this.$nextTick(() => {
-        this.layoutEditors()
-      })
-    },
     fieldPreviewDialogVisible(val) {
       if (!val) {
         this.disposeFieldPreviewEditors()
@@ -410,236 +298,9 @@ export default {
     },
     handleRowClick(row) {
       this.currentRow = row
-      this.simpleAttrData = null
-      this.simpleObjectData = null
-      this.fullAttrData = null
-      this.fullObjectData = null
-      this.activeTab = 'fieldSimple'
       this.dialogVisible = true
     },
-    onDialogOpened() {
-      if (this.currentRow && this.currentRow.OBJECTNAME) {
-        const objectName = this.currentRow.OBJECTNAME
-        const attrName = this.currentRow.ATTRIBUTENAME ? this.currentRow.ATTRIBUTENAME.toUpperCase() : ''
-        this.detailLoading = true
-        // 并行调用两个接口
-        Promise.all([
-          exportDbConfig(objectName, true),   // 精简模式（ignoreDefVal=true）
-          exportDbConfig(objectName, false)   // 完整模式（ignoreDefVal=false）
-        ]).then(([simpleRes, fullRes]) => {
-          // 处理精简数据
-          if (simpleRes.status === 200 && simpleRes.data) {
-            this.simpleObjectData = simpleRes.data
-            if (simpleRes.data.maxObjects) {
-              const maxObject = simpleRes.data.maxObjects.find(obj => obj.object === objectName)
-              if (maxObject) {
-                const attrData = (maxObject.attributes || []).find(
-                  attr => (attr.attribute || '').toUpperCase() === attrName
-                )
-                this.simpleAttrData = attrData || null
-              }
-            }
-          }
-          // 处理完整数据
-          if (fullRes.status === 200 && fullRes.data) {
-            this.fullObjectData = fullRes.data
-            if (fullRes.data.maxObjects) {
-              const maxObject = fullRes.data.maxObjects.find(obj => obj.object === objectName)
-              if (maxObject) {
-                const attrData = (maxObject.attributes || []).find(
-                  attr => (attr.attribute || '').toUpperCase() === attrName
-                )
-                this.fullAttrData = attrData || null
-              }
-            }
-          }
-          // 数据返回后初始化编辑器
-          this.$nextTick(() => {
-            setTimeout(() => {
-              this.initMonacoEditors()
-              this.detailLoading = false
-            }, 100)
-          })
-        }).catch(err => {
-          console.error('获取字段详情失败:', err)
-          this.detailLoading = false
-        })
-      }
-    },
-    initMonacoEditors() {
-      if (!this.currentRow) return
-      const fieldSimpleJson = this.simpleAttrData
-        ? JSON.stringify(this.simpleAttrData, null, 2)
-        : '{}'
-      const fieldFullJson = this.fullAttrData
-        ? JSON.stringify(this.fullAttrData, null, 2)
-        : '{}'
-      const objSimpleJson = this.simpleObjectData
-        ? JSON.stringify(this.simpleObjectData, null, 2)
-        : '{}'
-      const objFullJson = this.fullObjectData
-        ? JSON.stringify(this.fullObjectData, null, 2)
-        : '{}'
-      if (!this.monacoLoaded) {
-        import(/* webpackChunkName: "monaco" */ 'monaco-editor').then(monaco => {
-          this.monacoLoaded = true
-          this._monaco = monaco
-          this.createEditors(fieldSimpleJson, fieldFullJson, objSimpleJson, objFullJson)
-        }).catch(err => {
-          console.error('Monaco Editor 加载失败:', err)
-        })
-      } else {
-        this.createEditors(fieldSimpleJson, fieldFullJson, objSimpleJson, objFullJson)
-      }
-    },
-    createEditors(fieldSimpleJson, fieldFullJson, objSimpleJson, objFullJson) {
-      const monaco = this._monaco
-      const options = {
-        language: 'json',
-        readOnly: true,
-        theme: 'vs',
-        automaticLayout: false,
-        minimap: { enabled: false },
-        scrollBeyondLastLine: false,
-        fontSize: 13,
-        wordWrap: 'on',
-        folding: true,
-        lineNumbers: 'on',
-        renderLineHighlight: 'none',
-        scrollbar: {
-          verticalScrollbarSize: 10,
-          horizontalScrollbarSize: 10
-        }
-      }
-      if (this.$refs.fieldSimpleMonacoRef && !this.fieldSimpleEditor) {
-        this.fieldSimpleEditor = monaco.editor.create(this.$refs.fieldSimpleMonacoRef, {
-          value: fieldSimpleJson,
-          ...options
-        })
-      } else if (this.fieldSimpleEditor) {
-        this.fieldSimpleEditor.setValue(fieldSimpleJson)
-      }
-      if (this.$refs.fieldFullMonacoRef && !this.fieldFullEditor) {
-        this.fieldFullEditor = monaco.editor.create(this.$refs.fieldFullMonacoRef, {
-          value: fieldFullJson,
-          ...options
-        })
-      } else if (this.fieldFullEditor) {
-        this.fieldFullEditor.setValue(fieldFullJson)
-      }
-      if (this.$refs.objSimpleMonacoRef && !this.objSimpleEditor) {
-        this.objSimpleEditor = monaco.editor.create(this.$refs.objSimpleMonacoRef, {
-          value: objSimpleJson,
-          ...options
-        })
-      } else if (this.objSimpleEditor) {
-        this.objSimpleEditor.setValue(objSimpleJson)
-      }
-      if (this.$refs.objFullMonacoRef && !this.objFullEditor) {
-        this.objFullEditor = monaco.editor.create(this.$refs.objFullMonacoRef, {
-          value: objFullJson,
-          ...options
-        })
-      } else if (this.objFullEditor) {
-        this.objFullEditor.setValue(objFullJson)
-      }
-      this.initObjNoChangeMainEditor(monaco, options)
-      setTimeout(() => {
-        this.layoutEditors()
-      }, 100)
-    },
-    layoutEditors() {
-      if (this.fieldSimpleEditor) this.fieldSimpleEditor.layout()
-      if (this.fieldFullEditor) this.fieldFullEditor.layout()
-      if (this.objSimpleEditor) this.objSimpleEditor.layout()
-      if (this.objFullEditor) this.objFullEditor.layout()
-      if (this.objNoChangeMainEditor) this.objNoChangeMainEditor.layout()
-    },
-    disposeEditors() {
-      if (this.fieldSimpleEditor) {
-        this.fieldSimpleEditor.dispose()
-        this.fieldSimpleEditor = null
-      }
-      if (this.fieldFullEditor) {
-        this.fieldFullEditor.dispose()
-        this.fieldFullEditor = null
-      }
-      if (this.objSimpleEditor) {
-        this.objSimpleEditor.dispose()
-        this.objSimpleEditor = null
-      }
-      if (this.objFullEditor) {
-        this.objFullEditor.dispose()
-        this.objFullEditor = null
-      }
-      if (this.objNoChangeMainEditor) {
-        this.objNoChangeMainEditor.dispose()
-        this.objNoChangeMainEditor = null
-      }
-      this.monacoLoaded = false
-      this._monaco = null
-    },
-    copyFieldSimpleJson() {
-      const json = this.simpleAttrData
-        ? JSON.stringify(this.simpleAttrData, null, 2)
-        : '{}'
-      this.copyToClipboard(json, '字段精简JSON')
-    },
-    copyFieldFullJson() {
-      const json = this.fullAttrData
-        ? JSON.stringify(this.fullAttrData, null, 2)
-        : '{}'
-      this.copyToClipboard(json, '字段完整JSON')
-    },
-    copyObjSimpleJson() {
-      const json = this.simpleObjectData
-        ? JSON.stringify(this.simpleObjectData, null, 2)
-        : '{}'
-      this.copyToClipboard(json, '对象精简JSON')
-    },
-    copyObjFullJson() {
-      const json = this.fullObjectData
-        ? JSON.stringify(this.fullObjectData, null, 2)
-        : '{}'
-      this.copyToClipboard(json, '对象完整JSON')
-    },
-    getObjNoChangeMainJson() {
-      const objName = this.currentRow.OBJECTNAME || ''
-      let description = ''
-      const objectData = this.simpleObjectData || this.fullObjectData
-      if (objectData && objectData.maxObjects) {
-        const found = objectData.maxObjects.find(o => o.object === objName)
-        if (found && found.description) {
-          description = found.description
-        }
-      }
-      return JSON.stringify({
-        maxObjects: [
-          {
-            object: objName,
-            description: description,
-            ignoreObjectMain: true,
-            attributes: [],
-            relationships: []
-          }
-        ]
-      }, null, 2)
-    },
-    initObjNoChangeMainEditor(monaco, options) {
-      const json = this.getObjNoChangeMainJson()
-      if (this.$refs.objNoChangeMainMonacoRef && !this.objNoChangeMainEditor) {
-        this.objNoChangeMainEditor = monaco.editor.create(this.$refs.objNoChangeMainMonacoRef, {
-          value: json,
-          ...options
-        })
-      } else if (this.objNoChangeMainEditor) {
-        this.objNoChangeMainEditor.setValue(json)
-      }
-    },
-    copyObjNoChangeMainJson() {
-      const json = this.getObjNoChangeMainJson()
-      this.copyToClipboard(json, '对象不更改主信息JSON')
-    },
+    // === 字段统计预览 ===
     copyToClipboard(text, label) {
       if (navigator.clipboard && window.isSecureContext) {
         navigator.clipboard.writeText(text)

@@ -1,4 +1,5 @@
 import axios from 'axios'
+import { Message } from 'element-ui'
 
 /**
  * Solon 后端 API 请求封装
@@ -43,6 +44,25 @@ solonRequest.interceptors.response.use(res => {
   return res.data
 }, error => {
   console.error('[SolonAPI] 请求失败:', error.message)
+  // 统一格式化错误信息并提示（参考 jyy001 request.js）
+  let { message } = error
+  if (message == 'Network Error') {
+    message = '后端接口连接异常'
+  } else if (message.includes('timeout')) {
+    message = '系统接口请求超时'
+  } else if (message.includes('Request failed with status code')) {
+    const code = message.substr(message.length - 3)
+    if (code == '502') {
+      message = '系统正在维护,请稍后再试'
+    } else {
+      message = '系统接口' + code + '异常'
+    }
+  }
+  Message({
+    message: message,
+    type: 'error',
+    duration: 5 * 1000
+  })
   return Promise.reject(error)
 })
 

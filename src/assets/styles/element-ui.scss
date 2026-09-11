@@ -82,3 +82,12 @@
 .el-range-separator {
   box-sizing: content-box;
 }
+
+// 修复 loading 遮罩淡出卡在半透明帧不消失（需点击页面才恢复）的问题：
+// v-loading 遮罩隐藏依赖 300ms 淡出动画的 transitionend 回调，该回调丢失/延迟时
+// 遮罩会冻结在半透明状态。禁用淡出后 v-show 直接隐藏，立即且可靠（淡入动画保留）。
+// 注意：不要给 .v-modal / .el-dialog__wrapper 加 transform 强制合成层——
+// transform 会创建层叠上下文，导致嵌套 Dialog（未 append-to-body）被上层 modal 遮罩盖住。
+.el-loading-fade-leave-active {
+  transition: none !important;
+}
