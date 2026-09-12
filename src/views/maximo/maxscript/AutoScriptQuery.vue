@@ -4,7 +4,7 @@
       <div class="page-header-row">
         <div>
           <h2>自动化脚本查询</h2>
-          <p class="page-summary">支持脚本名称、描述、对象名、字段名、启动点名称查询，诊断模式可智能匹配相关脚本。</p>
+          <p class="page-summary">支持脚本名称、描述、对象名、字段名、启动点名称、变量绑定值查询，诊断模式可智能匹配相关脚本。</p>
         </div>
         <div class="header-actions">
           <saved-query-panel ref="savedQuery" appname="AUTOSCRIPT" :default-where="savedWhere" @whereChange="handleQuery" />
@@ -30,6 +30,9 @@
         </el-form-item>
         <el-form-item label="启动点">
           <el-input v-model="formData.launchpointname" placeholder="LAUNCHPOINTNAME" clearable @keyup.enter.native="handleQuery" style="width:180px" />
+        </el-form-item>
+        <el-form-item label="变量值">
+          <el-input v-model="formData.varbindingvalue" placeholder="VARBINDINGVALUE =精确/%模糊" clearable @keyup.enter.native="handleQuery" style="width:220px" />
         </el-form-item>
         <el-form-item label="脚本内容" v-if="!isDiagMode">
           <el-input v-model="formData.source" placeholder="SOURCE 模糊搜索" clearable @keyup.enter.native="handleQuery" style="width:200px" />
@@ -388,6 +391,7 @@ export default {
         objectname: '',
         attributename: '',
         launchpointname: '',
+        varbindingvalue: '',
         source: ''
       },
       sourceDialog: { visible: false, name: '', loading: false, editor: null, fullscreen: false },
@@ -445,6 +449,7 @@ export default {
         objectname: trim(this.formData.objectname),
         attributename: trim(this.formData.attributename),
         launchpointname: trim(this.formData.launchpointname),
+        varbindingvalue: trim(this.formData.varbindingvalue),
         source: this.isDiagMode ? undefined : trim(this.formData.source),
         mode: this.isDiagMode ? 'diag' : 'query',
         sourceCaseSensitive: this.sourceCaseSensitive,
@@ -504,7 +509,7 @@ export default {
     resetForm() {
       this.formData = {
         autoscript: '', description: '', objectname: '',
-        attributename: '', launchpointname: '', source: ''
+        attributename: '', launchpointname: '', varbindingvalue: '', source: ''
       }
       this.tableData = []
       this.tableParam = { total: 0, pageNum: 1, pageSize: 20 }

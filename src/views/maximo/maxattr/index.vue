@@ -65,6 +65,11 @@
 
     <!-- 字段统计预览弹窗 -->
     <el-dialog title="字段统计预览" :visible.sync="fieldPreviewDialogVisible" width="1200px" :close-on-click-modal="true" @opened="onFieldPreviewOpened">
+      <div style="margin-bottom:8px;">
+        <el-checkbox v-model="fieldPreviewShowTitle">显示标题</el-checkbox>
+        <span style="color:#909399;font-size:12px;margin-left:8px;">勾选后 JS/Java 多行格式附加 // 标题注释</span>
+        <el-button type="primary" size="mini" icon="el-icon-refresh" style="margin-left:12px;" @click="refreshFieldPreview">刷 新</el-button>
+      </div>
       <el-tabs v-model="fieldPreviewActiveTab" type="border-card" @tab-click="onFieldPreviewTabClick">
         <el-tab-pane label="字段名数组(Java) 单行" name="javaSingle">
           <div class="json-toolbar">
@@ -82,6 +87,24 @@
           </div>
           <div class="monaco-wrapper">
             <div ref="javaMultiMonacoRef" class="monaco-container"></div>
+          </div>
+        </el-tab-pane>
+        <el-tab-pane label="字段名数组(JS) 单行" name="jsSingle">
+          <div class="json-toolbar">
+            <span style="float:left;color:#606266;line-height:32px;">共选中 {{ tableSelection.length }} 个字段</span>
+            <el-button type="primary" size="mini" icon="el-icon-document-copy" @click="copyFieldPreview('jsSingle')">复制 JS 数组(单行)</el-button>
+          </div>
+          <div class="monaco-wrapper">
+            <div ref="jsSingleMonacoRef" class="monaco-container"></div>
+          </div>
+        </el-tab-pane>
+        <el-tab-pane label="字段名数组(JS) 多行" name="jsMulti">
+          <div class="json-toolbar">
+            <span style="float:left;color:#606266;line-height:32px;">共选中 {{ tableSelection.length }} 个字段</span>
+            <el-button type="primary" size="mini" icon="el-icon-document-copy" @click="copyFieldPreview('jsMulti')">复制 JS 数组(多行)</el-button>
+          </div>
+          <div class="monaco-wrapper">
+            <div ref="jsMultiMonacoRef" class="monaco-container"></div>
           </div>
         </el-tab-pane>
         <el-tab-pane label="SQL字段名(精简) 单行" name="sqlSimpleSingle">
@@ -122,6 +145,15 @@
           </el-table>
           <div class="monaco-wrapper">
             <div ref="sqlAdvancedMonacoRef" class="monaco-container" style="height:250px;"></div>
+          </div>
+        </el-tab-pane>
+        <el-tab-pane label="字段名标题" name="nameTitle">
+          <div class="json-toolbar">
+            <span style="float:left;color:#606266;line-height:32px;">共选中 {{ tableSelection.length }} 个字段</span>
+            <el-button type="primary" size="mini" icon="el-icon-document-copy" @click="copyFieldPreview('nameTitle')">复制 字段名标题</el-button>
+          </div>
+          <div class="monaco-wrapper">
+            <div ref="nameTitleMonacoRef" class="monaco-container"></div>
           </div>
         </el-tab-pane>
       </el-tabs>
@@ -170,7 +202,11 @@ export default {
       javaMultiEditor: null,
       sqlSimpleSingleEditor: null,
       sqlSimpleMultiEditor: null,
-      sqlAdvancedEditor: null
+      jsSingleEditor: null,
+      jsMultiEditor: null,
+      nameTitleEditor: null,
+      sqlAdvancedEditor: null,
+      fieldPreviewShowTitle: false
     }
   },
   watch: {
@@ -340,6 +376,7 @@ export default {
         return
       }
       this.fieldPreviewActiveTab = 'javaSingle'
+      this.fieldPreviewShowTitle = false
       this.fieldPreviewDialogVisible = true
     },
     onFieldPreviewOpened() {
@@ -373,8 +410,40 @@ export default {
       return 'String[] fields = new String[]{"' + names.join('", "') + '"};'
     },
     getJavaArrayMultiText() {
+      const withTitle = this.fieldPreviewShowTitle
+      const rows = this.tableSelection.filter(row => row.ATTRIBUTENAME)
+      const items = rows.map((row, idx) => {
+        const comma = idx < rows.length - 1 ? ',' : ''
+        const title = withTitle ? '// ' + (row.L_TITLE || row.TITLE || '') : ''
+        return '    "' + row.ATTRIBUTENAME + '"' + comma + title
+      })
+      return 'String[] fields = new String[]{\n' + items.join('\n') + '\n};'
+    },
+    getJsArraySingleText() {
       const names = this.tableSelection.map(row => row.ATTRIBUTENAME).filter(Boolean)
-      return 'String[] fields = new String[]{\n    "' + names.join('",\n    "') + '"\n};'
+      return 'var activelist = []\nactivelist = ["' + names.join('", "') + '"]'
+    },
+    getJsArrayMultiText() {
+      const withTitle = this.fieldPreviewShowTitle
+      const rows = this.tableSelection.filter(row => row.ATTRIBUTENAME)
+      const items = rows.map((row, idx) => {
+        const comma = idx < rows.length - 1 ? ',' : ''
+        const title = withTitle ? '// ' + (row.L_TITLE || row.TITLE || '') : ''
+        return '    "' + row.ATTRIBUTENAME + '"' + comma + title
+      })
+      return 'var activelist = []\nactivelist = [\n' + items.join('\n') + '\n]'
+    },
+    // 统一刷新：重新生成所有标签页内容（勾选"显示标题"等选项后点击生效）
+    refreshFieldPreview() {
+      this.prepareFieldPreviewData()
+      if (this.javaSingleEditor) this.javaSingleEditor.setValue(this.getJavaArraySingleText())
+      if (this.javaMultiEditor) this.javaMultiEditor.setValue(this.getJavaArrayMultiText())
+      if (this.jsSingleEditor) this.jsSingleEditor.setValue(this.getJsArraySingleText())
+      if (this.jsMultiEditor) this.jsMultiEditor.setValue(this.getJsArrayMultiText())
+      if (this.sqlSimpleSingleEditor) this.sqlSimpleSingleEditor.setValue(this.getSqlSimpleSingleText())
+      if (this.sqlSimpleMultiEditor) this.sqlSimpleMultiEditor.setValue(this.getSqlSimpleMultiText())
+      if (this.nameTitleEditor) this.nameTitleEditor.setValue(this.getNameTitleText())
+      if (this.sqlAdvancedEditor) this.sqlAdvancedEditor.setValue(this.getSqlAdvancedText())
     },
     getSqlSimpleSingleText() {
       const cols = this.tableSelection.map(row => row.COLUMNNAME || row.ATTRIBUTENAME).filter(Boolean)
@@ -383,6 +452,16 @@ export default {
     getSqlSimpleMultiText() {
       const cols = this.tableSelection.map(row => row.COLUMNNAME || row.ATTRIBUTENAME).filter(Boolean)
       return cols.join(',\n')
+    },
+    getNameTitleText() {
+      return this.tableSelection
+        .map(row => {
+          const name = row.COLUMNNAME || row.ATTRIBUTENAME
+          if (!name) return ''
+          return name + '\t' + (row.L_TITLE || row.TITLE || '')
+        })
+        .filter(Boolean)
+        .join('\n')
     },
     updateSqlAdvancedText() {
       if (!this.sqlAdvancedEditor) return
@@ -447,6 +526,24 @@ export default {
       } else if (this.javaMultiEditor) {
         this.javaMultiEditor.setValue(this.getJavaArrayMultiText())
       }
+      // JS 单行
+      if (this.$refs.jsSingleMonacoRef && !this.jsSingleEditor) {
+        this.jsSingleEditor = monaco.editor.create(this.$refs.jsSingleMonacoRef, {
+          value: this.getJsArraySingleText(),
+          ...options
+        })
+      } else if (this.jsSingleEditor) {
+        this.jsSingleEditor.setValue(this.getJsArraySingleText())
+      }
+      // JS 多行
+      if (this.$refs.jsMultiMonacoRef && !this.jsMultiEditor) {
+        this.jsMultiEditor = monaco.editor.create(this.$refs.jsMultiMonacoRef, {
+          value: this.getJsArrayMultiText(),
+          ...options
+        })
+      } else if (this.jsMultiEditor) {
+        this.jsMultiEditor.setValue(this.getJsArrayMultiText())
+      }
       // SQL 单行
       if (this.$refs.sqlSimpleSingleMonacoRef && !this.sqlSimpleSingleEditor) {
         this.sqlSimpleSingleEditor = monaco.editor.create(this.$refs.sqlSimpleSingleMonacoRef, {
@@ -464,6 +561,15 @@ export default {
         })
       } else if (this.sqlSimpleMultiEditor) {
         this.sqlSimpleMultiEditor.setValue(this.getSqlSimpleMultiText())
+      }
+      // 字段名标题
+      if (this.$refs.nameTitleMonacoRef && !this.nameTitleEditor) {
+        this.nameTitleEditor = monaco.editor.create(this.$refs.nameTitleMonacoRef, {
+          value: this.getNameTitleText(),
+          ...options
+        })
+      } else if (this.nameTitleEditor) {
+        this.nameTitleEditor.setValue(this.getNameTitleText())
       }
       // SQL 高级
       if (this.$refs.sqlAdvancedMonacoRef && !this.sqlAdvancedEditor) {
@@ -483,6 +589,9 @@ export default {
       if (this.javaMultiEditor) this.javaMultiEditor.layout()
       if (this.sqlSimpleSingleEditor) this.sqlSimpleSingleEditor.layout()
       if (this.sqlSimpleMultiEditor) this.sqlSimpleMultiEditor.layout()
+      if (this.jsSingleEditor) this.jsSingleEditor.layout()
+      if (this.jsMultiEditor) this.jsMultiEditor.layout()
+      if (this.nameTitleEditor) this.nameTitleEditor.layout()
       if (this.sqlAdvancedEditor) this.sqlAdvancedEditor.layout()
     },
     disposeFieldPreviewEditors() {
@@ -502,6 +611,18 @@ export default {
         this.sqlSimpleMultiEditor.dispose()
         this.sqlSimpleMultiEditor = null
       }
+      if (this.jsSingleEditor) {
+        this.jsSingleEditor.dispose()
+        this.jsSingleEditor = null
+      }
+      if (this.jsMultiEditor) {
+        this.jsMultiEditor.dispose()
+        this.jsMultiEditor = null
+      }
+      if (this.nameTitleEditor) {
+        this.nameTitleEditor.dispose()
+        this.nameTitleEditor = null
+      }
       if (this.sqlAdvancedEditor) {
         this.sqlAdvancedEditor.dispose()
         this.sqlAdvancedEditor = null
@@ -518,12 +639,21 @@ export default {
       } else if (type === 'javaMulti') {
         text = this.javaMultiEditor ? this.javaMultiEditor.getValue() : this.getJavaArrayMultiText()
         label = 'Java数组(多行)'
+      } else if (type === 'jsSingle') {
+        text = this.jsSingleEditor ? this.jsSingleEditor.getValue() : this.getJsArraySingleText()
+        label = 'JS数组(单行)'
+      } else if (type === 'jsMulti') {
+        text = this.jsMultiEditor ? this.jsMultiEditor.getValue() : this.getJsArrayMultiText()
+        label = 'JS数组(多行)'
       } else if (type === 'sqlSimpleSingle') {
         text = this.sqlSimpleSingleEditor ? this.sqlSimpleSingleEditor.getValue() : this.getSqlSimpleSingleText()
         label = 'SQL字段名(单行)'
       } else if (type === 'sqlSimpleMulti') {
         text = this.sqlSimpleMultiEditor ? this.sqlSimpleMultiEditor.getValue() : this.getSqlSimpleMultiText()
         label = 'SQL字段名(多行)'
+      } else if (type === 'nameTitle') {
+        text = this.nameTitleEditor ? this.nameTitleEditor.getValue() : this.getNameTitleText()
+        label = '字段名标题'
       } else if (type === 'sqlAdvanced') {
         text = this.sqlAdvancedEditor ? this.sqlAdvancedEditor.getValue() : this.getSqlAdvancedText()
         label = 'SQL字段名(高级)'

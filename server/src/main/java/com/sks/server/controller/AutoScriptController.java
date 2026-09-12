@@ -18,12 +18,12 @@ public class AutoScriptController {
 
     /**
      * 脚本列表查询（支持分页 + 查询模式/诊断模式）
-     * GET /autoscript/list?autoscript=&description=&objectname=&attributename=&launchpointname=&source=&mode=diag&pageNum=1&pageSize=20
+     * GET /autoscript/list?autoscript=&description=&objectname=&attributename=&launchpointname=&varbindingvalue=&source=&mode=diag&pageNum=1&pageSize=20
      */
     @Mapping(value = "/autoscript/list", method = MethodType.GET)
     public RestResult<Map<String, Object>> list(
             String autoscript, String description, String objectname,
-            String attributename, String launchpointname, String source,
+            String attributename, String launchpointname, String varbindingvalue, String source,
             @Param(defaultValue = "diag") String mode,
             @Param(defaultValue = "1") int pageNum,
             @Param(defaultValue = "20") int pageSize,
@@ -31,7 +31,7 @@ public class AutoScriptController {
             String where) {
         Map<String, Object> data = autoScriptService.queryAutoScriptList(
                 autoscript, description, objectname, attributename,
-                launchpointname, source, mode, pageNum, pageSize, sourceCaseSensitive, where);
+                launchpointname, varbindingvalue, source, mode, pageNum, pageSize, sourceCaseSensitive, where);
         return RestResult.ok(data);
     }
 
