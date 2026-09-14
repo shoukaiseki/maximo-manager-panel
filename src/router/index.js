@@ -251,6 +251,12 @@ export const constantRoutes = [
                 meta: { title: '条件表达式', icon: 'link', noCache: false }
             },
             {
+                path: 'maxintobject',
+                component: (resolve) => require(['/src/views/maximo/maxintobject/index'], resolve),
+                name: 'MaxIntObject',
+                meta: { title: '对象结构', icon: 'link', noCache: false }
+            },
+            {
                 path: 'maxappxml',
                 component: (resolve) => require(['/src/views/maximo/maxappxml/index'], resolve),
                 name: 'MaxAppXml',

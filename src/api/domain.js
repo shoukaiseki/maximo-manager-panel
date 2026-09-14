@@ -27,3 +27,31 @@ export function getDomainSubtables(domainid, domaintype) {
     params: { domainid, domaintype }
   })
 }
+
+/**
+ * 调用 SKS.AUTOSCRIPT.OBJECTS 脚本(域结构化详情)
+ * 含各值 maxdomvalcond 条件、TABLE/CROSSOVER 的 where 子句与错误消息键、CROSSOVER 字段映射
+ * 契约: URL 固定 _type=domains&_action=export; data 为纯查询条件 { where: "SQL条件" }
+ */
+export function exportDomainObjects(params, data) {
+  return request({
+    url: '/api/script/SKS.AUTOSCRIPT.OBJECTS',
+    method: 'post',
+    params: Object.assign({ _type: 'domains', _action: 'export' }, params),
+    data: data
+  })
+}
+
+/**
+ * 导入域定义(走 SKS.AUTOSCRIPT.OBJECTS, _type=domains&_action=import)
+ * @param {Object|Array} data 域数组 / {"domains":[...]} / 单个域定义对象, 可携带 syncFlag:true 全量同步
+ * 响应: {status,message,summary:{total,success,failed},result:[{domainid,status,message}]}
+ */
+export function importDomains(data) {
+  return request({
+    url: '/api/script/SKS.AUTOSCRIPT.OBJECTS',
+    method: 'post',
+    params: { _langcode: 'ZH', _type: 'domains', _action: 'import' },
+    data: data
+  })
+}

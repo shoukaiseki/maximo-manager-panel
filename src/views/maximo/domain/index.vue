@@ -8,6 +8,7 @@
         </div>
         <div class="page-actions">
           <saved-query-panel ref="savedQuery" appname="DOMAIN" :default-where="buildWhere()" @whereChange="handleWhereChange" />
+          <el-button type="success" icon="el-icon-upload2" size="mini" style="margin-left: 8px;" @click="openImportDialog">导入</el-button>
           <el-button type="warning" icon="el-icon-download" size="mini" style="margin-left: 8px;" :loading="exportLoading" @click="handleExport">导出</el-button>
         </div>
       </div>
@@ -68,6 +69,31 @@
       </span>
     </el-dialog>
 
+    <!-- 导入 JSON 弹窗 -->
+    <el-dialog title="导入域定义" :visible.sync="importDialog.visible" width="800px" top="3vh" :close-on-click-modal="true" @opened="onImportDialogOpened">
+      <p style="margin:0 0 8px;color:#909399;font-size:12px;">粘贴 JSON（数组 或 {"domains": [...]}），支持导出结果直接导入；按 domainid 匹配更新或创建。</p>
+      <div v-loading="importDialog.loading" element-loading-text="导入中..." class="monaco-wrapper">
+        <div ref="importMonacoRef" class="monaco-container import-monaco"></div>
+      </div>
+      <p style="margin:8px 0 0;color:#f56c6c;font-size:12px" v-if="importDialog.error">{{ importDialog.error }}</p>
+      <div v-if="importDialog.summary" class="import-summary">
+        <p>导入完成：共 {{ importDialog.summary.total }} 条，成功 {{ importDialog.summary.success }} 条，失败 {{ importDialog.summary.failed }} 条</p>
+        <el-table :data="importDialog.result" border stripe size="mini" max-height="260" style="width: 100%">
+          <el-table-column prop="domainid" label="域ID" min-width="160" show-overflow-tooltip />
+          <el-table-column prop="status" label="状态" width="100">
+            <template slot-scope="scope">
+              <el-tag :type="scope.row.status === 'SUCCESS' ? 'success' : 'danger'" size="mini">{{ scope.row.status }}</el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column prop="message" label="消息" min-width="240" show-overflow-tooltip />
+        </el-table>
+      </div>
+      <span slot="footer" class="dialog-footer">
+        <el-button @click="importDialog.visible = false">关 闭</el-button>
+        <el-button type="primary" :loading="importDialog.loading" @click="submitImport">导 入</el-button>
+      </span>
+    </el-dialog>
+
     <!-- 域详情弹窗 -->
     <max-domain-info-dialog :visible.sync="dialogVisible" :domainid="currentRow && currentRow.domainid" :domaintype="currentRow && currentRow.domaintype" />
   </section>
@@ -75,7 +101,7 @@
 
 <script>
 import { sksPageMixin } from "sks-plugin-el-erp/lib/sks-page";
-import { exportDomains } from '@/api/domain'
+import { exportDomains, importDomains } from '@/api/domain'
 import SavedQueryPanel from '@/views/components/SavedQueryPanel.vue'
 import MaxDomainInfoDialog from '@/views/maximo/domain/MaxDomainInfoDialog.vue'
 
@@ -103,6 +129,9 @@ export default {
       exportTotal: 0,
       exportMonacoLoaded: false,
       exportEditor: null,
+      // 导入
+      importDialog: { visible: false, text: '', error: '', loading: false, summary: null, result: [] },
+      importEditor: null,
       // 详情
       dialogVisible: false,
       currentRow: null
@@ -112,6 +141,11 @@ export default {
     exportDialogVisible(val) {
       if (!val) {
         this.disposeExportEditor()
+      }
+    },
+    'importDialog.visible'(val) {
+      if (!val) {
+        this.disposeImportEditor()
       }
     }
   },
@@ -265,6 +299,102 @@ export default {
       if (this.exportJson) {
         this.copyToClipboard(this.exportJson, '导出JSON')
       }
+    },
+    // === 导入 ===
+    openImportDialog() {
+      this.importDialog = { visible: true, text: '', error: '', loading: false, summary: null, result: [] }
+    },
+    onImportDialogOpened() {
+      this.$nextTick(() => {
+        setTimeout(() => {
+          this.initImportEditor()
+        }, 200)
+      })
+    },
+    initImportEditor() {
+      if (!this.exportMonacoLoaded) {
+        import(/* webpackChunkName: "monaco" */ 'monaco-editor').then(monaco => {
+          this.exportMonacoLoaded = true
+          this._exportMonaco = monaco
+          this.createImportEditor()
+        }).catch(err => {
+          console.error('Monaco Editor 加载失败:', err)
+        })
+      } else {
+        this.createImportEditor()
+      }
+    },
+    createImportEditor() {
+      const monaco = this._exportMonaco
+      if (this.$refs.importMonacoRef && !this.importEditor) {
+        this.importEditor = monaco.editor.create(this.$refs.importMonacoRef, {
+          value: this.importDialog.text || '',
+          language: 'json',
+          readOnly: false,
+          theme: 'vs',
+          automaticLayout: true,
+          minimap: { enabled: false },
+          scrollBeyondLastLine: false,
+          fontSize: 13,
+          wordWrap: 'on',
+          folding: true,
+          lineNumbers: 'on',
+          tabSize: 2,
+          renderLineHighlight: 'none'
+        })
+      } else if (this.importEditor) {
+        this.importEditor.setValue(this.importDialog.text || '')
+      }
+    },
+    disposeImportEditor() {
+      if (this.importEditor) {
+        this.importEditor.dispose()
+        this.importEditor = null
+      }
+    },
+    submitImport() {
+      const d = this.importDialog
+      const text = (this.importEditor ? this.importEditor.getValue() : d.text || '').trim()
+      if (!text) {
+        d.error = '请粘贴 JSON 内容'
+        return
+      }
+      let parsed
+      try {
+        parsed = JSON.parse(text)
+      } catch (err) {
+        d.error = 'JSON 解析失败: ' + err.message
+        return
+      }
+      // 支持数组 / 导出格式 {domains:[...]} / 单个域对象, 统一归一成纯数据包 {domains:[...]}
+      let importData
+      if (Array.isArray(parsed)) {
+        importData = { domains: parsed }
+      } else if (Array.isArray(parsed.domains)) {
+        // 导出结果原样回导(允许携带 syncFlag 等顶层参数)
+        importData = parsed
+      } else {
+        importData = { domains: [parsed] }
+      }
+      d.loading = true
+      d.error = ''
+      d.summary = null
+      d.result = []
+      importDomains(importData).then(res => {
+        const data = res.data || res
+        if (data.status === 'error') {
+          this.$message.error(data.message || '导入失败')
+        } else {
+          this.$message.success((data.message || '导入完成') + '：共 ' + data.summary.total + ' 条，成功 ' + data.summary.success + ' 条，失败 ' + data.summary.failed + ' 条')
+          d.summary = data.summary
+          d.result = data.result || []
+          this.fetchList()
+        }
+      }).catch(err => {
+        this.$message.error('导入失败: ' + (err.message || String(err)))
+      }).finally(() => {
+        d.loading = false
+      })
     },
     // 当前生效的 where：表单条件 与 自定义 where 组合
     getEffectiveWhere() {
@@ -443,6 +573,12 @@ export default {
   margin-bottom: 8px;
   text-align: right;
 }
+.import-summary {
+  margin-top: 12px;
+}
+.import-summary p {
+  margin: 0 0 8px 0;
+}
 .monaco-wrapper {
   position: relative;
 }
@@ -450,5 +586,8 @@ export default {
   height: 400px;
   border: 1px solid #dcdfe6;
   border-radius: 4px;
+}
+.import-monaco {
+  height: 320px;
 }
 </style>
