@@ -5,6 +5,7 @@ Vue.use(Router)
 
 /* Layout */
 import Layout from '/src/layout'
+import ParentView from '/src/components/ParentView'
 
 /**
  * Note: 路由配置项
@@ -298,6 +299,62 @@ export const constantRoutes = [
                 component: (resolve) => require(['/src/views/maximo/maxobject/MaxObjectDetail'], resolve),
                 name: 'MaxObjectDetail',
                 meta: { title: '对象详情', activeMenu: '/maxobject', noCache: false }
+            }
+        ]
+    },
+    {
+        path: '/sysconfig',
+        name: "sysconfig",
+        component: Layout,
+        hidden: false,
+        redirect: "noRedirect",
+        alwaysShow: true,
+        meta: {
+            "title": "系统配置",
+            "icon": "system",
+            "noCache": false
+        },
+        children: [
+            {
+                path: 'platform',
+                component: ParentView,
+                name: 'PlatformConfig',
+                redirect: 'noRedirect',
+                alwaysShow: true,
+                meta: { title: '平台配置', icon: 'tool', noCache: false },
+                children: [
+                    {
+                        path: 'wfdesign',
+                        component: (resolve) => require(['/src/views/maximo/wfdesign/index'], resolve),
+                        name: 'WfDesign',
+                        meta: { title: '工作流设计', icon: 'tree-table', noCache: false }
+                    },
+                    {
+                        path: 'maxrole',
+                        component: (resolve) => require(['/src/views/maximo/maxrole/index'], resolve),
+                        name: 'MaxRole',
+                        meta: { title: '角色管理', icon: 'peoples', noCache: false }
+                    },
+                    {
+                        path: 'maxaction',
+                        component: (resolve) => require(['/src/views/maximo/maxaction/index'], resolve),
+                        name: 'MaxAction',
+                        meta: { title: '操作管理', icon: 'button', noCache: false }
+                    }
+                ]
+            }
+        ]
+    },
+    {
+        path: '/wfdesign-detail',
+        component: Layout,
+        hidden: true,
+        children: [
+            {
+                path: 'index/:processName/:processRev',
+                component: (resolve) => require(['/src/views/maximo/wfdesign/detail'], resolve),
+                name: 'WfDesignDetail',
+                meta: { title: '工作流详情', activeMenu: '/sysconfig/platform/wfdesign', noCache: false }
             }
         ]
     },
