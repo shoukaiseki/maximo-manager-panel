@@ -2,7 +2,7 @@ import request from '@/utils/request'
 
 /**
  * SKS.AUTOSCRIPT.WORKFLOW 工作流/操作/角色 查询接口
- * URL 参数: _type=workflows(缺省)|actions|maxroles  _action=list|detail|export|import
+ * URL 参数: _type=workflows(缺省)|actions|maxroles  _action=list|detail|export|import|deactivate|disable
  * 请求体: {where:"SQL"} / {processName,processRev} / {id} 等, list 可带 pageNum/pageSize
  */
 
@@ -52,6 +52,32 @@ export function workflowImport(data, params) {
     url: '/api/script/SKS.AUTOSCRIPT.WORKFLOW',
     method: 'post',
     params: Object.assign({ _langcode: 'ZH', _type: 'workflows', _action: 'import' }, params || {}),
+    data: data
+  })
+}
+
+/**
+ * 取消激活过程(激活的修订被框架禁止修改, 取消激活后变回草稿状态即可编辑)
+ * body: {"id":<WFPROCESSID>} / {"processName":"PRCHG","processRev":1} / {"where":"..."}
+ */
+export function workflowDeactivate(data) {
+  return request({
+    url: '/api/script/SKS.AUTOSCRIPT.WORKFLOW',
+    method: 'post',
+    params: { _langcode: 'ZH', _type: 'workflows', _action: 'deactivate' },
+    data: data
+  })
+}
+
+/**
+ * 禁用过程(禁用后新记录不再进入该流程, 已在流程中的记录不受影响)
+ * body: 同 workflowDeactivate
+ */
+export function workflowDisable(data) {
+  return request({
+    url: '/api/script/SKS.AUTOSCRIPT.WORKFLOW',
+    method: 'post',
+    params: { _langcode: 'ZH', _type: 'workflows', _action: 'disable' },
     data: data
   })
 }

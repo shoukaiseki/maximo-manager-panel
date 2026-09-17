@@ -21,6 +21,19 @@
         <div class="header-actions">
           <template v-if="!editMode">
             <el-button type="primary" size="mini" icon="el-icon-edit" @click="handleEdit">编 辑</el-button>
+            <el-dropdown
+              class="state-dropdown"
+              size="mini"
+              trigger="click"
+              @command="handleStateCommand">
+              <el-button size="mini">
+                选择操作<i class="el-icon-arrow-down el-icon--right"></i>
+              </el-button>
+              <el-dropdown-menu slot="dropdown">
+                <el-dropdown-item command="deactivate" :disabled="workflow.active !== true">取消激活过程</el-dropdown-item>
+                <el-dropdown-item command="disable" :disabled="workflow.enabled !== true">禁用过程</el-dropdown-item>
+              </el-dropdown-menu>
+            </el-dropdown>
           </template>
           <template v-else>
             <el-button type="success" size="mini" icon="el-icon-check" @click="handleSave">保 存</el-button>
@@ -43,7 +56,7 @@
       <el-alert
         v-if="editMode"
         class="edit-tip"
-        title="编辑模式：拖拽节点调整坐标（自动吸附网格），双击节点或在节点详情中点击「编辑节点」修改标题/描述，完成后点击右上角「保存」。"
+        title="编辑模式：拖拽节点调整坐标（自动吸附网格），双击节点或右键「编辑节点」打开节点对话框，可修改标题/描述并维护出线操作、任务分配、分配组、通知，完成后点击右上角「保存」。"
         type="info"
         :closable="false"
         show-icon />
@@ -61,21 +74,37 @@
             <span class="canvas-legend">
               <i class="legend-item"><span class="line-pos"></span>正向连线</i>
               <i class="legend-item"><span class="line-neg"></span>负向连线</i>
-              <span class="canvas-tip">点击节点查看节点详情{{ editMode ? '；编辑模式：拖拽节点调整位置，双击节点编辑属性' : '' }}</span>
+              <span class="canvas-tip">点击节点查看节点详情，右键节点可选择「查看节点」{{ editMode ? '；编辑模式：拖拽节点调整位置，双击/右键节点打开节点对话框' : '' }}</span>
             </span>
           </div>
-          <div class="canvas-scroll" ref="canvasScroll">
-            <div class="canvas-inner" :style="innerStyle">
-              <svg :width="canvasSize.width" :height="canvasSize.height" class="wf-svg">
-                <defs>
-                  <marker id="arrow-pos" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
-                    <path d="M0,0 L8,3 L0,6 z" fill="#5a5a5a" />
-                  </marker>
-                  <marker id="arrow-neg" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
-                    <path d="M0,0 L8,3 L0,6 z" fill="#f00" />
-                  </marker>
-                </defs>
+          <div class="canvas-scroll" ref="canvasScroll" @scroll="closeContextMenu" @contextmenu.prevent>
+            <!-- viewBox + width/height 缩放, 元素本身用 flex margin:auto 居中 -->
+            <svg
+              :width="canvasSize.width * zoom"
+              :height="canvasSize.height * zoom"
+              :viewBox="'0 0 ' + canvasSize.width + ' ' + canvasSize.height"
+              class="wf-svg">
+              <defs>
+                <marker id="arrow-pos" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+                  <path d="M0,0 L8,3 L0,6 z" fill="#5a5a5a" />
+                </marker>
+                <marker id="arrow-neg" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+                  <path d="M0,0 L8,3 L0,6 z" fill="#f00" />
+                </marker>
+                <!-- 网格: 次网格 16px(80/5), 主网格 80px(=GRID), 与节点坐标同一坐标系, 随缩放一起变化 -->
+                <pattern id="wf-grid-minor" width="16" height="16" patternUnits="userSpaceOnUse">
+                  <path d="M 16 0 L 0 0 0 16" fill="none" stroke="#eceff3" stroke-width="1" vector-effect="non-scaling-stroke" />
+                </pattern>
+                <pattern id="wf-grid" width="80" height="80" patternUnits="userSpaceOnUse">
+                  <rect width="80" height="80" fill="url(#wf-grid-minor)" />
+                  <path d="M 80 0 L 0 0 0 80" fill="none" stroke="#dfe3e8" stroke-width="1" vector-effect="non-scaling-stroke" />
+                </pattern>
+              </defs>
 
+              <rect x="0" y="0" :width="canvasSize.width" :height="canvasSize.height" fill="url(#wf-grid)" />
+
+              <!-- 内容整体平移到画布左上留白处, 画布尺寸按内容包围盒计算, 再由外层居中 -->
+              <g :transform="contentTransform">
                 <!-- 连线 -->
                 <g class="edges">
                   <template v-for="edge in edges">
@@ -98,9 +127,10 @@
                   :key="'n-' + node.nodeId"
                   :transform="'translate(' + (node.x * GRID) + ',' + (node.y * GRID) + ')'"
                   class="wf-node" :class="{ selected: selectedNodeId === node.nodeId, editable: editMode }"
-                  @mousedown.prevent="onNodeMouseDown($event, node)"
+                  @mousedown="onNodeMouseDown($event, node)"
                   @click="selectNode(node)"
-                  @dblclick="openNodeEdit(node)">
+                  @dblclick="openNodeDetail(node)"
+                  @contextmenu.prevent="onNodeContextMenu($event, node)">
                   <!-- 选中环 -->
                   <rect v-if="selectedNodeId === node.nodeId" x="-4" y="-4" :width="shapeBox(node).w + 8" :height="shapeBox(node).h + 18"
                         rx="4" fill="none" stroke="#409eff" stroke-width="2" stroke-dasharray="4,2" />
@@ -151,7 +181,16 @@
                     <title>{{ node.title || (typeLabel(node.nodeType) + ' ' + node.nodeId) }}</title>
                   </text>
                 </g>
-              </svg>
+              </g>
+            </svg>
+
+            <!-- 节点右键菜单(相对画布容器定位) -->
+            <div
+              v-if="contextMenu.visible"
+              class="node-context-menu"
+              :style="{ left: contextMenu.x + 'px', top: contextMenu.y + 'px' }">
+              <div class="menu-item" @click="contextViewNode">查看节点</div>
+              <div v-if="editMode" class="menu-item" @click="contextEditNode">编辑节点</div>
             </div>
           </div>
 
@@ -163,7 +202,9 @@
                 <el-tag size="mini" effect="plain">{{ typeLabel(selectedNode.nodeType) }}</el-tag>
                 <span class="node-name">{{ selectedNode.title }}</span>
               </span>
-              <el-button v-if="editMode" type="primary" size="mini" icon="el-icon-edit" @click="openNodeEdit(selectedNode)">编辑节点</el-button>
+              <el-button type="primary" size="mini" icon="el-icon-view" @click="openNodeDetail(selectedNode)">
+                {{ editMode ? '编辑节点' : '查看节点' }}
+              </el-button>
             </div>
             <el-descriptions :column="4" border size="mini">
               <el-descriptions-item label="节点ID">{{ selectedNode.nodeId }}</el-descriptions-item>
@@ -176,10 +217,10 @@
               </template>
             </el-descriptions>
 
-            <el-row :gutter="12" v-if="(selectedNode.wfactions && selectedNode.wfactions.length) || (selectedNode.wfassignment && selectedNode.wfassignment.length)">
-              <el-col :span="14" v-if="selectedNode.wfactions && selectedNode.wfactions.length">
-                <p class="sub-title">出线操作（{{ selectedNode.wfactions.length }}）</p>
-                <el-table :data="selectedNode.wfactions" border stripe size="mini" max-height="220">
+            <el-row :gutter="12" v-if="activeRows(selectedNode.wfactions).length || activeRows(selectedNode.wfassignment).length">
+              <el-col :span="14" v-if="activeRows(selectedNode.wfactions).length">
+                <p class="sub-title">出线操作（{{ activeRows(selectedNode.wfactions).length }}）</p>
+                <el-table :data="activeRows(selectedNode.wfactions)" border stripe size="mini" max-height="220">
                   <el-table-column prop="actionId" label="操作ID" width="70" />
                   <el-table-column label="正向" width="60">
                     <template slot-scope="s">{{ s.row.isPositive === false ? '否' : '是' }}</template>
@@ -189,9 +230,9 @@
                   <el-table-column prop="instruction" label="说明" min-width="140" show-overflow-tooltip />
                 </el-table>
               </el-col>
-              <el-col :span="10" v-if="selectedNode.wfassignment && selectedNode.wfassignment.length">
-                <p class="sub-title">任务分配（{{ selectedNode.wfassignment.length }}）</p>
-                <el-table :data="selectedNode.wfassignment" border stripe size="mini" max-height="220">
+              <el-col :span="10" v-if="activeRows(selectedNode.wfassignment).length">
+                <p class="sub-title">任务分配（{{ activeRows(selectedNode.wfassignment).length }}）</p>
+                <el-table :data="activeRows(selectedNode.wfassignment)" border stripe size="mini" max-height="220">
                   <el-table-column prop="assignId" label="分配ID" width="70" />
                   <el-table-column prop="roleId" label="角色" min-width="100" show-overflow-tooltip />
                   <el-table-column prop="assignCode" label="人员" min-width="90" show-overflow-tooltip />
@@ -232,6 +273,11 @@
                 <el-table-column prop="x" label="X" width="70" />
                 <el-table-column prop="y" label="Y" width="70" />
                 <el-table-column prop="imageFile" label="图片" min-width="100" show-overflow-tooltip />
+                <el-table-column label="操作" width="90" fixed="right">
+                  <template slot-scope="s">
+                    <el-button type="text" size="mini" @click="openNodeDetail(s.row)">编辑属性</el-button>
+                  </template>
+                </el-table-column>
               </el-table>
             </el-tab-pane>
 
@@ -253,12 +299,30 @@
                 <el-table-column prop="condition" label="条件" min-width="130" show-overflow-tooltip />
                 <el-table-column prop="conditionClass" label="条件类" min-width="150" show-overflow-tooltip />
                 <el-table-column prop="instruction" label="操作说明" min-width="160" show-overflow-tooltip />
+                <el-table-column label="操作" width="90" fixed="right">
+                  <template slot-scope="s">
+                    <el-button type="text" size="mini" @click="openActionDetail(s.row.ownerNodeId, s.row._rowIndex)">编辑属性</el-button>
+                  </template>
+                </el-table-column>
               </el-table>
             </el-tab-pane>
 
             <!-- 任务分配 -->
             <el-tab-pane :label="'任务分配（' + assignmentRows.length + '）'" name="assignments">
               <el-table :data="assignmentRows" border stripe size="mini">
+                <el-table-column type="expand">
+                  <template slot-scope="s">
+                    <div class="expand-box">
+                      <p class="sub-title">详细信息</p>
+                      <el-descriptions v-if="detailItems(s.row, 'wfassignment').length" :column="3" border size="mini">
+                        <el-descriptions-item v-for="d in detailItems(s.row, 'wfassignment')" :key="d.label" :label="d.label">
+                          {{ d.value }}
+                        </el-descriptions-item>
+                      </el-descriptions>
+                      <p v-else class="no-prop">该记录无更多详细信息</p>
+                    </div>
+                  </template>
+                </el-table-column>
                 <el-table-column prop="ownerNodeId" label="所属节点" width="85" />
                 <el-table-column prop="assignId" label="分配ID" width="80" />
                 <el-table-column prop="roleId" label="角色" min-width="100" show-overflow-tooltip />
@@ -277,6 +341,19 @@
             <!-- 通知 -->
             <el-tab-pane :label="'通知（' + notificationRows.length + '）'" name="notifications">
               <el-table :data="notificationRows" border stripe size="mini">
+                <el-table-column type="expand">
+                  <template slot-scope="s">
+                    <div class="expand-box">
+                      <p class="sub-title">详细信息</p>
+                      <el-descriptions v-if="detailItems(s.row, 'wfnotifications').length" :column="3" border size="mini">
+                        <el-descriptions-item v-for="d in detailItems(s.row, 'wfnotifications')" :key="d.label" :label="d.label">
+                          {{ d.value }}
+                        </el-descriptions-item>
+                      </el-descriptions>
+                      <p v-else class="no-prop">该记录无更多详细信息</p>
+                    </div>
+                  </template>
+                </el-table-column>
                 <el-table-column prop="scope" label="归属" width="160" show-overflow-tooltip />
                 <el-table-column prop="uniqueId" label="通知ID" width="90" />
                 <el-table-column prop="templateId" label="通讯模板" min-width="180" show-overflow-tooltip />
@@ -299,23 +376,263 @@
       </el-tabs>
     </el-card>
 
-    <!-- 节点编辑对话框 -->
+    <!-- 节点对话框: 基础信息 + 该节点类型自己的属性(字段/子表按 Maximo 同名 dialog 取, 编辑态可改, 查看态只读) -->
     <el-dialog
-      :title="'编辑节点 #' + nodeEditDialog.nodeId"
-      :visible.sync="nodeEditDialog.visible"
-      width="480px"
-      append-to-body>
-      <el-form label-width="70px" size="small">
-        <el-form-item label="标题">
-          <el-input v-model="nodeEditDialog.form.title" maxlength="100" placeholder="节点标题" />
-        </el-form-item>
-        <el-form-item label="描述">
-          <el-input v-model="nodeEditDialog.form.description" type="textarea" :rows="3" placeholder="节点描述" />
-        </el-form-item>
-      </el-form>
+      :title="nodeDialogTitle"
+      :visible.sync="nodeDialog.visible"
+      width="1080px"
+      top="5vh"
+      append-to-body
+      :close-on-click-modal="false">
+      <div v-if="dialogNode" class="node-dialog-body">
+        <!-- 基本信息 -->
+        <el-card shadow="never" class="prop-card">
+          <div slot="header" class="prop-card-head">基本信息</div>
+          <el-form label-width="60px" size="mini" class="node-form">
+            <el-row :gutter="12">
+              <el-col :span="6">
+                <el-form-item label="节点ID">{{ dialogNode.nodeId }}</el-form-item>
+              </el-col>
+              <el-col :span="6">
+                <el-form-item label="类型">
+                  <el-tag size="mini" effect="plain">{{ typeLabel(dialogNode.nodeType) }}</el-tag>
+                </el-form-item>
+              </el-col>
+              <el-col :span="6">
+                <el-form-item label="坐标">({{ dialogNode.x }}, {{ dialogNode.y }})</el-form-item>
+              </el-col>
+              <el-col :span="6">
+                <el-form-item label="图片">{{ dialogNode.imageFile || '-' }}</el-form-item>
+              </el-col>
+              <el-col :span="12">
+                <el-form-item label="标题">
+                  <el-input v-if="editMode" v-model="dialogNode.title" size="mini" maxlength="100" @input="markDirty" />
+                  <span v-else>{{ dialogNode.title || '-' }}</span>
+                </el-form-item>
+              </el-col>
+              <el-col :span="12">
+                <el-form-item label="描述">
+                  <el-input v-if="editMode" v-model="dialogNode.description" size="mini" @input="markDirty" />
+                  <span v-else>{{ dialogNode.description || '-' }}</span>
+                </el-form-item>
+              </el-col>
+            </el-row>
+          </el-form>
+        </el-card>
+
+        <!-- 类型属性: 不同节点类型弹出各自的对话框(字段对照 Maximo wfdesign.xml 中同名 dialog) -->
+        <el-card shadow="never" class="prop-card">
+          <div slot="header" class="prop-card-head">{{ nodeDialogDef.label }}</div>
+          <p v-if="!nodeDialogDef.fields.length" class="no-prop">节点类型无可编辑属性。</p>
+          <el-form v-else label-width="96px" size="mini" class="node-form">
+            <el-row :gutter="12">
+              <el-col v-for="f in nodeDialogDef.fields" :key="f.prop" :span="f.span || 12">
+                <el-form-item :label="f.label">
+                  <template v-if="editMode && !f.readonly">
+                    <el-switch v-if="f.type === 'bool'" v-model="dialogDetail[f.prop]" @change="markDirty" />
+                    <el-radio-group v-else-if="f.type === 'radio'" v-model="dialogDetail[f.prop]" @change="markDirty">
+                      <el-radio v-for="opt in f.options" :key="String(opt.value)" :label="opt.value">{{ opt.label }}</el-radio>
+                    </el-radio-group>
+                    <el-input v-else-if="f.type === 'textarea'" v-model="dialogDetail[f.prop]" type="textarea" :rows="3" @input="markDirty" />
+                    <el-input v-else v-model="dialogDetail[f.prop]" size="mini" @input="markDirty" />
+                  </template>
+                  <span v-else>{{ propText(f) }}</span>
+                </el-form-item>
+              </el-col>
+            </el-row>
+          </el-form>
+        </el-card>
+
+        <!-- 该对话框关联的子表(详细信息对应 Maximo 的 tabledetails, 用展开行展示) -->
+        <el-card v-for="name in nodeDialogDef.tables" :key="name" shadow="never" class="prop-card">
+          <div slot="header" class="prop-card-head">
+            <span>{{ subTableDef(name).label }}（{{ activeRows(dialogNode[name]).length }}）</span>
+            <el-button
+              v-if="editMode"
+              type="primary" plain size="mini" icon="el-icon-plus"
+              @click="addSubRow(name)">新增</el-button>
+          </div>
+          <el-table
+            :data="dialogNode[name] || []"
+            border stripe size="mini" max-height="260"
+            :row-style="subRowStyle">
+            <el-table-column v-if="subTableDef(name).details.length" type="expand">
+              <template slot-scope="s">
+                <div class="expand-box">
+                  <p class="sub-title">详细信息</p>
+                  <el-descriptions v-if="detailItems(s.row, name).length" :column="2" border size="mini">
+                    <el-descriptions-item v-for="d in detailItems(s.row, name)" :key="d.label" :label="d.label">
+                      {{ d.value }}
+                    </el-descriptions-item>
+                  </el-descriptions>
+                  <p v-else class="no-prop">该记录无更多详细信息</p>
+                </div>
+              </template>
+            </el-table-column>
+            <el-table-column
+              v-for="col in subTableDef(name).columns"
+              :key="col.prop"
+              :label="col.label"
+              :width="col.width"
+              :min-width="col.minWidth">
+              <template slot-scope="s">
+                <template v-if="editMode && !subTableDef(name).readonly && !col.readonly && s.row._delete !== true">
+                  <el-switch v-if="col.type === 'bool'" v-model="s.row[col.prop]" @change="markDirty" />
+                  <el-select
+                    v-else-if="col.type === 'node'"
+                    v-model="s.row[col.prop]" size="mini" filterable clearable
+                    placeholder="选择目标节点" @change="markDirty">
+                    <el-option
+                      v-for="n in (workflow.wfnodes || [])"
+                      :key="n.nodeId"
+                      :label="'#' + n.nodeId + ' ' + (n.title || typeLabel(n.nodeType))"
+                      :value="n.nodeId" />
+                  </el-select>
+                  <el-input v-else v-model="s.row[col.prop]" size="mini" @input="markDirty" />
+                </template>
+                <span v-else>{{ cellText(s.row, col) }}</span>
+              </template>
+            </el-table-column>
+            <el-table-column label="操作" :width="subTableDef(name).readonly ? 130 : 80" fixed="right">
+              <template slot-scope="s">
+                <el-button
+                  v-if="name === 'wfactions'"
+                  type="text" size="mini"
+                  @click="openActionDetail(dialogNode.nodeId, s.$index)">编辑属性</el-button>
+                <template v-if="editMode">
+                  <el-button v-if="s.row._delete === true" type="text" size="mini" @click="undoSubRow(s.row)">撤销</el-button>
+                  <el-button v-else type="text" size="mini" class="danger-text" @click="deleteSubRow(dialogNode[name], s.$index)">删除</el-button>
+                </template>
+              </template>
+            </el-table-column>
+          </el-table>
+        </el-card>
+
+        <p v-if="editMode" class="node-dialog-tip">子表与节点属性改动会随页面右上角「保 存」一并提交；标记删除的行保存后才会真正删除。</p>
+      </div>
       <div slot="footer">
-        <el-button size="mini" @click="nodeEditDialog.visible = false">取 消</el-button>
-        <el-button type="primary" size="mini" @click="confirmNodeEdit">确 定</el-button>
+        <el-button size="mini" @click="nodeDialog.visible = false">关 闭</el-button>
+      </div>
+    </el-dialog>
+
+    <!-- 操作属性对话框(出线操作=Maximo「操作属性」, 手工输入节点的操作=Maximo「输入操作属性」) -->
+    <el-dialog
+      :title="actionDialogTitle"
+      :visible.sync="actionDialog.visible"
+      width="900px"
+      top="6vh"
+      append-to-body
+      :close-on-click-modal="false">
+      <div v-if="dialogAction" class="node-dialog-body">
+        <!-- 基本信息 -->
+        <el-card shadow="never" class="prop-card">
+          <div slot="header" class="prop-card-head">基本信息</div>
+          <el-form label-width="96px" size="mini" class="node-form">
+            <el-row :gutter="12">
+              <el-col :span="8">
+                <el-form-item label="操作ID">
+                  <span v-if="dialogAction.actionId === null || dialogAction.actionId === undefined">新建</span>
+                  <span v-else>{{ dialogAction.actionId }}</span>
+                </el-form-item>
+              </el-col>
+              <el-col :span="8">
+                <el-form-item label="方向">
+                  <el-tag :type="dialogAction.isPositive === false ? 'danger' : 'success'" size="mini">
+                    {{ dialogAction.isPositive === false ? '负向' : '正向' }}
+                  </el-tag>
+                </el-form-item>
+              </el-col>
+              <el-col :span="8">
+                <el-form-item label="目标节点">
+                  <el-select
+                    v-if="editMode"
+                    v-model="dialogAction.memberNodeId" size="mini" filterable clearable
+                    placeholder="选择目标节点" @change="markDirty">
+                    <el-option
+                      v-for="n in (workflow.wfnodes || [])"
+                      :key="n.nodeId"
+                      :label="'#' + n.nodeId + ' ' + (n.title || typeLabel(n.nodeType))"
+                      :value="n.nodeId" />
+                  </el-select>
+                  <span v-else>{{ dialogAction.memberNodeId }}</span>
+                </el-form-item>
+              </el-col>
+            </el-row>
+          </el-form>
+        </el-card>
+
+        <!-- 操作本身的属性(字段对照 Maximo 同名 dialog) -->
+        <el-card shadow="never" class="prop-card">
+          <div slot="header" class="prop-card-head">{{ actionDialogDef.label }}</div>
+          <el-form label-width="96px" size="mini" class="node-form">
+            <el-row :gutter="12">
+              <el-col v-for="f in actionDialogDef.fields" :key="f.prop" :span="f.span || 12">
+                <el-form-item :label="f.label">
+                  <template v-if="editMode && !f.readonly">
+                    <el-switch v-if="f.type === 'bool'" v-model="dialogAction[f.prop]" @change="markDirty" />
+                    <el-input v-else-if="f.type === 'textarea'" v-model="dialogAction[f.prop]" type="textarea" :rows="2" @input="markDirty" />
+                    <el-input v-else v-model="dialogAction[f.prop]" size="mini" @input="markDirty" />
+                  </template>
+                  <span v-else>{{ propText(f, dialogAction) }}</span>
+                </el-form-item>
+              </el-col>
+              <el-col :span="16">
+                <el-form-item label="顺序">
+                  <el-input v-if="editMode" v-model="dialogAction.sequence" size="mini" @input="markDirty" />
+                  <span v-else>{{ dialogAction.sequence }}</span>
+                </el-form-item>
+              </el-col>
+            </el-row>
+          </el-form>
+        </el-card>
+
+        <!-- 关联子表(详细信息对应 Maximo 的 tabledetails, 用展开行展示) -->
+        <el-card v-for="name in actionDialogDef.tables" :key="name" shadow="never" class="prop-card">
+          <div slot="header" class="prop-card-head">
+            <span>{{ subTableDef(name).label }}（{{ activeRows(dialogAction[name]).length }}）</span>
+            <el-button v-if="editMode" type="primary" plain size="mini" icon="el-icon-plus" @click="addActionNotification">新增</el-button>
+          </div>
+          <el-table :data="dialogAction[name] || []" border stripe size="mini" :row-style="subRowStyle">
+            <el-table-column v-if="subTableDef(name).details.length" type="expand">
+              <template slot-scope="s">
+                <div class="expand-box">
+                  <p class="sub-title">详细信息</p>
+                  <el-descriptions v-if="detailItems(s.row, name).length" :column="2" border size="mini">
+                    <el-descriptions-item v-for="d in detailItems(s.row, name)" :key="d.label" :label="d.label">
+                      {{ d.value }}
+                    </el-descriptions-item>
+                  </el-descriptions>
+                  <p v-else class="no-prop">该记录无更多详细信息</p>
+                </div>
+              </template>
+            </el-table-column>
+            <el-table-column
+              v-for="col in subTableDef(name).columns"
+              :key="col.prop"
+              :label="col.label"
+              :width="col.width"
+              :min-width="col.minWidth">
+              <template slot-scope="s">
+                <template v-if="editMode && !col.readonly && s.row._delete !== true">
+                  <el-switch v-if="col.type === 'bool'" v-model="s.row[col.prop]" @change="markDirty" />
+                  <el-input v-else v-model="s.row[col.prop]" size="mini" @input="markDirty" />
+                </template>
+                <span v-else>{{ cellText(s.row, col) }}</span>
+              </template>
+            </el-table-column>
+            <el-table-column v-if="editMode" label="操作" width="80" fixed="right">
+              <template slot-scope="s">
+                <el-button v-if="s.row._delete === true" type="text" size="mini" @click="undoSubRow(s.row)">撤销</el-button>
+                <el-button v-else type="text" size="mini" class="danger-text" @click="deleteSubRow(dialogAction[name], s.$index)">删除</el-button>
+              </template>
+            </el-table-column>
+          </el-table>
+        </el-card>
+
+        <p v-if="editMode" class="node-dialog-tip">改动会随页面右上角「保 存」一并提交。</p>
+      </div>
+      <div slot="footer">
+        <el-button size="mini" @click="actionDialog.visible = false">关 闭</el-button>
       </div>
     </el-dialog>
 
@@ -336,7 +653,7 @@
 </template>
 
 <script>
-import { workflowDetail, workflowImport } from '@/api/wfdesign'
+import { workflowDetail, workflowImport, workflowDeactivate, workflowDisable } from '@/api/wfdesign'
 
 // 节点类型中文标签
 var TYPE_LABELS = {
@@ -360,6 +677,168 @@ var TYPE_DETAIL_KEYS = {
   WFSUBPROCESS: 'wfsubprocess',
   WFWAIT: 'wfwaitlist'
 }
+// 子表列/详细信息定义(columns=表格列, details=Maximo 各 table 的 tabledetails 字段)
+// 键字段 readonly: 由框架分配, 不参与编辑
+var SUB_TABLE_DEFS = {
+  wfactions: {
+    label: '出线操作',
+    readonly: true, // 字段通过「编辑属性」对话框维护, 与 Maximo 一致
+    columns: [
+      { prop: 'actionId', label: '操作ID', width: 80, readonly: true },
+      { prop: 'sequence', label: '顺序', width: 70 },
+      { prop: 'action', label: '操作(ACTION)', minWidth: 130 },
+      { prop: 'instruction', label: '操作说明', minWidth: 150 },
+      { prop: 'memberNodeId', label: '目标节点', width: 160, type: 'node' },
+      { prop: 'isPositive', label: '正向', width: 70, type: 'bool' }
+    ],
+    details: [] // 出线操作无 tabledetails, 详细信息即「操作属性」对话框
+  },
+  wfassignment: {
+    label: '任务分配',
+    columns: [
+      { prop: 'roleId', label: '角色', minWidth: 120 },
+      { prop: 'description', label: '任务描述', minWidth: 160 },
+      { prop: 'emailNotification', label: '邮件通知', width: 85, type: 'bool' },
+      { prop: 'timelimit', label: '时限', width: 85 }
+    ],
+    // assignments_table_details
+    details: [
+      { prop: 'roleId', label: '角色' },
+      { prop: 'relationship', label: '关系' },
+      { prop: 'app', label: '应用' },
+      { prop: 'description', label: '任务描述' },
+      { prop: 'escRole', label: '升级角色' },
+      { prop: 'templateId', label: '通讯模板' },
+      { prop: 'condition', label: '条件(USERSQL)' },
+      { prop: 'timelimit', label: '时限' },
+      { prop: 'priority', label: '优先级' },
+      { prop: 'emailNotification', label: '邮件通知', type: 'bool' },
+      { prop: 'calendarBased', label: '基于日历', type: 'bool' },
+      { prop: 'conditionClass', label: '自定义类' },
+      { prop: 'keepOrigAssgn', label: '保留原分配', type: 'bool' },
+      { prop: 'assignCode', label: '人员' },
+      { prop: 'assignStatus', label: '分配状态' },
+      { prop: 'groupNum', label: '组号' }
+    ]
+  },
+  wfnotifications: {
+    label: '通知',
+    columns: [
+      { prop: 'uniqueId', label: '通知ID', width: 85, readonly: true },
+      { prop: 'templateId', label: '通讯模板', minWidth: 180 },
+      { prop: 'sendTo', label: '接收人', minWidth: 140 }
+    ],
+    // notifications_table_details / waitnotify_table_details
+    details: [
+      { prop: 'templateId', label: '通讯模板' },
+      { prop: 'sendTo', label: '接收人' },
+      { prop: 'subject', label: '主题' },
+      { prop: 'message', label: '消息' }
+    ]
+  }
+}
+
+// 各节点类型对应的属性对话框(字段与关联子表严格对照 Maximo wfdesign.xml 中同名的 dialog)
+var NODE_DIALOGS = {
+  // wfstartproperties / wfstopproperties: 只有「节点类型无可编辑属性。」
+  WFSTART: { label: '开始节点属性', fields: [], tables: [] },
+  WFSTOP: { label: '停止节点属性', fields: [], tables: [] },
+  // wftaskproperties: 任务分配 + 通知
+  WFTASK: {
+    label: '任务节点属性',
+    fields: [
+      { prop: 'app', label: '应用', span: 12 },
+      { prop: 'timelimit', label: '时限', span: 6 },
+      { prop: 'displayOne', label: '显示一个', type: 'bool', span: 6 },
+      { prop: 'taskType', label: '任务类型', span: 12 },
+      {
+        prop: 'firstComplete',
+        label: '执行接受操作',
+        type: 'radio',
+        span: 24,
+        options: [
+          { value: true, label: '当任何任务分配被接受时' },
+          { value: false, label: '当所有任务分配都被接受时' }
+        ]
+      }
+    ],
+    tables: ['wfassignment', 'wfnotifications']
+  },
+  // wfconditionproperties: 条件 + 自定义类, 无子表
+  WFCONDITION: {
+    label: '条件节点属性',
+    fields: [
+      { prop: 'condition', label: '条件', type: 'textarea', span: 24 },
+      { prop: 'customClass', label: '自定义类', span: 24 }
+    ],
+    tables: []
+  },
+  // wfinputproperties: 操作表(操作的通知在「输入操作属性」里维护)
+  WFINPUT: {
+    label: '手工输入节点属性',
+    fields: [
+      { prop: 'displayOne', label: '显示一个', type: 'bool', span: 12 }
+    ],
+    tables: ['wfactions']
+  },
+  // wfinteractionproperties: 目标标题/目标主体, 无子表
+  WFINTERACTION: {
+    label: '交互节点属性',
+    fields: [
+      { prop: 'app', label: '应用程序', span: 12 },
+      { prop: 'stayCurrentApp', label: '保持当前应用', type: 'bool', span: 12 },
+      { prop: 'tabName', label: '选项卡名', span: 12 },
+      { prop: 'action', label: '操作', span: 12 },
+      { prop: 'relation', label: '关系', span: 12 },
+      { prop: 'launchProcess', label: '启动过程', span: 12 },
+      { prop: 'directions', label: '目标标题', span: 12 },
+      { prop: 'directionsLongDescription', label: '目标主体', type: 'textarea', span: 24 }
+    ],
+    tables: []
+  },
+  // wfsubprocessproperties: 子过程名, 无子表
+  WFSUBPROCESS: {
+    label: '子过程节点属性',
+    fields: [
+      { prop: 'subProcessName', label: '子过程名', span: 24 }
+    ],
+    tables: []
+  },
+  // wfwaitproperties: 等待列表(单条: 事件名) + 通知
+  WFWAIT: {
+    label: '等待节点属性',
+    fields: [
+      { prop: 'eventName', label: '等待事件', span: 12 }
+    ],
+    tables: ['wfnotifications']
+  }
+}
+
+// 操作属性对话框: 出线操作(wfactionproperties) / 手工输入节点的操作(wfinputactionproperties)
+var ACTION_DIALOGS = {
+  wfaction: {
+    label: '操作属性',
+    fields: [
+      { prop: 'action', label: '操作(ACTION)', span: 12 },
+      { prop: 'isPositive', label: '正向', type: 'bool', span: 12, readonly: true },
+      { prop: 'instruction', label: '说明', span: 24 },
+      { prop: 'condition', label: '条件(USERSQL)', type: 'textarea', span: 24 },
+      { prop: 'conditionClass', label: '自定义类', span: 24 }
+    ],
+    tables: ['wfnotifications']
+  },
+  wfinputaction: {
+    label: '输入操作属性',
+    fields: [
+      { prop: 'instruction', label: '说明', span: 24 },
+      { prop: 'action', label: '操作(ACTION)', span: 12 },
+      { prop: 'isPositive', label: '正向', type: 'bool', span: 12, readonly: true },
+      { prop: 'condition', label: '条件(USERSQL)', type: 'textarea', span: 24 },
+      { prop: 'conditionClass', label: '自定义类', span: 24 }
+    ],
+    tables: ['wfnotifications']
+  }
+}
 
 export default {
   name: 'WfDesignDetail',
@@ -377,7 +856,10 @@ export default {
       zoom: 1,
       suppressClick: false, // 拖拽结束后的第一次 click 不改选中
       dragState: null, // {node,startX,startY,origX,origY,moved}
-      nodeEditDialog: { visible: false, nodeId: null, form: { title: '', description: '' } },
+      contextMenu: { visible: false, x: 0, y: 0, nodeId: null }, // 节点右键菜单
+      nodeDialog: { visible: false, nodeId: null }, // 节点对话框(查看/编辑)
+      actionDialog: { visible: false, nodeId: null, index: -1 }, // 出线操作属性对话框
+      subTableDefs: SUB_TABLE_DEFS,
       saveDialog: { visible: false, enable: true }
     }
   },
@@ -393,6 +875,9 @@ export default {
       var list = []
       ;(this.workflow.wfnodes || []).forEach(function (node) {
         ;(node.wfactions || []).forEach(function (a) {
+          if (a._delete === true) {
+            return
+          }
           var target = self.nodeMap[a.memberNodeId]
           var seg = target ? self.borderSegment(node, target) : null
           var rawLabel = a.action || a.instruction || ''
@@ -423,8 +908,12 @@ export default {
     actionRows() {
       var rows = []
       ;(this.workflow.wfnodes || []).forEach(function (n) {
-        ;(n.wfactions || []).forEach(function (a) {
-          rows.push(Object.assign({ ownerNodeId: n.nodeId }, a))
+        ;(n.wfactions || []).forEach(function (a, i) {
+          if (a._delete === true) {
+            return
+          }
+          // _rowIndex: 指向所在节点 wfactions 数组的下标, 供"编辑属性"对话框定位原始对象
+          rows.push(Object.assign({ ownerNodeId: n.nodeId, _rowIndex: i }, a))
         })
       })
       return rows
@@ -433,6 +922,9 @@ export default {
       var rows = []
       ;(this.workflow.wfnodes || []).forEach(function (n) {
         ;(n.wfassignment || []).forEach(function (a) {
+          if (a._delete === true) {
+            return
+          }
           rows.push(Object.assign({ ownerNodeId: n.nodeId }, a))
         })
       })
@@ -442,14 +934,26 @@ export default {
       var rows = []
       var wf = this.workflow
       ;(wf.wfnotifications || []).forEach(function (x) {
+        if (x._delete === true) {
+          return
+        }
         rows.push({ scope: '流程级', uniqueId: x.uniqueId, templateId: x.templateId })
       })
       ;(wf.wfnodes || []).forEach(function (n) {
         ;(n.wfnotifications || []).forEach(function (x) {
+          if (x._delete === true) {
+            return
+          }
           rows.push({ scope: '节点 #' + n.nodeId, uniqueId: x.uniqueId, templateId: x.templateId })
         })
         ;(n.wfactions || []).forEach(function (a) {
+          if (a._delete === true) {
+            return
+          }
           ;(a.wfnotifications || []).forEach(function (x) {
+            if (x._delete === true) {
+              return
+            }
             rows.push({ scope: '节点 #' + n.nodeId + ' / 操作 ' + a.actionId, uniqueId: x.uniqueId, templateId: x.templateId })
           })
         })
@@ -460,27 +964,109 @@ export default {
       var rows = []
       ;(this.workflow.wfnodes || []).forEach(function (n) {
         ;(n.wfasgngroup || []).forEach(function (g) {
+          if (g._delete === true) {
+            return
+          }
           rows.push(Object.assign({ ownerNodeId: n.nodeId }, g))
         })
       })
       return rows
     },
-    canvasSize() {
-      var maxX = 120
-      var maxY = 120
-      ;(this.workflow.wfnodes || []).forEach(n => {
-        maxX = Math.max(maxX, n.x * this.GRID + 80)
-        maxY = Math.max(maxY, n.y * this.GRID + 70)
+    /** 画布上所有节点的内容包围盒(像素) */
+    canvasBounds() {
+      var minX = null
+      var minY = null
+      var maxX = 0
+      var maxY = 0
+      var grid = this.GRID
+      ;(this.workflow.wfnodes || []).forEach(function (n) {
+        minX = minX === null ? n.x * grid : Math.min(minX, n.x * grid)
+        minY = minY === null ? n.y * grid : Math.min(minY, n.y * grid)
+        maxX = Math.max(maxX, n.x * grid + 80)
+        maxY = Math.max(maxY, n.y * grid + 70)
       })
-      return { width: maxX, height: maxY }
-    },
-    innerStyle() {
-      return {
-        width: this.canvasSize.width + 'px',
-        height: this.canvasSize.height + 'px',
-        transform: 'scale(' + this.zoom + ')',
-        transformOrigin: '0 0'
+      if (minX === null) {
+        minX = 0
+        minY = 0
+        maxX = 160
+        maxY = 120
       }
+      return { minX: minX, minY: minY, maxX: maxX, maxY: maxY }
+    },
+    /** 内容四周留白: 取网格整数倍, 保证内容与网格对齐 */
+    canvasPadding() {
+      return this.GRID
+    },
+    /** 画布尺寸 = 内容包围盒 + 四周留白 */
+    canvasSize() {
+      var b = this.canvasBounds
+      var pad = this.canvasPadding
+      return { width: b.maxX - b.minX + pad * 2, height: b.maxY - b.minY + pad * 2 }
+    },
+    /** 内容整体平移到画布留白处, 使图形不贴左上角 */
+    contentTransform() {
+      var b = this.canvasBounds
+      var pad = this.canvasPadding
+      return 'translate(' + (pad - b.minX) + ',' + (pad - b.minY) + ')'
+    },
+    /** 节点对话框对应的节点(直接引用 workflow.wfnodes 中的对象, 编辑即改工作流数据) */
+    dialogNode() {
+      if (this.nodeDialog.nodeId === null) {
+        return null
+      }
+      return this.nodeMap[this.nodeDialog.nodeId] || null
+    },
+    /** 节点类型子表对象(如 wftask), 编辑态由 ensureNodeDetail 预建 */
+    dialogDetail() {
+      var n = this.dialogNode
+      var key = n ? TYPE_DETAIL_KEYS[n.nodeType] : null
+      if (!n || !key) {
+        return null
+      }
+      return n[key] || null
+    },
+    /** 当前节点类型对应的属性对话框定义(不同节点类型弹出各自对话框) */
+    nodeDialogDef() {
+      var n = this.dialogNode
+      return n ? (NODE_DIALOGS[n.nodeType] || { label: '节点属性', fields: [], tables: [] }) : { label: '节点属性', fields: [], tables: [] }
+    },
+    nodeDialogTitle() {
+      var n = this.dialogNode
+      if (!n) {
+        return '节点属性'
+      }
+      var base = NODE_DIALOGS[n.nodeType] ? NODE_DIALOGS[n.nodeType].label : (this.typeLabel(n.nodeType) + '节点属性')
+      return base + ' #' + n.nodeId + (this.editMode ? '（编辑中）' : '')
+    },
+    /** 出线操作对话框对应的操作(直接引用 workflow.wfnodes[].wfactions[] 中的对象) */
+    dialogAction() {
+      if (this.actionDialog.nodeId === null || this.actionDialog.index < 0) {
+        return null
+      }
+      var node = this.nodeMap[this.actionDialog.nodeId]
+      var list = node ? (node.wfactions || []) : []
+      return list[this.actionDialog.index] || null
+    },
+    /** 操作所在的节点(手工输入节点的操作用「输入操作属性」对话框) */
+    dialogActionOwnerNode() {
+      if (this.actionDialog.nodeId === null) {
+        return null
+      }
+      return this.nodeMap[this.actionDialog.nodeId] || null
+    },
+    /** 操作属性对话框定义: 出线操作 vs 手工输入节点的操作 */
+    actionDialogDef() {
+      var owner = this.dialogActionOwnerNode
+      var key = owner && owner.nodeType === 'WFINPUT' ? 'wfinputaction' : 'wfaction'
+      return ACTION_DIALOGS[key]
+    },
+    actionDialogTitle() {
+      var a = this.dialogAction
+      if (!a) {
+        return '操作属性'
+      }
+      var id = (a.actionId === null || a.actionId === undefined) ? '新建' : a.actionId
+      return this.actionDialogDef.label + ' #' + id + (this.editMode ? '（编辑中）' : '')
     }
   },
   methods: {
@@ -595,21 +1181,24 @@ export default {
       var el = this.$refs.canvasScroll
       if (!el) return
       var w = el.clientWidth - 20
-      if (this.canvasSize.width > 0) {
-        this.zoom = Math.min(1, Math.max(0.2, Math.round((w / this.canvasSize.width) * 100) / 100))
+      // 画布不超出容器时保持 100%(由外层居中), 仅在超出时缩小
+      if (this.canvasSize.width <= w) {
+        this.zoom = 1
+        return
       }
+      this.zoom = Math.max(0.2, Math.round((w / this.canvasSize.width) * 100) / 100)
     },
     // === 编辑模式 ===
     handleEdit() {
       // 激活状态的修订被 Maximo 框架禁止修改, 直接拦截
       if (this.workflow.active === true) {
-        this.$message.error('激活状态的流程修订不可修改，请先在 Maximo 工作流设计器中停用该修订')
+        this.$message.error('激活状态的流程修订不可修改，请先通过右上角「状态操作 - 取消激活过程」取消激活后再编辑')
         return
       }
       this.editSnapshot = JSON.parse(JSON.stringify(this.workflow))
       this.dirty = false
       this.editMode = true
-      this.$message.success('已进入编辑模式：拖拽节点调整位置，双击节点编辑标题/描述')
+      this.$message.success('已进入编辑模式：拖拽节点调整位置，双击节点或右键「编辑节点」打开节点对话框')
     },
     cancelEdit() {
       if (!this.dirty) {
@@ -629,13 +1218,20 @@ export default {
       this.selectedNodeId = null
       this.dragState = null
       this.saveDialog.visible = false
-      this.nodeEditDialog.visible = false
+      this.closeContextMenu()
+      this.nodeDialog.visible = false
+      this.nodeDialog.nodeId = null
+      this.actionDialog.visible = false
+      this.actionDialog.nodeId = null
+      this.actionDialog.index = -1
     },
     // === 画布拖拽 ===
     onNodeMouseDown(event, node) {
+      // 仅编辑模式左键可拖拽; 右键留给上下文菜单(mousedown 的 preventDefault 会吞掉部分浏览器的 contextmenu)
       if (!this.editMode || event.button !== 0) {
         return
       }
+      event.preventDefault()
       this.dragState = { node: node, startX: event.clientX, startY: event.clientY, origX: node.x, origY: node.y, moved: false }
       document.addEventListener('mousemove', this.onDragMove)
       document.addEventListener('mouseup', this.onDragEnd)
@@ -666,27 +1262,246 @@ export default {
         this.suppressClick = true
       }
     },
-    // === 节点属性编辑 ===
-    openNodeEdit(node) {
-      if (!this.editMode || !node) {
+    // === 节点右键菜单 ===
+    onNodeContextMenu(event, node) {
+      var el = this.$refs.canvasScroll
+      if (!el || !node) {
         return
       }
-      this.nodeEditDialog.nodeId = node.nodeId
-      this.nodeEditDialog.form.title = node.title || ''
-      this.nodeEditDialog.form.description = node.description || ''
-      this.nodeEditDialog.visible = true
+      var rect = el.getBoundingClientRect()
+      this.selectedNodeId = node.nodeId
+      this.contextMenu.nodeId = node.nodeId
+      this.contextMenu.x = event.clientX - rect.left + el.scrollLeft
+      this.contextMenu.y = event.clientY - rect.top + el.scrollTop
+      this.contextMenu.visible = true
+      document.addEventListener('click', this.closeContextMenu)
     },
-    confirmNodeEdit() {
-      var node = this.nodeMap[this.nodeEditDialog.nodeId]
-      if (node) {
-        node.title = this.nodeEditDialog.form.title
-        node.description = this.nodeEditDialog.form.description
-        this.dirty = true
+    closeContextMenu() {
+      document.removeEventListener('click', this.closeContextMenu)
+      this.contextMenu.visible = false
+    },
+    contextViewNode() {
+      var node = this.nodeMap[this.contextMenu.nodeId]
+      this.closeContextMenu()
+      this.openNodeDetail(node)
+    },
+    contextEditNode() {
+      this.contextViewNode()
+    },
+    // === 节点对话框 ===
+    openNodeDetail(node) {
+      if (!node) {
+        return
       }
-      this.nodeEditDialog.visible = false
+      this.selectedNodeId = node.nodeId
+      this.closeContextMenu()
+      if (this.editMode) {
+        this.ensureNodeDetail(node)
+      }
+      this.nodeDialog.nodeId = node.nodeId
+      this.nodeDialog.visible = true
+    },
+    /** 编辑态下为缺类型子表的节点预建对象(字段预置, 保证 v-model 响应式) */
+    ensureNodeDetail(node) {
+      var key = TYPE_DETAIL_KEYS[node.nodeType]
+      var def = NODE_DIALOGS[node.nodeType]
+      var fields = def ? def.fields : []
+      if (!key || fields.length === 0 || node[key]) {
+        return
+      }
+      var detail = {}
+      fields.forEach(function (f) {
+        detail[f.prop] = f.type === 'bool' ? false : (f.type === 'radio' ? f.options[0].value : '')
+      })
+      this.$set(node, key, detail)
+    },
+    /** 属性字段的只读展示值(默认取节点类型子表, 可传入操作等其他对象) */
+    propText(field, obj) {
+      var detail = obj || this.dialogDetail
+      var v = detail ? detail[field.prop] : null
+      if (field.type === 'bool') {
+        return this.boolText(v === true)
+      }
+      if (field.type === 'radio' && field.options) {
+        for (var i = 0; i < field.options.length; i++) {
+          if (field.options[i].value === v) {
+            return field.options[i].label
+          }
+        }
+      }
+      if (v === null || v === undefined || v === '') {
+        return '-'
+      }
+      return String(v)
+    },
+    // === 出线操作属性对话框 ===
+    openActionDetail(nodeId, index) {
+      var node = this.nodeMap[nodeId]
+      var list = node ? (node.wfactions || []) : []
+      if (!list[index]) {
+        return
+      }
+      this.actionDialog.nodeId = nodeId
+      this.actionDialog.index = index
+      this.actionDialog.visible = true
+    },
+    addActionNotification() {
+      var action = this.dialogAction
+      if (!action) {
+        return
+      }
+      if (!action.wfnotifications) {
+        this.$set(action, 'wfnotifications', [])
+      }
+      action.wfnotifications.push({ templateId: '', _new: true })
+      this.markDirty()
+    },
+    markDirty() {
+      this.dirty = true
+    },
+    /** 过滤掉已标记删除的行(提交时仍会带上 _delete 标记) */
+    activeRows(list) {
+      return (list || []).filter(function (r) {
+        return r._delete !== true
+      })
+    },
+    cellText(row, col) {
+      var v = row[col.prop]
+      if (col.type === 'bool') {
+        return this.boolText(v)
+      }
+      if (v === null || v === undefined || v === '') {
+        // 键字段由框架分配, 新增行保存前显示"新建"
+        return col.readonly ? '新建' : ''
+      }
+      return String(v)
+    },
+    subRowStyle(obj) {
+      if (obj && obj.row && obj.row._delete === true) {
+        return { color: '#c0c4cc', textDecoration: 'line-through' }
+      }
+      return {}
+    },
+    /** 子表定义(列/详细信息/是否只读行内编辑) */
+    subTableDef(name) {
+      return SUB_TABLE_DEFS[name] || { label: name, columns: [], details: [] }
+    },
+    /** Maximo tabledetails: 展开行展示的详细信息(空值不显示, 布尔显示是/否) */
+    detailItems(row, name) {
+      var def = SUB_TABLE_DEFS[name]
+      var fields = def ? (def.details || []) : []
+      var items = []
+      fields.forEach(function (f) {
+        var v = row[f.prop]
+        if (f.type === 'bool') {
+          items.push({ label: f.label, value: v === true ? '是' : '否' })
+          return
+        }
+        if (v === null || v === undefined || v === '') {
+          return
+        }
+        items.push({ label: f.label, value: String(v) })
+      })
+      return items
+    },
+    /** 子表拍平(用于生成新行的业务键) */
+    flattenSubTable(name) {
+      var rows = []
+      ;(this.workflow.wfnodes || []).forEach(function (n) {
+        ;(n[name] || []).forEach(function (r) {
+          rows.push(r)
+        })
+      })
+      return rows
+    },
+    maxOf(list, prop) {
+      var max = 0
+      ;(list || []).forEach(function (r) {
+        var v = parseInt(r[prop], 10)
+        if (!isNaN(v) && v > max) {
+          max = v
+        }
+      })
+      return max
+    },
+    /** 新增子表行: actionId/uniqueId 由框架分配(留空), assignId/groupNum 为必填键需先生成 */
+    addSubRow(name) {
+      var node = this.dialogNode
+      if (!node) {
+        return
+      }
+      var row = null
+      if (name === 'wfactions') {
+        row = { isPositive: true, memberNodeId: null, action: '', condition: '', conditionClass: '', instruction: '', _new: true }
+      } else if (name === 'wfassignment') {
+        if (node.nodeType !== 'WFTASK') {
+          this.$message.warning('仅任务节点(WFTASK)可维护定义分配')
+          return
+        }
+        row = {
+          assignId: this.maxOf(this.flattenSubTable('wfassignment'), 'assignId') + 1,
+          roleId: '', relationship: '', assignCode: '', app: '', description: '',
+          timelimit: '', priority: 0, groupNum: 0, assignStatus: '', escRole: '',
+          emailNotification: false, calendarBased: false, _new: true
+        }
+      } else if (name === 'wfnotifications') {
+        row = { templateId: '', _new: true }
+      }
+      if (!row) {
+        return
+      }
+      if (!node[name]) {
+        this.$set(node, name, [])
+      }
+      node[name].push(row)
+      this.dirty = true
+    },
+    deleteSubRow(list, index) {
+      var row = list[index]
+      if (!row) {
+        return
+      }
+      if (row._new === true) {
+        list.splice(index, 1)
+      } else {
+        this.$set(row, '_delete', true)
+      }
+      this.dirty = true
+    },
+    undoSubRow(row) {
+      this.$set(row, '_delete', false)
+      this.dirty = true
+    },
+    /** 保存前校验: 通知必须有通讯模板(后端缺 templateId 会整包回滚) */
+    validateNotifications() {
+      var problems = []
+      function check(list, scope) {
+        (list || []).forEach(function (n) {
+          if (n._delete !== true && !n.templateId) {
+            problems.push(scope + ' 的通知缺少通讯模板')
+          }
+        })
+      }
+      var wf = this.workflow
+      check(wf.wfnotifications, '流程级')
+      ;(wf.wfnodes || []).forEach(function (node) {
+        check(node.wfnotifications, '节点 #' + node.nodeId)
+        ;(node.wfactions || []).forEach(function (a) {
+          if (a._delete === true) {
+            return
+          }
+          check(a.wfnotifications, '节点 #' + node.nodeId + ' / 操作 ' + a.actionId)
+        })
+      })
+      return problems
     },
     // === 保存 ===
     handleSave() {
+      var problems = this.validateNotifications()
+      if (problems.length > 0) {
+        this.$message.error('无法保存: ' + problems.join('；'))
+        return
+      }
       this.saveDialog.enable = this.workflow.enabled === true
       this.saveDialog.visible = true
     },
@@ -727,6 +1542,50 @@ export default {
       this.exitEdit()
       this.fetchDetail()
     },
+    // === 状态操作(取消激活 / 禁用) ===
+    handleStateCommand(command) {
+      var label = command === 'deactivate' ? '取消激活过程' : '禁用过程'
+      var tip = command === 'deactivate'
+        ? '取消激活后该流程修订变回草稿状态，可在本页「编 辑」修改；已在流程中的记录不受影响。是否继续?'
+        : '禁用后新记录不再进入该流程，已在流程中的记录不受影响。是否继续?'
+      this.$confirm(tip, label, { type: 'warning' })
+        .then(() => {
+          this.submitStateChange(command, label)
+        })
+        .catch(() => {})
+    },
+    submitStateChange(command, label) {
+      var api = command === 'deactivate' ? workflowDeactivate : workflowDisable
+      this.saving = true
+      api({
+        processName: this.workflow.processName,
+        processRev: this.workflow.processRev
+      }).then(res => {
+        this.handleStateResult(res.data || res, label)
+      }).catch(err => {
+        this.$message.error(label + '失败: ' + (err.message || String(err)))
+      }).finally(() => {
+        this.saving = false
+      })
+    },
+    handleStateResult(data, label) {
+      if (data.status === 'error') {
+        this.$message.error(data.message || (label + '失败'))
+        return
+      }
+      var result = ((data.workflows || {}).result || [])[0] || {}
+      if (result.status !== 'SUCCESS') {
+        this.$message.error(label + '失败: ' + (result.message || '未知错误'))
+        return
+      }
+      var warnings = result.warnings || []
+      if (warnings.length > 0) {
+        this.$message.warning(warnings.join('；'))
+      } else {
+        this.$message.success(result.message || (label + '成功'))
+      }
+      this.fetchDetail()
+    },
     goBack() {
       this.$router.push({ name: 'WfDesign' })
     },
@@ -760,6 +1619,7 @@ export default {
   beforeDestroy() {
     document.removeEventListener('mousemove', this.onDragMove)
     document.removeEventListener('mouseup', this.onDragEnd)
+    document.removeEventListener('click', this.closeContextMenu)
   }
 }
 </script>
@@ -783,6 +1643,9 @@ export default {
   margin: 0 0 2px 0;
   font-size: 18px;
   font-weight: 600;
+}
+.header-actions .state-dropdown {
+  margin-left: 10px;
 }
 .header-title .rev {
   font-size: 13px;
@@ -835,25 +1698,20 @@ export default {
   color: #909399;
 }
 .canvas-scroll {
+  position: relative;
   border: 1px solid #dcdfe6;
   border-radius: 4px;
   height: 520px;
   overflow: auto;
-  background: #fafafa;
-  /* 主网格 80px(=GRID), 次网格 16px(5 等分) */
-  background-image:
-    linear-gradient(to right, rgba(200,200,200,.35) 1px, transparent 1px),
-    linear-gradient(to bottom, rgba(200,200,200,.35) 1px, transparent 1px),
-    linear-gradient(to right, #e4e7ed 1px, transparent 1px),
-    linear-gradient(to bottom, #e4e7ed 1px, transparent 1px);
-  background-size: 16px 16px, 16px 16px, 80px 80px, 80px 80px;
-  background-position: -1px -1px;
-}
-.canvas-inner {
-  position: relative;
+  background: #fff;
+  /* 内容由 svg 的网格底图绘制, 画布小于容器时整体居中 */
+  display: flex;
 }
 .wf-svg {
   display: block;
+  /* margin:auto 居中; 内容超出容器时仍可完整滚动 */
+  margin: auto;
+  flex: none;
 }
 .wf-node {
   cursor: pointer;
@@ -863,6 +1721,66 @@ export default {
 }
 .node-label {
   pointer-events: none;
+}
+/* 节点右键菜单 */
+.node-context-menu {
+  position: absolute;
+  z-index: 2000;
+  min-width: 110px;
+  padding: 4px 0;
+  background: #fff;
+  border: 1px solid #dcdfe6;
+  border-radius: 4px;
+  box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.15);
+  font-size: 13px;
+  color: #303133;
+}
+.node-context-menu .menu-item {
+  padding: 7px 16px;
+  cursor: pointer;
+  line-height: 1.4;
+}
+.node-context-menu .menu-item:hover {
+  background: #ecf5ff;
+  color: #409eff;
+}
+.node-dialog-body {
+  max-height: 70vh;
+  overflow: auto;
+  padding-right: 4px;
+}
+.node-form {
+  margin-bottom: 4px;
+}
+.node-form .el-form-item {
+  margin-bottom: 8px;
+}
+.prop-card {
+  margin-bottom: 12px;
+  border-radius: 4px;
+}
+.prop-card ::v-deep .el-card__header {
+  padding: 8px 12px;
+  background: #f5f7fa;
+}
+.prop-card ::v-deep .el-card__body {
+  padding: 12px 12px 4px 12px;
+}
+.prop-card-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 13px;
+  font-weight: 600;
+  color: #303133;
+}
+.node-dialog-tip {
+  margin: 14px 0 0 0;
+  font-size: 12px;
+  color: #909399;
+}
+.danger-text {
+  color: #f56c6c;
 }
 .node-detail {
   margin-top: 12px;
