@@ -1,5 +1,6 @@
 <template>
   <section class="wf-detail-page" v-loading="loading">
+    <div v-loading.fullscreen.lock="saving" element-loading-text="拼命处理中，请耐心等待" element-loading-background="rgba(0, 0, 0, 0.8)">
     <el-card>
       <!-- 头部: 返回 + 主信息 + 编辑/保存/取消 -->
       <div class="detail-header">
@@ -7,7 +8,14 @@
           <el-button icon="el-icon-arrow-left" size="mini" @click="goBack">返回</el-button>
           <div class="header-title">
             <h2>{{ workflow.processName }} <span class="rev">v{{ workflow.processRev }}</span></h2>
-            <p class="page-summary">{{ workflow.description || '无描述' }}</p>
+            <p v-if="!editMode" class="page-summary">{{ workflow.description || '无描述' }}</p>
+            <el-input
+              v-else
+              v-model="workflow.description"
+              size="mini"
+              placeholder="流程描述"
+              style="max-width: 460px;"
+              @input="dirty = true" />
           </div>
         </div>
         <div class="header-actions">
@@ -35,8 +43,8 @@
       <el-alert
         v-if="editMode"
         class="edit-tip"
-        title="编辑功能正在开发中，当前仍为只读预览，保存暂未开放。"
-        type="warning"
+        title="编辑模式：拖拽节点调整坐标（自动吸附网格），双击节点或在节点详情中点击「编辑节点」修改标题/描述，完成后点击右上角「保存」。"
+        type="info"
         :closable="false"
         show-icon />
 
@@ -53,7 +61,7 @@
             <span class="canvas-legend">
               <i class="legend-item"><span class="line-pos"></span>正向连线</i>
               <i class="legend-item"><span class="line-neg"></span>负向连线</i>
-              <span class="canvas-tip">点击节点查看节点详情{{ editMode ? '（编辑模式：节点可拖拽，暂未开放）' : '' }}</span>
+              <span class="canvas-tip">点击节点查看节点详情{{ editMode ? '；编辑模式：拖拽节点调整位置，双击节点编辑属性' : '' }}</span>
             </span>
           </div>
           <div class="canvas-scroll" ref="canvasScroll">
@@ -90,7 +98,9 @@
                   :key="'n-' + node.nodeId"
                   :transform="'translate(' + (node.x * GRID) + ',' + (node.y * GRID) + ')'"
                   class="wf-node" :class="{ selected: selectedNodeId === node.nodeId, editable: editMode }"
-                  @click="selectNode(node)">
+                  @mousedown.prevent="onNodeMouseDown($event, node)"
+                  @click="selectNode(node)"
+                  @dblclick="openNodeEdit(node)">
                   <!-- 选中环 -->
                   <rect v-if="selectedNodeId === node.nodeId" x="-4" y="-4" :width="shapeBox(node).w + 8" :height="shapeBox(node).h + 18"
                         rx="4" fill="none" stroke="#409eff" stroke-width="2" stroke-dasharray="4,2" />
@@ -153,6 +163,7 @@
                 <el-tag size="mini" effect="plain">{{ typeLabel(selectedNode.nodeType) }}</el-tag>
                 <span class="node-name">{{ selectedNode.title }}</span>
               </span>
+              <el-button v-if="editMode" type="primary" size="mini" icon="el-icon-edit" @click="openNodeEdit(selectedNode)">编辑节点</el-button>
             </div>
             <el-descriptions :column="4" border size="mini">
               <el-descriptions-item label="节点ID">{{ selectedNode.nodeId }}</el-descriptions-item>
@@ -287,11 +298,45 @@
         </el-tab-pane>
       </el-tabs>
     </el-card>
+
+    <!-- 节点编辑对话框 -->
+    <el-dialog
+      :title="'编辑节点 #' + nodeEditDialog.nodeId"
+      :visible.sync="nodeEditDialog.visible"
+      width="480px"
+      append-to-body>
+      <el-form label-width="70px" size="small">
+        <el-form-item label="标题">
+          <el-input v-model="nodeEditDialog.form.title" maxlength="100" placeholder="节点标题" />
+        </el-form-item>
+        <el-form-item label="描述">
+          <el-input v-model="nodeEditDialog.form.description" type="textarea" :rows="3" placeholder="节点描述" />
+        </el-form-item>
+      </el-form>
+      <div slot="footer">
+        <el-button size="mini" @click="nodeEditDialog.visible = false">取 消</el-button>
+        <el-button type="primary" size="mini" @click="confirmNodeEdit">确 定</el-button>
+      </div>
+    </el-dialog>
+
+    <!-- 保存确认对话框 -->
+    <el-dialog title="保存工作流" :visible.sync="saveDialog.visible" width="460px" append-to-body>
+      <p class="save-tip">
+        将按迁移模式整包保存流程 {{ workflow.processName }} (v{{ workflow.processRev }})，共
+        {{ (workflow.wfnodes || []).length }} 个节点；已存在的节点/操作/分配等记录将被更新，不会删除 JSON 之外的数据。
+      </p>
+      <el-checkbox v-model="saveDialog.enable">保存后启用并激活</el-checkbox>
+      <div slot="footer">
+        <el-button size="mini" @click="saveDialog.visible = false">取 消</el-button>
+        <el-button type="primary" size="mini" :loading="saving" @click="submitSave">确认保存</el-button>
+      </div>
+    </el-dialog>
+    </div>
   </section>
 </template>
 
 <script>
-import { workflowDetail } from '@/api/wfdesign'
+import { workflowDetail, workflowImport } from '@/api/wfdesign'
 
 // 节点类型中文标签
 var TYPE_LABELS = {
@@ -322,11 +367,18 @@ export default {
     return {
       GRID: 80, // Maximo 工作流设计器网格像素(系统属性 mxe.webclient.wfdesigner.pixelsPerNode, 默认80)
       loading: false,
+      saving: false,
       editMode: false,
+      dirty: false,
+      editSnapshot: null, // 进入编辑模式时的整包快照, 取消时恢复
       activeTab: 'canvas',
       workflow: {},
       selectedNodeId: null,
-      zoom: 1
+      zoom: 1,
+      suppressClick: false, // 拖拽结束后的第一次 click 不改选中
+      dragState: null, // {node,startX,startY,origX,origY,moved}
+      nodeEditDialog: { visible: false, nodeId: null, form: { title: '', description: '' } },
+      saveDialog: { visible: false, enable: true }
     }
   },
   computed: {
@@ -522,6 +574,11 @@ export default {
       return items
     },
     selectNode: function (node) {
+      // 拖拽结束后的第一次 click 不改变选中
+      if (this.suppressClick) {
+        this.suppressClick = false
+        return
+      }
       this.selectedNodeId = node.nodeId
     },
     // === 缩放 ===
@@ -542,17 +599,133 @@ export default {
         this.zoom = Math.min(1, Math.max(0.2, Math.round((w / this.canvasSize.width) * 100) / 100))
       }
     },
-    // === 编辑(功能占位, 暂未实现) ===
+    // === 编辑模式 ===
     handleEdit() {
+      // 激活状态的修订被 Maximo 框架禁止修改, 直接拦截
+      if (this.workflow.active === true) {
+        this.$message.error('激活状态的流程修订不可修改，请先在 Maximo 工作流设计器中停用该修订')
+        return
+      }
+      this.editSnapshot = JSON.parse(JSON.stringify(this.workflow))
+      this.dirty = false
       this.editMode = true
-      this.$message.info('编辑功能正在开发中，当前仅可预览')
+      this.$message.success('已进入编辑模式：拖拽节点调整位置，双击节点编辑标题/描述')
     },
     cancelEdit() {
-      this.editMode = false
+      if (!this.dirty) {
+        this.exitEdit()
+        return
+      }
+      this.$confirm('放弃当前全部修改并恢复到打开编辑时的状态?', '确认放弃', { type: 'warning' })
+        .then(() => {
+          this.workflow = JSON.parse(JSON.stringify(this.editSnapshot))
+          this.exitEdit()
+        }).catch(() => {})
     },
+    exitEdit() {
+      this.editMode = false
+      this.dirty = false
+      this.editSnapshot = null
+      this.selectedNodeId = null
+      this.dragState = null
+      this.saveDialog.visible = false
+      this.nodeEditDialog.visible = false
+    },
+    // === 画布拖拽 ===
+    onNodeMouseDown(event, node) {
+      if (!this.editMode || event.button !== 0) {
+        return
+      }
+      this.dragState = { node: node, startX: event.clientX, startY: event.clientY, origX: node.x, origY: node.y, moved: false }
+      document.addEventListener('mousemove', this.onDragMove)
+      document.addEventListener('mouseup', this.onDragEnd)
+    },
+    onDragMove(event) {
+      var d = this.dragState
+      if (!d) {
+        return
+      }
+      if (Math.abs(event.clientX - d.startX) > 3 || Math.abs(event.clientY - d.startY) > 3) {
+        d.moved = true
+      }
+      // 客户端像素差 -> 网格坐标(除以缩放与网格像素), 四舍五入吸附网格, 不允许负坐标
+      var nx = Math.max(0, Math.round(d.origX + (event.clientX - d.startX) / (this.GRID * this.zoom)))
+      var ny = Math.max(0, Math.round(d.origY + (event.clientY - d.startY) / (this.GRID * this.zoom)))
+      if (nx !== d.node.x || ny !== d.node.y) {
+        d.node.x = nx
+        d.node.y = ny
+        this.dirty = true
+      }
+    },
+    onDragEnd() {
+      var d = this.dragState
+      document.removeEventListener('mousemove', this.onDragMove)
+      document.removeEventListener('mouseup', this.onDragEnd)
+      this.dragState = null
+      if (d && d.moved) {
+        this.suppressClick = true
+      }
+    },
+    // === 节点属性编辑 ===
+    openNodeEdit(node) {
+      if (!this.editMode || !node) {
+        return
+      }
+      this.nodeEditDialog.nodeId = node.nodeId
+      this.nodeEditDialog.form.title = node.title || ''
+      this.nodeEditDialog.form.description = node.description || ''
+      this.nodeEditDialog.visible = true
+    },
+    confirmNodeEdit() {
+      var node = this.nodeMap[this.nodeEditDialog.nodeId]
+      if (node) {
+        node.title = this.nodeEditDialog.form.title
+        node.description = this.nodeEditDialog.form.description
+        this.dirty = true
+      }
+      this.nodeEditDialog.visible = false
+    },
+    // === 保存 ===
     handleSave() {
-      // TODO: 编辑保存待实现(画布拖拽改 x/y、表格内联编辑后调用工作流导入接口)
-      this.$message.info('编辑保存功能正在开发中，暂未开放')
+      this.saveDialog.enable = this.workflow.enabled === true
+      this.saveDialog.visible = true
+    },
+    submitSave() {
+      var payload = JSON.parse(JSON.stringify(this.workflow))
+      // 导入脚本仅在 data.enabled === true 且 _enable != false 时才走启用激活流程
+      if (this.saveDialog.enable) {
+        payload.enabled = true
+      }
+      this.saving = true
+      workflowImport({ workflows: [payload] }, { _impMode: 'migration', _enable: this.saveDialog.enable ? 'true' : 'false' })
+        .then(res => {
+          this.handleSaveResult(res.data || res)
+        })
+        .catch(err => {
+          this.$message.error('保存失败: ' + (err.message || String(err)))
+        })
+        .finally(() => {
+          this.saving = false
+        })
+    },
+    handleSaveResult(data) {
+      if (data.status === 'error') {
+        this.$message.error(data.message || '保存失败')
+        return
+      }
+      var result = (data.result || [])[0] || {}
+      if (result.status !== 'SUCCESS') {
+        this.$message.error('保存失败: ' + (result.message || '未知错误'))
+        return
+      }
+      var warnings = result.warnings || []
+      if (warnings.length > 0) {
+        this.$alert(warnings.join('<br/>'), '保存成功，启用/激活过程有警告', { dangerouslyUseHTMLString: true, type: 'warning' })
+      } else {
+        this.$message.success(result.message || '保存成功')
+      }
+      this.exitEdit()
+      this.fetchDetail()
     },
     goBack() {
       this.$router.push({ name: 'WfDesign' })
@@ -583,6 +756,10 @@ export default {
   },
   mounted() {
     this.fetchDetail()
+  },
+  beforeDestroy() {
+    document.removeEventListener('mousemove', this.onDragMove)
+    document.removeEventListener('mouseup', this.onDragEnd)
   }
 }
 </script>
@@ -696,6 +873,9 @@ export default {
 }
 .node-detail-header {
   margin-bottom: 8px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
 }
 .node-detail-title {
   font-size: 14px;
@@ -720,5 +900,11 @@ export default {
 }
 .sub-tabs {
   margin-top: 4px;
+}
+.save-tip {
+  margin: 0 0 12px 0;
+  font-size: 13px;
+  color: #606266;
+  line-height: 1.6;
 }
 </style>
