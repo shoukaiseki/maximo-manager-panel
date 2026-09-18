@@ -82,8 +82,8 @@
       <div class="import-opts">
         <span class="import-opts-label">导入模式</span>
         <el-select v-model="importDialog.impMode" size="mini" style="width: 300px;">
-          <el-option label="迁移模式（存在则修改，缺省）" value="migration" />
           <el-option label="新增模式（已存在的不修改）" value="add" />
+          <el-option label="迁移模式（存在则修改，缺省）" value="migration" />
         </el-select>
       </div>
       <div class="import-opts">
@@ -150,7 +150,7 @@ export default {
       },
       exportEditor: null,
       // 导入
-      importDialog: { visible: false, text: '', error: '', loading: false, summary: null, result: [], impMode: 'migration', enable: true, syncFlag: false },
+      importDialog: { visible: false, text: '', error: '', loading: false, summary: null, result: [], impMode: 'add', enable: true, syncFlag: false },
       importEditor: null,
       monacoLoaded: false,
       _monaco: null
@@ -384,7 +384,7 @@ export default {
     },
     // === 导入 ===
     openImportDialog() {
-      this.importDialog = { visible: true, text: '', error: '', loading: false, summary: null, result: [], impMode: 'migration', enable: true, syncFlag: false }
+      this.importDialog = { visible: true, text: '', error: '', loading: false, summary: null, result: [], impMode: 'add', enable: true, syncFlag: false }
     },
     onImportDialogOpened() {
       this.$nextTick(() => {

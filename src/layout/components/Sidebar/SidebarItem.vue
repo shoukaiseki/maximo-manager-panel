@@ -2,13 +2,15 @@
   <div v-if="!item.hidden">
     <template v-if="hasOneShowingChild(item.children,item) && (!onlyOneChild.children||onlyOneChild.noShowingChildren)&&!item.alwaysShow">
       <app-link v-if="onlyOneChild.meta" :to="resolvePath(onlyOneChild.path)">
-        <el-menu-item :index="resolvePath(onlyOneChild.path)" :class="{'submenu-title-noDropdown':!isNest}">
+        <el-menu-item
+          :index="resolvePath(onlyOneChild.path)"
+          :class="['menu-lv-' + level, {'submenu-title-noDropdown':!isNest}]">
           <item :icon="onlyOneChild.meta.icon||(item.meta&&item.meta.icon)" :title="onlyOneChild.meta.title" />
         </el-menu-item>
       </app-link>
     </template>
 
-    <el-submenu v-else ref="subMenu" :index="resolvePath(item.path)" popper-append-to-body>
+    <el-submenu v-else ref="subMenu" :index="resolvePath(item.path)" :class="'menu-lv-' + level" popper-append-to-body>
       <template slot="title">
         <item v-if="item.meta" :icon="item.meta && item.meta.icon" :title="item.meta.title" />
       </template>
@@ -16,6 +18,7 @@
         v-for="child in item.children"
         :key="child.path"
         :is-nest="true"
+        :level="level + 1"
         :item="child"
         :base-path="resolvePath(child.path)"
         class="nest-menu"
@@ -44,6 +47,11 @@ export default {
     isNest: {
       type: Boolean,
       default: false
+    },
+    // 菜单层级: 1=一级, 2=二级, 3=三级(用于层级化缩进/字重)
+    level: {
+      type: Number,
+      default: 1
     },
     basePath: {
       type: String,
@@ -95,29 +103,31 @@ export default {
 }
 </script>
 <style lang="scss">
-.nest-menu span {
-  font-size: 14px!important;
-}
-//.nest-menu{
-//  li.el-menu-item {
-    //padding:0 !important;
-    //padding-left: 10px!important;
-  //}
-//}
-//.el-submenu .el-menu-item{
-//  padding:0 !important;
-  //padding-right: 15px!important;
-//}
-//.el-submenu{
-  //padding:0 !important;
-  //padding-left: 5px!important;
-//}
-.el-submenu__title{
-  //padding:0 !important;
-  padding-left: 5px!important;
-}
-.el-menu-item{
-  padding-left: 12px!important;
+// 菜单层级区分: 一级加粗, 二级/三级逐级缩进并缩小字号
+// 限定在 .sidebar-container 内, 折叠态(.el-menu--collapse)与折叠弹出层不受影响
+.sidebar-container .el-menu:not(.el-menu--collapse) {
+  .menu-lv-1.el-menu-item,
+  .menu-lv-1 > .el-submenu__title {
+    padding-left: 16px !important;
+    font-weight: 600;
+  }
+
+  .menu-lv-2.el-menu-item,
+  .menu-lv-2 > .el-submenu__title {
+    padding-left: 36px !important;
+    font-weight: 400;
+  }
+
+  .menu-lv-3.el-menu-item,
+  .menu-lv-3 > .el-submenu__title {
+    padding-left: 56px !important;
+    font-weight: 400;
+  }
+
+  .menu-lv-2 span,
+  .menu-lv-3 span {
+    font-size: 13px;
+  }
 }
 </style>
 

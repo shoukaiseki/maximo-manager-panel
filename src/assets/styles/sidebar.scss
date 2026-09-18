@@ -46,6 +46,19 @@
       }
     }
 
+    // 顶部菜单搜索框占位
+    &.has-menu-search {
+      .el-scrollbar {
+        height: calc(100% - 44px);
+      }
+    }
+
+    &.has-logo.has-menu-search {
+      .el-scrollbar {
+        height: calc(100% - 94px);
+      }
+    }
+
     .is-horizontal {
       display: none;
     }
