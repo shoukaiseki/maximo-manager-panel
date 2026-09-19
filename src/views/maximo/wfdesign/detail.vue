@@ -460,12 +460,34 @@
               <template slot-scope="s">
                 <div class="expand-box">
                   <p class="sub-title">详细信息</p>
-                  <el-descriptions v-if="detailItems(s.row, name).length" :column="2" border size="mini">
-                    <el-descriptions-item v-for="d in detailItems(s.row, name)" :key="d.label" :label="d.label">
-                      {{ d.value }}
-                    </el-descriptions-item>
-                  </el-descriptions>
-                  <p v-else class="no-prop">该记录无更多详细信息</p>
+                  <!-- 编辑态: 字段定义 editableDetails 的子表, 详细信息直接就地编辑 -->
+                  <el-form
+                    v-if="editMode && subTableDef(name).editableDetails && s.row._delete !== true"
+                    label-width="96px" size="mini" class="node-form">
+                    <el-row :gutter="12">
+                      <el-col v-for="d in subTableDef(name).details" :key="d.prop" :span="d.span || 8">
+                        <el-form-item :label="d.label">
+                          <el-input v-if="d.readonly" :value="s.row[d.prop]" size="mini" disabled />
+                          <el-switch v-else-if="d.type === 'bool'" v-model="s.row[d.prop]" @change="markDirty" />
+                          <el-input
+                            v-else
+                            v-model="s.row[d.prop]"
+                            :type="d.type === 'textarea' ? 'textarea' : 'text'"
+                            :rows="d.type === 'textarea' ? 2 : undefined"
+                            size="mini"
+                            @input="markDirty" />
+                        </el-form-item>
+                      </el-col>
+                    </el-row>
+                  </el-form>
+                  <template v-else>
+                    <el-descriptions v-if="detailItems(s.row, name).length" :column="2" border size="mini">
+                      <el-descriptions-item v-for="d in detailItems(s.row, name)" :key="d.label" :label="d.label">
+                        {{ d.value }}
+                      </el-descriptions-item>
+                    </el-descriptions>
+                    <p v-else class="no-prop">该记录无更多详细信息</p>
+                  </template>
                 </div>
               </template>
             </el-table-column>
@@ -488,7 +510,14 @@
                       :label="'#' + n.nodeId + ' ' + (n.title || typeLabel(n.nodeType))"
                       :value="n.nodeId" />
                   </el-select>
-                  <el-input v-else v-model="s.row[col.prop]" size="mini" @input="markDirty" />
+                  <el-input v-else v-model="s.row[col.prop]" size="mini" @input="markDirty">
+                    <i
+                      v-if="col.lookup"
+                      slot="suffix"
+                      class="el-input__icon el-icon-search lookup-icon"
+                      :title="'选择' + col.label"
+                      @click="openLookup(s.row, col)" />
+                  </el-input>
                 </template>
                 <span v-else>{{ cellText(s.row, col) }}</span>
               </template>
@@ -571,7 +600,14 @@
                   <template v-if="editMode && !f.readonly">
                     <el-switch v-if="f.type === 'bool'" v-model="dialogAction[f.prop]" @change="markDirty" />
                     <el-input v-else-if="f.type === 'textarea'" v-model="dialogAction[f.prop]" type="textarea" :rows="2" @input="markDirty" />
-                    <el-input v-else v-model="dialogAction[f.prop]" size="mini" @input="markDirty" />
+                    <el-input v-else v-model="dialogAction[f.prop]" size="mini" @input="markDirty">
+                      <i
+                        v-if="f.lookup"
+                        slot="suffix"
+                        class="el-input__icon el-icon-search lookup-icon"
+                        :title="'选择' + f.label"
+                        @click="openLookup(dialogAction, f)" />
+                    </el-input>
                   </template>
                   <span v-else>{{ propText(f, dialogAction) }}</span>
                 </el-form-item>
@@ -597,12 +633,34 @@
               <template slot-scope="s">
                 <div class="expand-box">
                   <p class="sub-title">详细信息</p>
-                  <el-descriptions v-if="detailItems(s.row, name).length" :column="2" border size="mini">
-                    <el-descriptions-item v-for="d in detailItems(s.row, name)" :key="d.label" :label="d.label">
-                      {{ d.value }}
-                    </el-descriptions-item>
-                  </el-descriptions>
-                  <p v-else class="no-prop">该记录无更多详细信息</p>
+                  <!-- 编辑态: 字段定义 editableDetails 的子表, 详细信息直接就地编辑 -->
+                  <el-form
+                    v-if="editMode && subTableDef(name).editableDetails && s.row._delete !== true"
+                    label-width="96px" size="mini" class="node-form">
+                    <el-row :gutter="12">
+                      <el-col v-for="d in subTableDef(name).details" :key="d.prop" :span="d.span || 8">
+                        <el-form-item :label="d.label">
+                          <el-input v-if="d.readonly" :value="s.row[d.prop]" size="mini" disabled />
+                          <el-switch v-else-if="d.type === 'bool'" v-model="s.row[d.prop]" @change="markDirty" />
+                          <el-input
+                            v-else
+                            v-model="s.row[d.prop]"
+                            :type="d.type === 'textarea' ? 'textarea' : 'text'"
+                            :rows="d.type === 'textarea' ? 2 : undefined"
+                            size="mini"
+                            @input="markDirty" />
+                        </el-form-item>
+                      </el-col>
+                    </el-row>
+                  </el-form>
+                  <template v-else>
+                    <el-descriptions v-if="detailItems(s.row, name).length" :column="2" border size="mini">
+                      <el-descriptions-item v-for="d in detailItems(s.row, name)" :key="d.label" :label="d.label">
+                        {{ d.value }}
+                      </el-descriptions-item>
+                    </el-descriptions>
+                    <p v-else class="no-prop">该记录无更多详细信息</p>
+                  </template>
                 </div>
               </template>
             </el-table-column>
@@ -615,7 +673,14 @@
               <template slot-scope="s">
                 <template v-if="editMode && !col.readonly && s.row._delete !== true">
                   <el-switch v-if="col.type === 'bool'" v-model="s.row[col.prop]" @change="markDirty" />
-                  <el-input v-else v-model="s.row[col.prop]" size="mini" @input="markDirty" />
+                  <el-input v-else v-model="s.row[col.prop]" size="mini" @input="markDirty">
+                    <i
+                      v-if="col.lookup"
+                      slot="suffix"
+                      class="el-input__icon el-icon-search lookup-icon"
+                      :title="'选择' + col.label"
+                      @click="openLookup(s.row, col)" />
+                  </el-input>
                 </template>
                 <span v-else>{{ cellText(s.row, col) }}</span>
               </template>
@@ -648,12 +713,25 @@
         <el-button type="primary" size="mini" :loading="saving" @click="submitSave">确认保存</el-button>
       </div>
     </el-dialog>
+
+    <!-- 通用 lookup 选择对话框(角色/操作等字段点右侧搜索图标打开) -->
+    <sks-lookup-dialog
+      ref="lookupDialog"
+      :lookup="lookup.name"
+      :title="lookup.title"
+      :mbo-data="lookup.row"
+      :src-keys="lookup.srcKeys"
+      :target-keys="lookup.targetKeys"
+      :relation-object="lookup.relationObject"
+      @selectrecord="markDirty" />
     </div>
   </section>
 </template>
 
 <script>
 import { workflowDetail, workflowImport, workflowDeactivate, workflowDisable } from '@/api/wfdesign'
+import SKsLookupDialog from '@/views/components/skslookup/SKsLookupDialog.vue'
+import { getLookupKeyColumns } from '@/views/components/skslookup/sksLookup'
 
 // 节点类型中文标签
 var TYPE_LABELS = {
@@ -695,8 +773,11 @@ var SUB_TABLE_DEFS = {
   },
   wfassignment: {
     label: '任务分配',
+    // 编辑态下展开行的「详细信息」可直接编辑(这些字段脚本 buildWfAssignment/saveOrUpdateWfAssignments 都会读写)
+    editableDetails: true,
     columns: [
-      { prop: 'roleId', label: '角色', minWidth: 120 },
+      // 角色: Maximo lookup "role"(对象 MAXROLE)
+      { prop: 'roleId', label: '角色', minWidth: 120, lookup: 'role', lookupObject: 'MAXROLE' },
       { prop: 'description', label: '任务描述', minWidth: 160 },
       { prop: 'emailNotification', label: '邮件通知', width: 85, type: 'bool' },
       { prop: 'timelimit', label: '时限', width: 85 }
@@ -709,7 +790,7 @@ var SUB_TABLE_DEFS = {
       { prop: 'description', label: '任务描述' },
       { prop: 'escRole', label: '升级角色' },
       { prop: 'templateId', label: '通讯模板' },
-      { prop: 'condition', label: '条件(USERSQL)' },
+      { prop: 'condition', label: '条件(USERSQL)', type: 'textarea', span: 24 },
       { prop: 'timelimit', label: '时限' },
       { prop: 'priority', label: '优先级' },
       { prop: 'emailNotification', label: '邮件通知', type: 'bool' },
@@ -717,7 +798,8 @@ var SUB_TABLE_DEFS = {
       { prop: 'conditionClass', label: '自定义类' },
       { prop: 'keepOrigAssgn', label: '保留原分配', type: 'bool' },
       { prop: 'assignCode', label: '人员' },
-      { prop: 'assignStatus', label: '分配状态' },
+      // 分配状态: 由框架维护, 设计器中恒为 DEFAULT, 只读展示
+      { prop: 'assignStatus', label: '分配状态', readonly: true },
       { prop: 'groupNum', label: '组号' }
     ]
   },
@@ -726,7 +808,8 @@ var SUB_TABLE_DEFS = {
     columns: [
       { prop: 'uniqueId', label: '通知ID', width: 85, readonly: true },
       { prop: 'templateId', label: '通讯模板', minWidth: 180 },
-      { prop: 'sendTo', label: '接收人', minWidth: 140 }
+      // 接收人: Maximo lookup "role"(对象 MAXROLE)
+      { prop: 'sendTo', label: '接收人', minWidth: 140, lookup: 'role', lookupObject: 'MAXROLE' }
     ],
     // notifications_table_details / waitnotify_table_details
     details: [
@@ -819,7 +902,8 @@ var ACTION_DIALOGS = {
   wfaction: {
     label: '操作属性',
     fields: [
-      { prop: 'action', label: '操作(ACTION)', span: 12 },
+      // 操作: Maximo lookup "action"(对象 ACTION)
+      { prop: 'action', label: '操作(ACTION)', span: 12, lookup: 'action' },
       { prop: 'isPositive', label: '正向', type: 'bool', span: 12, readonly: true },
       { prop: 'instruction', label: '说明', span: 24 },
       { prop: 'condition', label: '条件(USERSQL)', type: 'textarea', span: 24 },
@@ -831,7 +915,7 @@ var ACTION_DIALOGS = {
     label: '输入操作属性',
     fields: [
       { prop: 'instruction', label: '说明', span: 24 },
-      { prop: 'action', label: '操作(ACTION)', span: 12 },
+      { prop: 'action', label: '操作(ACTION)', span: 12, lookup: 'action' },
       { prop: 'isPositive', label: '正向', type: 'bool', span: 12, readonly: true },
       { prop: 'condition', label: '条件(USERSQL)', type: 'textarea', span: 24 },
       { prop: 'conditionClass', label: '自定义类', span: 24 }
@@ -842,6 +926,7 @@ var ACTION_DIALOGS = {
 
 export default {
   name: 'WfDesignDetail',
+  components: { 'sks-lookup-dialog': SKsLookupDialog },
   data() {
     return {
       GRID: 80, // Maximo 工作流设计器网格像素(系统属性 mxe.webclient.wfdesigner.pixelsPerNode, 默认80)
@@ -859,6 +944,8 @@ export default {
       contextMenu: { visible: false, x: 0, y: 0, nodeId: null }, // 节点右键菜单
       nodeDialog: { visible: false, nodeId: null }, // 节点对话框(查看/编辑)
       actionDialog: { visible: false, nodeId: null, index: -1 }, // 出线操作属性对话框
+      // SksLookup 选择: 由字段定义(col.lookup)决定 lookup 名, 选择行的关键字段写入 row 的 targetKeys
+      lookup: { name: '', title: '', relationObject: '', row: null, srcKeys: [], targetKeys: [] },
       subTableDefs: SUB_TABLE_DEFS,
       saveDialog: { visible: false, enable: true }
     }
@@ -1359,6 +1446,26 @@ export default {
     markDirty() {
       this.dirty = true
     },
+    /** 打开 SksLookup 选择对话框: 字段定义中的 lookup 决定 lookup 名, 选择行关键字段写回该字段 */
+    openLookup(row, field) {
+      if (!row || !field || !field.lookup) {
+        return
+      }
+      const self = this
+      this.lookup = {
+        name: field.lookup,
+        title: '选择' + (field.label || ''),
+        relationObject: field.lookupObject || '',
+        row: row,
+        srcKeys: getLookupKeyColumns(field.lookup),
+        targetKeys: [field.prop]
+      }
+      this.$nextTick(function () {
+        if (self.$refs.lookupDialog) {
+          self.$refs.lookupDialog.open()
+        }
+      })
+    },
     /** 过滤掉已标记删除的行(提交时仍会带上 _delete 标记) */
     activeRows(list) {
       return (list || []).filter(function (r) {
@@ -1441,8 +1548,9 @@ export default {
         row = {
           assignId: this.maxOf(this.flattenSubTable('wfassignment'), 'assignId') + 1,
           roleId: '', relationship: '', assignCode: '', app: '', description: '',
-          timelimit: '', priority: 0, groupNum: 0, assignStatus: '', escRole: '',
-          emailNotification: false, calendarBased: false, _new: true
+          timelimit: '', priority: 0, groupNum: 0, assignStatus: 'DEFAULT', escRole: '',
+          templateId: '', condition: '', conditionClass: '',
+          emailNotification: false, calendarBased: false, keepOrigAssgn: false, _new: true
         }
       } else if (name === 'wfnotifications') {
         row = { templateId: '', _new: true }
@@ -1589,6 +1697,15 @@ export default {
     goBack() {
       this.$router.push({ name: 'WfDesign' })
     },
+    /** 顶部标签页标题: 在路由标题后追加流程描述, 便于区分多个已打开的工作流 */
+    updateTagTitle() {
+      var base = (this.$route.meta && this.$route.meta.title) || '工作流详情'
+      var description = String(this.workflow.description || '').trim()
+      this.$store.dispatch('tagsView/updateVisitedView', {
+        path: this.$route.path,
+        title: description ? base + '：' + description : base
+      })
+    },
     fetchDetail() {
       this.loading = true
       workflowDetail({
@@ -1603,6 +1720,7 @@ export default {
         }
         var list = data.workflows || []
         this.workflow = list[0] || {}
+        this.updateTagTitle()
         this.$nextTick(() => {
           this.fitZoom()
         })
@@ -1754,6 +1872,13 @@ export default {
 }
 .node-form .el-form-item {
   margin-bottom: 8px;
+}
+.lookup-icon {
+  cursor: pointer;
+
+  &:hover {
+    color: #409eff;
+  }
 }
 .prop-card {
   margin-bottom: 12px;
