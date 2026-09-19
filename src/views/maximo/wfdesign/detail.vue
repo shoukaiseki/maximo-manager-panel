@@ -30,6 +30,8 @@
                 选择操作<i class="el-icon-arrow-down el-icon--right"></i>
               </el-button>
               <el-dropdown-menu slot="dropdown">
+                <el-dropdown-item command="enable" :disabled="workflow.enabled === true">启用过程</el-dropdown-item>
+                <el-dropdown-item command="activate" :disabled="workflow.enabled !== true || workflow.active === true">激活过程</el-dropdown-item>
                 <el-dropdown-item command="deactivate" :disabled="workflow.active !== true">取消激活过程</el-dropdown-item>
                 <el-dropdown-item command="disable" :disabled="workflow.enabled !== true">禁用过程</el-dropdown-item>
               </el-dropdown-menu>
@@ -82,12 +84,41 @@
             <span class="canvas-legend">
               <i class="legend-item"><span class="line-pos"></span>正向连线</i>
               <i class="legend-item"><span class="line-neg"></span>负向连线</i>
-              <span class="canvas-tip">点击节点查看节点详情，右键节点可选择「查看节点」{{ editMode ? '；编辑模式：拖拽节点调整位置，双击/右键节点打开节点对话框' : '' }}</span>
+              <span class="canvas-tip" :class="{ connecting: !!connectMode }">
+                <template v-if="connectMode">连线中：点击目标节点完成「{{ connectMode.isPositive ? '正向' : '负向' }}连线」，Esc 或点击空白处取消</template>
+                <template v-else>点击节点查看节点详情，右键节点可选择「查看节点」{{ editMode ? '；编辑模式：拖拽节点移动位置、从上方图标拖入新增节点、右键节点连线或编辑属性' : '' }}</template>
+              </span>
+              <el-button size="mini" icon="el-icon-download" @click="saveCanvasImage">保存图片</el-button>
             </span>
           </div>
-          <div class="canvas-scroll" ref="canvasScroll" @scroll="closeContextMenu" @contextmenu.prevent>
-            <!-- viewBox + width/height 缩放, 元素本身用 flex margin:auto 居中 -->
+          <!-- 节点图标: 编辑模式下拖到画布即可新增节点 -->
+          <div v-if="editMode" class="node-palette">
+            <span class="palette-label">拖拽新增节点</span>
+            <div
+              v-for="t in nodePalette"
+              :key="t"
+              class="palette-item"
+              draggable="true"
+              :title="'拖到画布新增' + typeLabel(t) + '节点'"
+              @dragstart="onPaletteDragStart($event, t)"
+              @dragend="onPaletteDragEnd">
+              <svg class="palette-icon" width="58" height="34" viewBox="0 0 54 32">
+                <wf-node-shape :node-type="t" />
+              </svg>
+              <span>{{ typeLabel(t) }}</span>
+            </div>
+          </div>
+          <div
+            class="canvas-scroll"
+            ref="canvasScroll"
+            :class="{ connecting: !!connectMode }"
+            @scroll="closeContextMenu"
+            @contextmenu.prevent
+            @dragover.prevent="onCanvasDragOver"
+            @drop.prevent="onCanvasDrop">
+            <!-- viewBox=画布尺寸, width/height=画布×缩放; 画布至少铺满容器, 缩小画布时同一屏可见的网格(坐标点)更多 -->
             <svg
+              ref="wfSvg"
               :width="canvasSize.width * zoom"
               :height="canvasSize.height * zoom"
               :viewBox="'0 0 ' + canvasSize.width + ' ' + canvasSize.height"
@@ -109,7 +140,7 @@
                 </pattern>
               </defs>
 
-              <rect x="0" y="0" :width="canvasSize.width" :height="canvasSize.height" fill="url(#wf-grid)" />
+              <rect x="0" y="0" :width="canvasSize.width" :height="canvasSize.height" fill="url(#wf-grid)" @click="cancelConnect" />
 
               <!-- 内容整体平移到画布左上留白处, 画布尺寸按内容包围盒计算, 再由外层居中 -->
               <g :transform="contentTransform">
@@ -122,7 +153,14 @@
                       :stroke="edge.isPositive === false ? '#f00' : '#5a5a5a'"
                       :stroke-width="edge.isPositive === false ? 1.5 : 1.2"
                       :marker-end="edge.isPositive === false ? 'url(#arrow-neg)' : 'url(#arrow-pos)'" />
-                    <g v-if="edge.label" :key="'l-' + edge.from + '-' + edge.actionId" :transform="'translate(' + edge.lx + ',' + edge.ly + ')'">
+                    <!-- 透明加宽命中区: 细线本身难以点中, 供右键弹出「查看」 -->
+                    <line
+                      :key="'hit-' + edge.from + '-' + edge.actionId"
+                      :x1="edge.x1" :y1="edge.y1" :x2="edge.x2" :y2="edge.y2"
+                      stroke="transparent" stroke-width="10" fill="none" class="edge-hit"
+                      @contextmenu.prevent="onEdgeContextMenu($event, edge)" />
+                    <g v-if="edge.label" :key="'l-' + edge.from + '-' + edge.actionId" :transform="'translate(' + edge.lx + ',' + edge.ly + ')'"
+                       class="edge-label" @contextmenu.prevent="onEdgeContextMenu($event, edge)">
                       <rect :x="-(edge.labelW / 2)" y="-9" :width="edge.labelW + 8" height="16" rx="2" fill="#fff" stroke="#c0c4cc" stroke-width="0.6" />
                       <text x="0" y="3" font-size="10" fill="#606266" text-anchor="middle">{{ edge.label }}</text>
                     </g>
@@ -139,50 +177,12 @@
                   @click="selectNode(node)"
                   @dblclick="openNodeDetail(node)"
                   @contextmenu.prevent="onNodeContextMenu($event, node)">
-                  <!-- 选中环 -->
-                  <rect v-if="selectedNodeId === node.nodeId" x="-4" y="-4" :width="shapeBox(node).w + 8" :height="shapeBox(node).h + 18"
+                  <!-- 选中环(交互态产物, 导出图片时会剔除) -->
+                  <rect v-if="selectedNodeId === node.nodeId" class="selection-ring" x="-4" y="-4" :width="shapeBox(node).w + 8" :height="shapeBox(node).h + 18"
                         rx="4" fill="none" stroke="#409eff" stroke-width="2" stroke-dasharray="4,2" />
 
-                  <!-- 开始 -->
-                  <template v-if="node.nodeType === 'WFSTART'">
-                    <circle cx="16" cy="16" r="15" fill="#fff" stroke="#5a5a5a" stroke-width="1.5" />
-                    <polygon points="11,9 23,16 11,23" fill="#5aa700" />
-                  </template>
-                  <!-- 停止 -->
-                  <template v-else-if="node.nodeType === 'WFSTOP'">
-                    <circle cx="16" cy="16" r="15" fill="#fff" stroke="#5a5a5a" stroke-width="1.5" />
-                    <rect x="10" y="10" width="12" height="12" fill="#cc6666" />
-                  </template>
-                  <!-- 任务 -->
-                  <template v-else-if="node.nodeType === 'WFTASK'">
-                    <rect width="54" height="32" fill="#76ade5" stroke="#5a5a5a" stroke-width="1" />
-                  </template>
-                  <!-- 子流程 -->
-                  <template v-else-if="node.nodeType === 'WFSUBPROCESS'">
-                    <rect width="54" height="32" fill="#ab8fcc" stroke="#5a5a5a" stroke-width="1" />
-                    <rect x="7" y="1" width="2" height="30" fill="#fff" />
-                    <rect x="45" y="1" width="2" height="30" fill="#fff" />
-                  </template>
-                  <!-- 等待 -->
-                  <template v-else-if="node.nodeType === 'WFWAIT'">
-                    <path d="M0,0 H37 Q54,0 54,16 Q54,32 37,32 H0 Z" fill="#c4b08c" stroke="#777677" stroke-width="1" />
-                  </template>
-                  <!-- 交互 -->
-                  <template v-else-if="node.nodeType === 'WFINTERACTION'">
-                    <polygon points="10,0 54,0 44,32 0,32" fill="#7accbc" stroke="#5a5a5a" stroke-width="1" />
-                  </template>
-                  <!-- 条件 -->
-                  <template v-else-if="node.nodeType === 'WFCONDITION'">
-                    <polygon points="27,0 54,16 27,32 0,16" fill="#eacf60" stroke="#777677" stroke-width="1" />
-                  </template>
-                  <!-- 输入 -->
-                  <template v-else-if="node.nodeType === 'WFINPUT'">
-                    <polygon points="15,0 54,0 39,32 0,32" fill="#f0f2f4" stroke="#5a5a5a" stroke-width="1" />
-                  </template>
-                  <!-- 兜底矩形 -->
-                  <template v-else>
-                    <rect width="54" height="32" fill="#dcdfe6" stroke="#5a5a5a" stroke-width="1" />
-                  </template>
+                  <!-- 节点形状(与图标面板共用同一组件) -->
+                  <wf-node-shape :node-type="node.nodeType" />
 
                   <text x="27" y="48" font-size="11" fill="#303133" text-anchor="middle" class="node-label">
                     {{ truncate(node.title || (typeLabel(node.nodeType) + ' ' + node.nodeId), 12) }}
@@ -192,13 +192,24 @@
               </g>
             </svg>
 
-            <!-- 节点右键菜单(相对画布容器定位) -->
+            <!-- 画布右键菜单(相对画布容器定位): 节点菜单 / 连线菜单 -->
             <div
               v-if="contextMenu.visible"
               class="node-context-menu"
               :style="{ left: contextMenu.x + 'px', top: contextMenu.y + 'px' }">
-              <div class="menu-item" @click="contextViewNode">查看节点</div>
-              <div v-if="editMode" class="menu-item" @click="contextEditNode">编辑节点</div>
+              <template v-if="contextMenu.type === 'edge'">
+                <div class="menu-item" @click="contextViewEdge">查看</div>
+              </template>
+              <template v-else>
+                <div class="menu-item" @click="contextViewNode">查看节点</div>
+                <div v-if="editMode" class="menu-item" @click="contextEditNode">编辑节点</div>
+                <div v-if="editMode" class="menu-item" @click="contextStartConnect(true)">
+                  {{ hasConnect(contextMenu.nodeId, true) ? '更改正向连线' : '正向连线' }}
+                </div>
+                <div v-if="editMode" class="menu-item" @click="contextStartConnect(false)">
+                  {{ hasConnect(contextMenu.nodeId, false) ? '更改负向连线' : '负向连线' }}
+                </div>
+              </template>
             </div>
           </div>
 
@@ -210,6 +221,13 @@
                 <el-tag size="mini" effect="plain">{{ typeLabel(selectedNode.nodeType) }}</el-tag>
                 <span class="node-name">{{ selectedNode.title }}</span>
               </span>
+              <!-- 坐标微调: 每次 ±1 格(与画布拖动同一套网格坐标) -->
+              <el-button-group v-if="editMode" class="nudge-group">
+                <el-button size="mini" icon="el-icon-top" title="上移一格（Y-1）" @click="nudgeNode(selectedNode, 0, -1)" />
+                <el-button size="mini" icon="el-icon-bottom" title="下移一格（Y+1）" @click="nudgeNode(selectedNode, 0, 1)" />
+                <el-button size="mini" icon="el-icon-back" title="左移一格（X-1）" @click="nudgeNode(selectedNode, -1, 0)" />
+                <el-button size="mini" icon="el-icon-right" title="右移一格（X+1）" @click="nudgeNode(selectedNode, 1, 0)" />
+              </el-button-group>
               <el-button type="primary" size="mini" icon="el-icon-view" @click="openNodeDetail(selectedNode)">
                 {{ editMode ? '编辑节点' : '查看节点' }}
               </el-button>
@@ -714,8 +732,8 @@
       <p class="save-tip">
         将按迁移模式整包保存流程 {{ workflow.processName }} (v{{ workflow.processRev }})，共
         {{ (workflow.wfnodes || []).length }} 个节点；已存在的节点/操作/分配等记录将被更新，不会删除 JSON 之外的数据。
+        保存只写入定义，不改变启用/激活状态（启用/激活请用右上角「选择操作」）。
       </p>
-      <el-checkbox v-model="saveDialog.enable">保存后启用并激活</el-checkbox>
       <div slot="footer">
         <el-button size="mini" @click="saveDialog.visible = false">取 消</el-button>
         <el-button type="primary" size="mini" :loading="saving" @click="submitSave">确认保存</el-button>
@@ -740,6 +758,7 @@
 import { workflowDetail, workflowImport, workflowDeactivate, workflowDisable } from '@/api/wfdesign'
 import SKsLookupDialog from '@/views/components/skslookup/SKsLookupDialog.vue'
 import { getLookupKeyColumns } from '@/views/components/skslookup/sksLookup'
+import WfNodeShape from './NodeShape.vue'
 
 // 节点类型中文标签
 var TYPE_LABELS = {
@@ -840,7 +859,8 @@ var NODE_DIALOGS = {
     fields: [
       { prop: 'app', label: '应用', span: 12 },
       { prop: 'timelimit', label: '时限', span: 6 },
-      { prop: 'displayOne', label: '显示一个', type: 'bool', span: 6 },
+      // 默认值取自 MAXATTRIBUTE.WFTASK.DISPLAYONE(DEFAULTVALUE=1, 与 Maximo 设计器一致)
+      { prop: 'displayOne', label: '显示一个', type: 'bool', span: 6, default: true },
       { prop: 'taskType', label: '任务类型', span: 12 },
       {
         prop: 'firstComplete',
@@ -934,10 +954,12 @@ var ACTION_DIALOGS = {
 
 export default {
   name: 'WfDesignDetail',
-  components: { 'sks-lookup-dialog': SKsLookupDialog },
+  components: { 'sks-lookup-dialog': SKsLookupDialog, 'wf-node-shape': WfNodeShape },
   data() {
     return {
       GRID: 80, // Maximo 工作流设计器网格像素(系统属性 mxe.webclient.wfdesigner.pixelsPerNode, 默认80)
+      ORIGIN_ROOM_PX: 160, // 画布原点在屏幕上保留的可拖动余量: 缩小画布时换算成更多空白格
+      viewport: { width: 0, height: 0 }, // 画布容器可视尺寸(clientWidth/Height), 用于让画布铺满可视区
       loading: false,
       saving: false,
       editMode: false,
@@ -948,15 +970,18 @@ export default {
       selectedNodeId: null,
       zoom: 1,
       spacing: 1.5, // 节点间距倍率(1 = Maximo 默认 80px/格), 只影响画布显示, 不改节点的网格坐标
+      nodePalette: ['WFSTART', 'WFSTOP', 'WFTASK', 'WFCONDITION', 'WFINPUT', 'WFINTERACTION', 'WFSUBPROCESS', 'WFWAIT'],
+      paletteDragType: '', // 从图标面板拖出的节点类型
+      connectMode: null, // 连线模式: {nodeId, isPositive} 选完目标节点或 Esc 结束
       suppressClick: false, // 拖拽结束后的第一次 click 不改选中
       dragState: null, // {node,startX,startY,origX,origY,moved}
-      contextMenu: { visible: false, x: 0, y: 0, nodeId: null }, // 节点右键菜单
+      contextMenu: { visible: false, x: 0, y: 0, type: 'node', nodeId: null, edgeIndex: -1 }, // 画布右键菜单: type=node(节点)/edge(连线)
       nodeDialog: { visible: false, nodeId: null }, // 节点对话框(查看/编辑)
       actionDialog: { visible: false, nodeId: null, index: -1 }, // 出线操作属性对话框
       // SksLookup 选择: 由字段定义(col.lookup)决定 lookup 名, 选择行的关键字段写入 row 的 targetKeys
       lookup: { name: '', title: '', relationObject: '', row: null, srcKeys: [], targetKeys: [] },
       subTableDefs: SUB_TABLE_DEFS,
-      saveDialog: { visible: false, enable: true }
+      saveDialog: { visible: false }
     }
   },
   computed: {
@@ -970,7 +995,7 @@ export default {
       var self = this
       var list = []
       ;(this.workflow.wfnodes || []).forEach(function (node) {
-        ;(node.wfactions || []).forEach(function (a) {
+        ;(node.wfactions || []).forEach(function (a, i) {
           if (a._delete === true) {
             return
           }
@@ -981,6 +1006,8 @@ export default {
           var item = {
             from: node.nodeId,
             actionId: a.actionId,
+            // 原始 wfactions 数组下标: 新建未保存的出线没有 actionId, 用下标定位原始对象
+            index: i,
             isPositive: a.isPositive,
             label: label,
             labelW: self.textWidth(label)
@@ -1072,42 +1099,51 @@ export default {
     gridPx() {
       return Math.round(this.GRID * this.spacing)
     },
-    /** 画布上所有节点的内容包围盒(像素) */
-    canvasBounds() {
-      var minX = null
-      var minY = null
-      var maxX = 0
-      var maxY = 0
-      var grid = this.gridPx
+    /**
+     * 画布原点四周保留的空白格数(向上/向左可以摆放的余量)。
+     * 屏幕上约保留 ORIGIN_ROOM_PX, 画布缩得越小格数越多(可用的画布坐标点也越多);
+     * 同时不小于已有节点的负坐标, 保证 Maximo 设计器产生的负坐标节点不会被挤出画布。
+     */
+    originCells() {
+      var cells = Math.max(2, Math.ceil(this.ORIGIN_ROOM_PX / (this.gridPx * this.zoom)))
       ;(this.workflow.wfnodes || []).forEach(function (n) {
-        minX = minX === null ? n.x * grid : Math.min(minX, n.x * grid)
-        minY = minY === null ? n.y * grid : Math.min(minY, n.y * grid)
-        maxX = Math.max(maxX, n.x * grid + 80)
-        maxY = Math.max(maxY, n.y * grid + 70)
+        cells = Math.max(cells, -(Number(n.x) || 0), -(Number(n.y) || 0))
       })
-      if (minX === null) {
-        minX = 0
-        minY = 0
-        maxX = 160
-        maxY = 120
-      }
-      return { minX: minX, minY: minY, maxX: maxX, maxY: maxY }
+      return cells
     },
-    /** 内容四周留白: 取网格整数倍, 保证内容与网格对齐 */
-    canvasPadding() {
-      return this.gridPx
+    /** 可摆放的网格坐标下限: 允许负坐标, 最上/最左可拖到画布边缘 */
+    minGrid() {
+      return -this.originCells
     },
-    /** 画布尺寸 = 内容包围盒 + 四周留白 */
+    /** 内容占用的画布尺寸: 原点留白 + 到最右/最下节点, 末尾再留一格 */
+    contentSize() {
+      var grid = this.gridPx
+      var origin = this.originCells * grid
+      var w = origin + grid * 2
+      var h = origin + grid * 2
+      ;(this.workflow.wfnodes || []).forEach(function (n) {
+        w = Math.max(w, origin + (Number(n.x) || 0) * grid + 80 + grid)
+        h = Math.max(h, origin + (Number(n.y) || 0) * grid + 70 + grid)
+      })
+      return { width: w, height: h }
+    },
+    /**
+     * 画布尺寸 = 内容与外框取大: 至少铺满可视区域, 因此画布缩小时同一屏能看到更多网格(坐标点);
+     * 铺满后 svg 不会小于容器, 拖动时内容位置也不会因画布尺寸变化而漂移
+     */
     canvasSize() {
-      var b = this.canvasBounds
-      var pad = this.canvasPadding
-      return { width: b.maxX - b.minX + pad * 2, height: b.maxY - b.minY + pad * 2 }
+      var c = this.contentSize
+      var vp = this.viewport
+      var zoom = this.zoom || 1
+      return {
+        width: Math.ceil(Math.max(c.width, vp.width / zoom)),
+        height: Math.ceil(Math.max(c.height, vp.height / zoom))
+      }
     },
-    /** 内容整体平移到画布留白处, 使图形不贴左上角 */
+    /** 内容整体平移: 固定画布原点留白(不随内容变化, 保证拖动时画面不漂移) */
     contentTransform() {
-      var b = this.canvasBounds
-      var pad = this.canvasPadding
-      return 'translate(' + (pad - b.minX) + ',' + (pad - b.minY) + ')'
+      var origin = this.originCells * this.gridPx
+      return 'translate(' + origin + ',' + origin + ')'
     },
     /** 节点对话框对应的节点(直接引用 workflow.wfnodes 中的对象, 编辑即改工作流数据) */
     dialogNode() {
@@ -1167,6 +1203,12 @@ export default {
       }
       var id = (a.actionId === null || a.actionId === undefined) ? '新建' : a.actionId
       return this.actionDialogDef.label + ' #' + id + (this.editMode ? '（编辑中）' : '')
+    }
+  },
+  watch: {
+    // 缩放后画布尺寸变化, 滚动条随之出现/消失, 需要重新量容器可视区
+    zoom() {
+      this.updateViewport()
     }
   },
   methods: {
@@ -1265,6 +1307,11 @@ export default {
         this.suppressClick = false
         return
       }
+      // 连线模式下点击节点即为「选目标节点」
+      if (this.connectMode) {
+        this.finishConnect(node)
+        return
+      }
       this.selectedNodeId = node.nodeId
     },
     // === 缩放 ===
@@ -1281,12 +1328,56 @@ export default {
       var el = this.$refs.canvasScroll
       if (!el) return
       var w = el.clientWidth - 20
-      // 画布不超出容器时保持 100%(由外层居中), 仅在超出时缩小
-      if (this.canvasSize.width <= w) {
+      // 按内容宽度适配: 画布会随缩放铺满可视区, 不能用画布尺寸反算缩放
+      var contentWidth = this.contentSize.width
+      if (contentWidth <= w) {
         this.zoom = 1
         return
       }
-      this.zoom = Math.max(0.2, Math.round((w / this.canvasSize.width) * 100) / 100)
+      this.zoom = Math.max(0.2, Math.round((w / contentWidth) * 100) / 100)
+    },
+    /** 记录画布容器可视尺寸: 画布尺寸要按它铺满, 缩小时才能看到更多网格 */
+    updateViewport(retry) {
+      var el = this.$refs.canvasScroll
+      if (!el) {
+        return
+      }
+      var self = this
+      var w = el.clientWidth
+      var h = el.clientHeight
+      var changed = w !== this.viewport.width || h !== this.viewport.height
+      if (changed) {
+        this.viewport = { width: w, height: h }
+      }
+      // 画布尺寸变化会让滚动条出现/消失, 进而改变可视区, 再量几轮直到稳定(有限次数, 防止来回抖动)
+      var left = retry === undefined ? 2 : retry
+      if (changed && left > 0) {
+        this.$nextTick(function () {
+          self.updateViewport(left - 1)
+        })
+      }
+    },
+    onWindowResize() {
+      this.updateViewport()
+    },
+    /** 加载后把视口滚到内容附近(原点留白可能很大, 避免打开后看不到节点) */
+    scrollToContent() {
+      var el = this.$refs.canvasScroll
+      var nodes = this.workflow.wfnodes || []
+      if (!el || nodes.length === 0) {
+        return
+      }
+      var grid = this.gridPx
+      var origin = this.originCells * grid
+      var minX = Number(nodes[0].x) || 0
+      var minY = Number(nodes[0].y) || 0
+      nodes.forEach(function (n) {
+        minX = Math.min(minX, Number(n.x) || 0)
+        minY = Math.min(minY, Number(n.y) || 0)
+      })
+      // 内容左上角再往左上留一格
+      el.scrollLeft = Math.max(0, (origin + minX * grid - grid) * this.zoom)
+      el.scrollTop = Math.max(0, (origin + minY * grid - grid) * this.zoom)
     },
     // === 编辑模式 ===
     handleEdit() {
@@ -1319,6 +1410,7 @@ export default {
       this.dragState = null
       this.saveDialog.visible = false
       this.closeContextMenu()
+      this.cancelConnect()
       this.nodeDialog.visible = false
       this.nodeDialog.nodeId = null
       this.actionDialog.visible = false
@@ -1328,7 +1420,8 @@ export default {
     // === 画布拖拽 ===
     onNodeMouseDown(event, node) {
       // 仅编辑模式左键可拖拽; 右键留给上下文菜单(mousedown 的 preventDefault 会吞掉部分浏览器的 contextmenu)
-      if (!this.editMode || event.button !== 0) {
+      // 连线模式下点击节点是「选目标节点」, 不进入拖拽
+      if (!this.editMode || event.button !== 0 || this.connectMode) {
         return
       }
       event.preventDefault()
@@ -1344,9 +1437,10 @@ export default {
       if (Math.abs(event.clientX - d.startX) > 3 || Math.abs(event.clientY - d.startY) > 3) {
         d.moved = true
       }
-      // 客户端像素差 -> 网格坐标(除以缩放与网格像素), 四舍五入吸附网格, 不允许负坐标
-      var nx = Math.max(0, Math.round(d.origX + (event.clientX - d.startX) / (this.gridPx * this.zoom)))
-      var ny = Math.max(0, Math.round(d.origY + (event.clientY - d.startY) / (this.gridPx * this.zoom)))
+      // 客户端像素差 -> 网格坐标(除以缩放与网格像素), 四舍五入吸附网格; 允许负坐标(下限为画布原点留白)
+      var min = this.minGrid
+      var nx = Math.max(min, Math.round(d.origX + (event.clientX - d.startX) / (this.gridPx * this.zoom)))
+      var ny = Math.max(min, Math.round(d.origY + (event.clientY - d.startY) / (this.gridPx * this.zoom)))
       if (nx !== d.node.x || ny !== d.node.y) {
         d.node.x = nx
         d.node.y = ny
@@ -1370,7 +1464,24 @@ export default {
       }
       var rect = el.getBoundingClientRect()
       this.selectedNodeId = node.nodeId
+      this.contextMenu.type = 'node'
       this.contextMenu.nodeId = node.nodeId
+      this.contextMenu.x = event.clientX - rect.left + el.scrollLeft
+      this.contextMenu.y = event.clientY - rect.top + el.scrollTop
+      this.contextMenu.visible = true
+      document.addEventListener('click', this.closeContextMenu)
+    },
+    // === 连线右键菜单: 线条或线条描述上右键, 弹出「查看」(出线操作属性) ===
+    onEdgeContextMenu(event, edge) {
+      var el = this.$refs.canvasScroll
+      if (!el || !edge) {
+        return
+      }
+      var rect = el.getBoundingClientRect()
+      this.contextMenu.type = 'edge'
+      // 出线挂在源节点上: nodeId 用 from, edgeIndex 用其 wfactions 原始下标(与「编辑属性」一致)
+      this.contextMenu.nodeId = edge.from
+      this.contextMenu.edgeIndex = edge.index
       this.contextMenu.x = event.clientX - rect.left + el.scrollLeft
       this.contextMenu.y = event.clientY - rect.top + el.scrollTop
       this.contextMenu.visible = true
@@ -1379,6 +1490,7 @@ export default {
     closeContextMenu() {
       document.removeEventListener('click', this.closeContextMenu)
       this.contextMenu.visible = false
+      this.contextMenu.type = 'node'
     },
     contextViewNode() {
       var node = this.nodeMap[this.contextMenu.nodeId]
@@ -1387,6 +1499,266 @@ export default {
     },
     contextEditNode() {
       this.contextViewNode()
+    },
+    contextViewEdge() {
+      var nodeId = this.contextMenu.nodeId
+      var index = this.contextMenu.edgeIndex
+      this.closeContextMenu()
+      this.openActionDetail(nodeId, index)
+    },
+    // === 节点连线 ===
+    /** 该节点是否已有指定方向的出线(决定右键菜单显示「连线」还是「更改连线」) */
+    hasConnect(nodeId, isPositive) {
+      var node = this.nodeMap[nodeId]
+      var list = node ? this.activeRows(node.wfactions) : []
+      return list.some(function (a) {
+        return (a.isPositive === false ? false : true) === isPositive
+      })
+    },
+    contextStartConnect(isPositive) {
+      var node = this.nodeMap[this.contextMenu.nodeId]
+      this.closeContextMenu()
+      if (!node) {
+        return
+      }
+      this.connectMode = { nodeId: node.nodeId, isPositive: isPositive }
+      document.addEventListener('keydown', this.onConnectKeydown)
+    },
+    onConnectKeydown(event) {
+      if (event.key === 'Escape') {
+        this.cancelConnect()
+      }
+    },
+    cancelConnect() {
+      if (!this.connectMode) {
+        return
+      }
+      this.connectMode = null
+      document.removeEventListener('keydown', this.onConnectKeydown)
+    },
+    /**
+     * 连线完成(连线模式下点击目标节点):
+     * 已有同向出线 -> 只改目标节点; 没有 -> 新建出线(操作/条件留空)并打开「操作属性」选操作
+     */
+    finishConnect(target) {
+      var mode = this.connectMode
+      var source = mode ? this.nodeMap[mode.nodeId] : null
+      this.cancelConnect()
+      if (!source || !target) {
+        return
+      }
+      var direction = mode.isPositive ? '正向' : '负向'
+      if (target.nodeId === source.nodeId) {
+        this.$message.warning('不能连接到节点自身')
+        return
+      }
+      var self = this
+      var list = this.activeRows(source.wfactions)
+      var exist = null
+      list.forEach(function (a) {
+        if ((a.isPositive === false ? false : true) === mode.isPositive) {
+          exist = a
+        }
+      })
+      if (exist) {
+        exist.memberNodeId = target.nodeId
+        this.dirty = true
+        this.$message.success('已将' + direction + '连线改到节点 #' + target.nodeId)
+        return
+      }
+      var sequence = 0
+      list.forEach(function (a) {
+        var v = parseInt(a.sequence, 10)
+        if (!isNaN(v) && v > sequence) {
+          sequence = v
+        }
+      })
+      if (!source.wfactions) {
+        this.$set(source, 'wfactions', [])
+      }
+      var row = {
+        isPositive: mode.isPositive,
+        memberNodeId: target.nodeId,
+        sequence: sequence + 1,
+        action: '',
+        condition: '',
+        conditionClass: '',
+        instruction: '',
+        _new: true
+      }
+      source.wfactions.push(row)
+      this.dirty = true
+      this.$message.success('已新增' + direction + '连线到节点 #' + target.nodeId + '，请选择操作(ACTION)')
+      // 出线的操作(ACTION)是流程运行的必要信息, 建好后直接打开属性对话框
+      this.$nextTick(function () {
+        self.openActionDetail(source.nodeId, source.wfactions.length - 1)
+      })
+    },
+    // === 图标面板拖拽新增节点 ===
+    onPaletteDragStart(event, nodeType) {
+      this.paletteDragType = nodeType
+      if (event.dataTransfer) {
+        event.dataTransfer.setData('text/plain', nodeType)
+        event.dataTransfer.effectAllowed = 'copy'
+      }
+    },
+    onPaletteDragEnd() {
+      this.paletteDragType = ''
+    },
+    onCanvasDragOver(event) {
+      if (this.paletteDragType && event.dataTransfer) {
+        event.dataTransfer.dropEffect = 'copy'
+      }
+    },
+    /** 拖放落点 -> 画布网格坐标(节点左上角), 允许负坐标(画布原点留白区域内) */
+    onCanvasDrop(event) {
+      var nodeType = this.paletteDragType || (event.dataTransfer ? event.dataTransfer.getData('text/plain') : '')
+      this.paletteDragType = ''
+      var svg = this.$refs.wfSvg
+      if (!this.editMode || !TYPE_LABELS[nodeType] || !svg) {
+        return
+      }
+      var rect = svg.getBoundingClientRect()
+      // 屏幕像素 -> 画布坐标(除以缩放) -> 减去原点留白 -> 网格坐标
+      var sx = (event.clientX - rect.left) / this.zoom
+      var sy = (event.clientY - rect.top) / this.zoom
+      var origin = this.originCells * this.gridPx
+      var min = this.minGrid
+      var gx = Math.max(min, Math.round((sx - origin - 27) / this.gridPx))
+      var gy = Math.max(min, Math.round((sy - origin - 16) / this.gridPx))
+      this.addNode(nodeType, gx, gy)
+    },
+    /** 新增节点: nodeId 由前端按最大值+1 预分配(其余字段由框架补默认值) */
+    addNode(nodeType, x, y) {
+      var nodes = this.workflow.wfnodes
+      if (!nodes) {
+        this.$set(this.workflow, 'wfnodes', [])
+        nodes = this.workflow.wfnodes
+      }
+      if (nodeType === 'WFSTART' || nodeType === 'WFSTOP') {
+        var duplicated = nodes.some(function (n) {
+          return n.nodeType === nodeType
+        })
+        if (duplicated) {
+          this.$message.warning('该流程已存在' + TYPE_LABELS[nodeType] + '节点，不能重复添加')
+          return
+        }
+      }
+      var nodeId = 0
+      nodes.forEach(function (n) {
+        var id = parseInt(n.nodeId, 10)
+        if (!isNaN(id) && id > nodeId) {
+          nodeId = id
+        }
+      })
+      nodeId += 1
+      nodes.push({ nodeId: nodeId, nodeType: nodeType, title: '', description: null, x: x, y: y })
+      this.dirty = true
+      this.selectedNodeId = nodeId
+      this.$message.success('已新增' + TYPE_LABELS[nodeType] + '节点 #' + nodeId + '，双击节点可编辑属性')
+    },
+    // === 画布导出图片 ===
+    /** 默认文件名: 流程名-版本号(去掉文件名非法字符) */
+    defaultImageName() {
+      var name = String(this.workflow.processName || 'workflow')
+      var rev = this.workflow.processRev
+      var full = rev === undefined || rev === null || rev === '' ? name : name + '-' + rev
+      return full.replace(/[\\/:*?"<>|]/g, '_')
+    },
+    /**
+     * 画布 -> PNG: 点击后直接弹浏览器原生「另存为」对话框选保存位置; 
+     * 不支持 showSaveFilePicker 的环境退回普通下载(保存到浏览器默认下载目录)。
+     * 把 svg 序列化后当图片绘制到 canvas: 页面样式(含 scoped)不会作用到这张图片, 
+     * 所以画布内的外观必须全部由 svg 属性(fill/font-size/stroke 等)描述, 不依赖 css 类。
+     */
+    saveCanvasImage() {
+      var svg = this.$refs.wfSvg
+      if (!svg) {
+        this.$message.error('画布尚未渲染完成，请稍后重试')
+        return
+      }
+      var self = this
+      var fileName = this.defaultImageName() + '.png'
+      var w = this.canvasSize.width
+      var h = this.canvasSize.height
+      // 2 倍导出更清晰; 画布很大时退回 1 倍, 避免超过浏览器 canvas 面积上限导致空白图
+      var scale = w * h * 4 > 16000000 ? 1 : 2
+      var pxW = w * scale
+      var pxH = h * scale
+      var clone = svg.cloneNode(true)
+      // 选中框属于交互态产物, 不进入导出图片
+      var rings = clone.querySelectorAll('.selection-ring')
+      for (var i = 0; i < rings.length; i++) {
+        rings[i].parentNode.removeChild(rings[i])
+      }
+      clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg')
+      // viewBox 不变, 改 width/height 让浏览器按目标像素栅格化(导出与当前 zoom 无关)
+      clone.setAttribute('width', pxW)
+      clone.setAttribute('height', pxH)
+      // 图片里的 svg 不继承页面字体, 显式带上页面字体, 避免导出后文字变成默认衬线体
+      var fontFamily = window.getComputedStyle(svg).fontFamily
+      if (fontFamily) {
+        clone.setAttribute('font-family', fontFamily)
+      }
+      var url = URL.createObjectURL(new Blob([new XMLSerializer().serializeToString(clone)], { type: 'image/svg+xml;charset=utf-8' }))
+      var img = new Image()
+      img.onload = function () {
+        URL.revokeObjectURL(url)
+        var canvas = document.createElement('canvas')
+        canvas.width = pxW
+        canvas.height = pxH
+        var ctx = canvas.getContext('2d')
+        ctx.fillStyle = '#fff'
+        ctx.fillRect(0, 0, pxW, pxH)
+        ctx.drawImage(img, 0, 0, pxW, pxH)
+        canvas.toBlob(function (blob) {
+          self.saveImageBlob(blob, fileName)
+        }, 'image/png')
+      }
+      img.onerror = function () {
+        URL.revokeObjectURL(url)
+        self.$message.error('画布转换为图片失败')
+      }
+      img.src = url
+    },
+    saveImageBlob(blob, fileName) {
+      var self = this
+      if (!blob) {
+        this.$message.error('画布图片生成失败(画布可能过大)')
+        return
+      }
+      // 原生「另存为」对话框: 需要用户手势, 生成图片耗时很短, 仍在手势有效期内
+      if (window.showSaveFilePicker) {
+        window.showSaveFilePicker({
+          suggestedName: fileName,
+          types: [{ description: 'PNG 图片', accept: { 'image/png': ['.png'] } }]
+        }).then(function (handle) {
+          return handle.createWritable().then(function (writable) {
+            return writable.write(blob).then(function () { return writable.close() })
+          }).then(function () {
+            self.$message.success('画布图片已保存: ' + handle.name)
+          })
+        }).catch(function (err) {
+          // 用户取消保存不提示、不退回下载; 其他情况(如无用户手势)退回普通下载
+          if (!err || err.name !== 'AbortError') {
+            self.downloadImageBlob(blob, fileName)
+          }
+        })
+        return
+      }
+      this.downloadImageBlob(blob, fileName)
+    },
+    /** 退回方案: 触发普通下载(保存到浏览器默认下载目录) */
+    downloadImageBlob(blob, fileName) {
+      var href = URL.createObjectURL(blob)
+      var a = document.createElement('a')
+      a.href = href
+      a.download = fileName
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(href)
+      this.$message.success('画布图片已保存: ' + fileName)
     },
     // === 节点对话框 ===
     openNodeDetail(node) {
@@ -1411,7 +1783,8 @@ export default {
       }
       var detail = {}
       fields.forEach(function (f) {
-        detail[f.prop] = f.type === 'bool' ? false : (f.type === 'radio' ? f.options[0].value : '')
+        // bool 用字段定义的 default(对齐 MAXATTRIBUTE 的 DEFAULTVALUE), radio 取第一个选项
+        detail[f.prop] = f.type === 'bool' ? f.default === true : (f.type === 'radio' ? f.options[0].value : '')
       })
       this.$set(node, key, detail)
     },
@@ -1458,6 +1831,16 @@ export default {
     },
     markDirty() {
       this.dirty = true
+    },
+    /** 按上下左右图标微调节点坐标(每次 ±1 格); 与画布拖动一致, 下限为画布原点留白 */
+    nudgeNode(node, dx, dy) {
+      if (!this.editMode || !node) {
+        return
+      }
+      var min = this.minGrid
+      node.x = Math.max(min, (Number(node.x) || 0) + dx)
+      node.y = Math.max(min, (Number(node.y) || 0) + dy)
+      this.markDirty()
     },
     /** 打开 SksLookup 选择对话框: 字段定义中的 lookup 决定 lookup 名, 选择行关键字段写回该字段 */
     openLookup(row, field) {
@@ -1623,17 +2006,13 @@ export default {
         this.$message.error('无法保存: ' + problems.join('；'))
         return
       }
-      this.saveDialog.enable = this.workflow.enabled === true
       this.saveDialog.visible = true
     },
     submitSave() {
       var payload = JSON.parse(JSON.stringify(this.workflow))
-      // 导入脚本仅在 data.enabled === true 且 _enable != false 时才走启用激活流程
-      if (this.saveDialog.enable) {
-        payload.enabled = true
-      }
       this.saving = true
-      workflowImport({ workflows: [payload] }, { _impMode: 'migration', _enable: this.saveDialog.enable ? 'true' : 'false' })
+      // _enable=false: 只写定义, 不改动目标环境原有的启用/激活状态(启用/激活走右上角「选择操作」)
+      workflowImport({ workflows: [payload] }, { _impMode: 'migration', _enable: 'false' })
         .then(res => {
           this.handleSaveResult(res.data || res)
         })
@@ -1656,26 +2035,49 @@ export default {
       }
       var warnings = result.warnings || []
       if (warnings.length > 0) {
-        this.$alert(warnings.join('<br/>'), '保存成功，启用/激活过程有警告', { dangerouslyUseHTMLString: true, type: 'warning' })
+        this.$alert(warnings.join('<br/>'), '保存成功，但有警告', { dangerouslyUseHTMLString: true, type: 'warning' })
       } else {
         this.$message.success(result.message || '保存成功')
       }
       this.exitEdit()
       this.fetchDetail()
     },
-    // === 状态操作(取消激活 / 禁用) ===
+    // === 状态操作(启用 / 激活 / 取消激活 / 禁用) ===
     handleStateCommand(command) {
-      var label = command === 'deactivate' ? '取消激活过程' : '禁用过程'
-      var tip = command === 'deactivate'
-        ? '取消激活后该流程修订变回草稿状态，可在本页「编 辑」修改；已在流程中的记录不受影响。是否继续?'
-        : '禁用后新记录不再进入该流程，已在流程中的记录不受影响。是否继续?'
-      this.$confirm(tip, label, { type: 'warning' })
+      var defs = {
+        enable: {
+          label: '启用过程',
+          tip: '启用后该流程修订的定义生效，但还需要「激活过程」才会被新记录使用。是否继续?'
+        },
+        activate: {
+          label: '激活过程',
+          tip: '激活后该流程修订对外生效并生成修订记录，激活状态下不能再编辑（需先取消激活）。是否继续?'
+        },
+        deactivate: {
+          label: '取消激活过程',
+          tip: '取消激活后该流程修订变回草稿状态，可在本页「编 辑」修改；已在流程中的记录不受影响。是否继续?'
+        },
+        disable: {
+          label: '禁用过程',
+          tip: '禁用后新记录不再进入该流程，已在流程中的记录不受影响。是否继续?'
+        }
+      }
+      var def = defs[command]
+      if (!def) {
+        return
+      }
+      this.$confirm(def.tip, def.label, { type: 'warning' })
         .then(() => {
-          this.submitStateChange(command, label)
+          this.submitStateChange(command, def.label)
         })
         .catch(() => {})
     },
     submitStateChange(command, label) {
+      // 启用/激活在脚本里没有独立动作, 只能走整包导入 + _enable 触发框架标准动作
+      if (command === 'enable' || command === 'activate') {
+        this.submitEnableState(command, label)
+        return
+      }
       var api = command === 'deactivate' ? workflowDeactivate : workflowDisable
       this.saving = true
       api({
@@ -1689,21 +2091,52 @@ export default {
         this.saving = false
       })
     },
-    handleStateResult(data, label) {
+    /**
+     * 启用过程: enabled=true、active=false —— 框架 validateProcess + enableProcess
+     * 激活过程: enabled=true、active=true  —— 再调用 makeProcessActive(生成 WFREVISION 修订记录)
+     * 两者都用当前详情整包回存(_impMode=migration, _enable=true)触发, 因为脚本的 _enable 流程
+     * 只在 data.enabled === true 时执行, 且 makeProcessActive 仅在 data.active === true 时调用
+     */
+    submitEnableState(command, label) {
+      var payload = JSON.parse(JSON.stringify(this.workflow))
+      payload.enabled = true
+      payload.active = command === 'activate'
+      this.saving = true
+      workflowImport({ workflows: [payload] }, { _impMode: 'migration', _enable: 'true' })
+        .then(res => {
+          this.handleStateResult(res.data || res, label, true)
+        })
+        .catch(err => {
+          this.$message.error(label + '失败: ' + (err.message || String(err)))
+        })
+        .finally(() => {
+          this.saving = false
+        })
+    },
+    /**
+     * @param {boolean} preferLabel - 启用/激活走导入接口, 其 message 是"修改成功"这类通用文案,
+     *        且校验提示可能多条, 故用 label 提示成功、用弹窗展示校验问题
+     */
+    handleStateResult(data, label, preferLabel) {
       if (data.status === 'error') {
         this.$message.error(data.message || (label + '失败'))
         return
       }
-      var result = ((data.workflows || {}).result || [])[0] || {}
+      // 状态变更接口返回 workflows.result, 导入接口返回顶层 result
+      var result = (data.result || (data.workflows || {}).result || [])[0] || {}
       if (result.status !== 'SUCCESS') {
         this.$message.error(label + '失败: ' + (result.message || '未知错误'))
         return
       }
       var warnings = result.warnings || []
       if (warnings.length > 0) {
-        this.$message.warning(warnings.join('；'))
+        if (preferLabel) {
+          this.$alert(warnings.join('<br/>'), label + '未生效，请先修正以下问题', { dangerouslyUseHTMLString: true, type: 'warning' })
+        } else {
+          this.$message.warning(warnings.join('；'))
+        }
       } else {
-        this.$message.success(result.message || (label + '成功'))
+        this.$message.success(preferLabel ? (label + '成功') : (result.message || (label + '成功')))
       }
       this.fetchDetail()
     },
@@ -1736,6 +2169,10 @@ export default {
         this.updateTagTitle()
         this.$nextTick(() => {
           this.fitZoom()
+          this.$nextTick(() => {
+            this.updateViewport()
+            this.scrollToContent()
+          })
         })
       }).catch(err => {
         this.$message.error('加载失败: ' + (err.message || String(err)))
@@ -1746,11 +2183,14 @@ export default {
   },
   mounted() {
     this.fetchDetail()
+    window.addEventListener('resize', this.onWindowResize)
   },
   beforeDestroy() {
+    window.removeEventListener('resize', this.onWindowResize)
     document.removeEventListener('mousemove', this.onDragMove)
     document.removeEventListener('mouseup', this.onDragEnd)
     document.removeEventListener('click', this.closeContextMenu)
+    document.removeEventListener('keydown', this.onConnectKeydown)
   }
 }
 </script>
@@ -1826,6 +2266,51 @@ export default {
   color: #909399;
   width: 36px;
 }
+/* 节点图标面板: 拖到画布新增节点 */
+.node-palette {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 6px 10px;
+  margin-bottom: 8px;
+  background: #f7f9fc;
+  border: 1px dashed #dcdfe6;
+  border-radius: 4px;
+}
+.node-palette .palette-label {
+  font-size: 12px;
+  color: #606266;
+  margin-right: 2px;
+}
+.node-palette .palette-item {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  width: 66px;
+  padding: 2px 0;
+  background: #fff;
+  border: 1px solid #e4e7ed;
+  border-radius: 4px;
+  font-size: 12px;
+  color: #606266;
+  cursor: grab;
+  user-select: none;
+}
+.node-palette .palette-item:hover {
+  border-color: #409eff;
+  color: #409eff;
+}
+.node-palette .palette-item:active {
+  cursor: grabbing;
+}
+.canvas-tip.connecting {
+  color: #409eff;
+  font-weight: 600;
+}
+.canvas-scroll.connecting {
+  cursor: crosshair;
+}
 .canvas-legend {
   font-size: 12px;
   color: #606266;
@@ -1858,12 +2343,12 @@ export default {
   height: 520px;
   overflow: auto;
   background: #fff;
-  /* 内容由 svg 的网格底图绘制, 画布小于容器时整体居中 */
+  /* 画布(svg 网格底图)至少铺满容器, 超出时滚动查看 */
   display: flex;
 }
 .wf-svg {
   display: block;
-  /* margin:auto 居中; 内容超出容器时仍可完整滚动 */
+  /* 画布不小于容器时为 0(内容位置稳定), 仅画布小于容器时居中 */
   margin: auto;
   flex: none;
 }
@@ -1875,6 +2360,11 @@ export default {
 }
 .node-label {
   pointer-events: none;
+}
+/* 连线命中区/线条描述: 右键可查看出线操作属性 */
+.edge-hit,
+.edge-label {
+  cursor: pointer;
 }
 /* 节点右键菜单 */
 .node-context-menu {
@@ -1949,6 +2439,11 @@ export default {
   border-radius: 4px;
   padding: 10px;
   background: #fff;
+}
+/* 坐标微调按钮: 与「编辑节点」同一行, 靠左右 auto 外边距居中 */
+.nudge-group {
+  flex: none;
+  margin: 0 auto;
 }
 .node-detail-header {
   margin-bottom: 8px;
