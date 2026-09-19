@@ -65,12 +65,20 @@
         <!-- ============ 画布 Tab ============ -->
         <el-tab-pane label="流程图" name="canvas">
           <div class="canvas-toolbar">
-            <el-button-group>
-              <el-button size="mini" icon="el-icon-zoom-out" @click="zoomOut" title="缩小"></el-button>
-              <el-button size="mini" @click="resetZoom">{{ Math.round(zoom * 100) }}%</el-button>
-              <el-button size="mini" icon="el-icon-zoom-in" @click="zoomIn" title="放大"></el-button>
-              <el-button size="mini" icon="el-icon-full-screen" @click="fitZoom" title="适应宽度"></el-button>
-            </el-button-group>
+            <div class="canvas-tools">
+              <el-button-group>
+                <el-button size="mini" icon="el-icon-zoom-out" @click="zoomOut" title="缩小"></el-button>
+                <el-button size="mini" @click="resetZoom">{{ Math.round(zoom * 100) }}%</el-button>
+                <el-button size="mini" icon="el-icon-zoom-in" @click="zoomIn" title="放大"></el-button>
+                <el-button size="mini" icon="el-icon-full-screen" @click="fitZoom" title="适应宽度"></el-button>
+              </el-button-group>
+              <!-- 节点间距: 拉开网格, 避免节点标题过长时左右压字 -->
+              <span class="canvas-spacing">
+                <span class="spacing-label">节点间距</span>
+                <el-slider v-model="spacing" :min="1" :max="2.5" :step="0.1" class="spacing-slider" />
+                <span class="spacing-value">{{ Math.round(spacing * 100) }}%</span>
+              </span>
+            </div>
             <span class="canvas-legend">
               <i class="legend-item"><span class="line-pos"></span>正向连线</i>
               <i class="legend-item"><span class="line-neg"></span>负向连线</i>
@@ -91,13 +99,13 @@
                 <marker id="arrow-neg" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
                   <path d="M0,0 L8,3 L0,6 z" fill="#f00" />
                 </marker>
-                <!-- 网格: 次网格 16px(80/5), 主网格 80px(=GRID), 与节点坐标同一坐标系, 随缩放一起变化 -->
-                <pattern id="wf-grid-minor" width="16" height="16" patternUnits="userSpaceOnUse">
-                  <path d="M 16 0 L 0 0 0 16" fill="none" stroke="#eceff3" stroke-width="1" vector-effect="non-scaling-stroke" />
+                <!-- 网格: 次网格 = 主网格/5, 主网格 = 节点间距(默认 80px = GRID), 与节点坐标同一坐标系, 随缩放一起变化 -->
+                <pattern id="wf-grid-minor" :width="gridPx / 5" :height="gridPx / 5" patternUnits="userSpaceOnUse">
+                  <path :d="'M ' + (gridPx / 5) + ' 0 L 0 0 0 ' + (gridPx / 5)" fill="none" stroke="#eceff3" stroke-width="1" vector-effect="non-scaling-stroke" />
                 </pattern>
-                <pattern id="wf-grid" width="80" height="80" patternUnits="userSpaceOnUse">
-                  <rect width="80" height="80" fill="url(#wf-grid-minor)" />
-                  <path d="M 80 0 L 0 0 0 80" fill="none" stroke="#dfe3e8" stroke-width="1" vector-effect="non-scaling-stroke" />
+                <pattern id="wf-grid" :width="gridPx" :height="gridPx" patternUnits="userSpaceOnUse">
+                  <rect :width="gridPx" :height="gridPx" fill="url(#wf-grid-minor)" />
+                  <path :d="'M ' + gridPx + ' 0 L 0 0 0 ' + gridPx" fill="none" stroke="#dfe3e8" stroke-width="1" vector-effect="non-scaling-stroke" />
                 </pattern>
               </defs>
 
@@ -125,7 +133,7 @@
                 <g
                   v-for="node in workflow.wfnodes"
                   :key="'n-' + node.nodeId"
-                  :transform="'translate(' + (node.x * GRID) + ',' + (node.y * GRID) + ')'"
+                  :transform="'translate(' + (node.x * gridPx) + ',' + (node.y * gridPx) + ')'"
                   class="wf-node" :class="{ selected: selectedNodeId === node.nodeId, editable: editMode }"
                   @mousedown="onNodeMouseDown($event, node)"
                   @click="selectNode(node)"
@@ -939,6 +947,7 @@ export default {
       workflow: {},
       selectedNodeId: null,
       zoom: 1,
+      spacing: 1.5, // 节点间距倍率(1 = Maximo 默认 80px/格), 只影响画布显示, 不改节点的网格坐标
       suppressClick: false, // 拖拽结束后的第一次 click 不改选中
       dragState: null, // {node,startX,startY,origX,origY,moved}
       contextMenu: { visible: false, x: 0, y: 0, nodeId: null }, // 节点右键菜单
@@ -1059,13 +1068,17 @@ export default {
       })
       return rows
     },
+    /** 网格像素 = Maximo 每格像素(GRID) × 节点间距倍率; 画布渲染与拖拽换算是同一个坐标系 */
+    gridPx() {
+      return Math.round(this.GRID * this.spacing)
+    },
     /** 画布上所有节点的内容包围盒(像素) */
     canvasBounds() {
       var minX = null
       var minY = null
       var maxX = 0
       var maxY = 0
-      var grid = this.GRID
+      var grid = this.gridPx
       ;(this.workflow.wfnodes || []).forEach(function (n) {
         minX = minX === null ? n.x * grid : Math.min(minX, n.x * grid)
         minY = minY === null ? n.y * grid : Math.min(minY, n.y * grid)
@@ -1082,7 +1095,7 @@ export default {
     },
     /** 内容四周留白: 取网格整数倍, 保证内容与网格对齐 */
     canvasPadding() {
-      return this.GRID
+      return this.gridPx
     },
     /** 画布尺寸 = 内容包围盒 + 四周留白 */
     canvasSize() {
@@ -1203,7 +1216,7 @@ export default {
     },
     /** 节点左上角画布坐标 */
     nodeOrigin: function (node) {
-      return { x: node.x * this.GRID, y: node.y * this.GRID }
+      return { x: node.x * this.gridPx, y: node.y * this.gridPx }
     },
     /** 两节点中心 -> 与各自矩形边框交点(椭圆近似) */
     borderSegment: function (from, to) {
@@ -1332,8 +1345,8 @@ export default {
         d.moved = true
       }
       // 客户端像素差 -> 网格坐标(除以缩放与网格像素), 四舍五入吸附网格, 不允许负坐标
-      var nx = Math.max(0, Math.round(d.origX + (event.clientX - d.startX) / (this.GRID * this.zoom)))
-      var ny = Math.max(0, Math.round(d.origY + (event.clientY - d.startY) / (this.GRID * this.zoom)))
+      var nx = Math.max(0, Math.round(d.origX + (event.clientX - d.startX) / (this.gridPx * this.zoom)))
+      var ny = Math.max(0, Math.round(d.origY + (event.clientY - d.startY) / (this.gridPx * this.zoom)))
       if (nx !== d.node.x || ny !== d.node.y) {
         d.node.x = nx
         d.node.y = ny
@@ -1789,6 +1802,29 @@ export default {
   justify-content: space-between;
   align-items: center;
   margin-bottom: 8px;
+}
+.canvas-tools {
+  display: flex;
+  align-items: center;
+}
+.canvas-spacing {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 14px;
+}
+.canvas-spacing .spacing-label {
+  font-size: 12px;
+  color: #606266;
+  margin-right: 6px;
+}
+.canvas-spacing .spacing-slider {
+  width: 110px;
+  margin-right: 4px;
+}
+.canvas-spacing .spacing-value {
+  font-size: 12px;
+  color: #909399;
+  width: 36px;
 }
 .canvas-legend {
   font-size: 12px;
