@@ -45,6 +45,16 @@
           :highlight-current-row="true"
           @rowClickAfter="handleRowClick"
           @refresh="fetchList">
+          <template slot="none-enabled" slot-scope="{ row }">
+            <el-tag :type="row.enabled === true ? 'success' : 'info'" size="mini">
+              {{ row.enabled === true ? '已启用' : '未启用' }}
+            </el-tag>
+          </template>
+          <template slot="none-active" slot-scope="{ row }">
+            <el-tag :type="row.active === true ? '' : 'info'" size="mini">
+              {{ row.active === true ? '已激活' : '未激活' }}
+            </el-tag>
+          </template>
           <template slot="tableColumnList-after">
             <el-table-column label="操作" width="80" align="center" fixed="right">
               <template slot-scope="scope">
@@ -200,15 +210,12 @@ export default {
             { prop: 'processRev', label: '版本', width: 70 },
             { prop: 'objectName', label: '主对象', width: 140 },
             { prop: 'description', label: '描述', minWidth: 220 },
-            { prop: 'enabledText', label: '启用', width: 80 },
-            { prop: 'activeText', label: '激活', width: 80 }
+            { prop: 'enabled', label: '启用', width: 90, align: 'center', htmlType: 'none' },
+            { prop: 'active', label: '激活', width: 90, align: 'center', htmlType: 'none' }
           ]),
         queryParamsColumnListEnable: false,
         queryParamsColumnList: []
       }
-    },
-    yesNoText(v) {
-      return v === true ? '是' : '否'
     },
     // === SQL 条件构建 ===
     escapeSql(v) {
@@ -273,10 +280,6 @@ export default {
           this.$message.error(data.message || '查询失败')
         } else {
           const rows = data.workflows || []
-          rows.forEach(r => {
-            r.enabledText = this.yesNoText(r.enabled)
-            r.activeText = this.yesNoText(r.active)
-          })
           this.mainTable.list = rows
           this.mainTable.total = data.total || 0
           this.total = data.total || 0

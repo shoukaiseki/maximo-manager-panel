@@ -241,6 +241,10 @@ export default {
       this.sortOrder = ''
       this.errorMessage = ''
       this.pageNum = 1
+      // 列/对象名必须清空: 组件被多个 lookup 复用(如先开「选择角色」再开「选择操作」),
+      // 残留上一次服务端返回的列会导致本次表格列与关键字过滤字段全是上一个 lookup 的字段
+      this.columns = []
+      this.objectname = ''
       this.visible = true
     },
     /** 关闭对话框 */

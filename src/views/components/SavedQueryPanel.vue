@@ -2,7 +2,7 @@
   <div class="saved-query-panel">
     <div class="sqp-actions">
       <el-select v-model="selectedSavedQuery" placeholder="选择保存的查询" clearable filterable size="mini" style="width: 180px; margin-right: 8px;" :class="{ 'sqp-select-active': !!selectedSavedQuery }" @change="applySavedQuery">
-        <el-option v-for="q in savedQueryList" :key="q.id" :label="q.queryname" :value="q.id" />
+        <el-option v-for="q in savedQueryList" :key="q.id" :label="q.description || q.queryname" :value="q.id" />
       </el-select>
       <el-dropdown trigger="click" size="mini" @command="handleMenuCommand">
         <el-button size="mini" style="width: 31px; padding: 7px 0;">
@@ -32,8 +32,8 @@
         <el-form-item label="查询名称" required>
           <el-input v-model="saveDialog.queryname" placeholder="查询名称，如：按类型查询" />
         </el-form-item>
-        <el-form-item label="描述">
-          <el-input v-model="saveDialog.description" placeholder="可选" />
+        <el-form-item label="描述" required>
+          <el-input v-model="saveDialog.description" placeholder="请输入描述" />
         </el-form-item>
         <el-form-item label="WHERE子句" required>
           <el-input v-model="saveDialog.whereclause" type="textarea" :rows="5" />
@@ -189,9 +189,14 @@ export default {
     // 保存查询
     confirmSave() {
       const queryname = (this.saveDialog.queryname || '').trim()
+      const description = (this.saveDialog.description || '').trim()
       const whereclause = (this.saveDialog.whereclause || '').trim()
       if (!queryname) {
         this.$message.warning('请输入查询名称')
+        return
+      }
+      if (!description) {
+        this.$message.warning('请输入描述')
         return
       }
       if (!whereclause) {
@@ -202,7 +207,7 @@ export default {
         app: this.appname,
         queryname,
         whereclause,
-        description: this.saveDialog.description || ''
+        description
       }).then(res => {
         if (res.code === 200) {
           this.$message.success('保存查询成功')

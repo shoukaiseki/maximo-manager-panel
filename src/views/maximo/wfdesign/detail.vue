@@ -167,9 +167,9 @@
                   </template>
                 </g>
 
-                <!-- 节点 -->
+                <!-- 节点(遍历 activeNodes, 过滤已标记删除的节点) -->
                 <g
-                  v-for="node in workflow.wfnodes"
+                  v-for="node in activeNodes"
                   :key="'n-' + node.nodeId"
                   :transform="'translate(' + (node.x * gridPx) + ',' + (node.y * gridPx) + ')'"
                   class="wf-node" :class="{ selected: selectedNodeId === node.nodeId, editable: editMode }"
@@ -209,6 +209,8 @@
                 <div v-if="editMode" class="menu-item" @click="contextStartConnect(false)">
                   {{ hasConnect(contextMenu.nodeId, false) ? '更改负向连线' : '负向连线' }}
                 </div>
+                <!-- 开始/结束节点为流程必备, 不允许删除 -->
+                <div v-if="editMode && canDeleteContextNode" class="menu-item menu-item-danger" @click="contextDeleteNode">删除节点</div>
               </template>
             </div>
           </div>
@@ -273,8 +275,8 @@
         <el-tab-pane label="表格明细" name="table">
           <el-tabs type="card" class="sub-tabs">
             <!-- 节点 -->
-            <el-tab-pane :label="'节点（' + (workflow.wfnodes || []).length + '）'" name="nodes">
-              <el-table :data="workflow.wfnodes || []" border stripe size="mini">
+            <el-tab-pane :label="'节点（' + activeNodes.length + '）'" name="nodes">
+              <el-table :data="activeNodes" border stripe size="mini">
                 <el-table-column type="expand">
                   <template slot-scope="s">
                     <div class="expand-box" v-if="typeDetailItems(s.row).length">
@@ -442,6 +444,13 @@
                   <span v-else>{{ dialogNode.description || '-' }}</span>
                 </el-form-item>
               </el-col>
+              <!-- 类型属性中 basic 标记的字段(交互节点目标标题等)渲染到基本信息中 -->
+              <el-col v-for="f in dialogBasicFields" :key="f.prop" :span="f.span || 12">
+                <el-form-item :label="f.label">
+                  <el-input v-if="editMode && !f.readonly" v-model="dialogDetail[f.prop]" size="mini" @input="markDirty" />
+                  <span v-else>{{ propText(f) }}</span>
+                </el-form-item>
+              </el-col>
             </el-row>
           </el-form>
         </el-card>
@@ -452,7 +461,7 @@
           <p v-if="!nodeDialogDef.fields.length" class="no-prop">节点类型无可编辑属性。</p>
           <el-form v-else label-width="96px" size="mini" class="node-form">
             <el-row :gutter="12">
-              <el-col v-for="f in nodeDialogDef.fields" :key="f.prop" :span="f.span || 12">
+              <el-col v-for="f in dialogPropFields" :key="f.prop" :span="f.span || 12">
                 <el-form-item :label="f.label">
                   <template v-if="editMode && !f.readonly">
                     <el-switch v-if="f.type === 'bool'" v-model="dialogDetail[f.prop]" @change="markDirty" />
@@ -531,7 +540,7 @@
                     v-model="s.row[col.prop]" size="mini" filterable clearable
                     placeholder="选择目标节点" @change="markDirty">
                     <el-option
-                      v-for="n in (workflow.wfnodes || [])"
+                      v-for="n in activeNodes"
                       :key="n.nodeId"
                       :label="'#' + n.nodeId + ' ' + (n.title || typeLabel(n.nodeType))"
                       :value="n.nodeId" />
@@ -604,7 +613,7 @@
                     v-model="dialogAction.memberNodeId" size="mini" filterable clearable
                     placeholder="选择目标节点" @change="markDirty">
                     <el-option
-                      v-for="n in (workflow.wfnodes || [])"
+                      v-for="n in activeNodes"
                       :key="n.nodeId"
                       :label="'#' + n.nodeId + ' ' + (n.title || typeLabel(n.nodeType))"
                       :value="n.nodeId" />
@@ -814,7 +823,7 @@ var SUB_TABLE_DEFS = {
       { prop: 'roleId', label: '角色' },
       { prop: 'relationship', label: '关系' },
       { prop: 'app', label: '应用' },
-      { prop: 'description', label: '任务描述' },
+      { prop: 'description', label: '任务描述', type: 'textarea', span: 24 },
       { prop: 'escRole', label: '升级角色' },
       { prop: 'templateId', label: '通讯模板' },
       { prop: 'condition', label: '条件(USERSQL)', type: 'textarea', span: 24 },
@@ -902,7 +911,8 @@ var NODE_DIALOGS = {
       { prop: 'action', label: '操作', span: 12 },
       { prop: 'relation', label: '关系', span: 12 },
       { prop: 'launchProcess', label: '启动过程', span: 12 },
-      { prop: 'directions', label: '目标标题', span: 12 },
+      // 目标标题: 需求要求放到「基本信息」卡中显示(basic 标记, 渲染层过滤)
+      { prop: 'directions', label: '目标标题', span: 12, basic: true },
       { prop: 'directionsLongDescription', label: '目标主体', type: 'textarea', span: 24 }
     ],
     tables: []
@@ -985,22 +995,35 @@ export default {
     }
   },
   computed: {
+    /** 展示/遍历用节点: 过滤掉已标记删除(_delete)的节点(原始数据仍保留, 保存时提交后端删除) */
+    activeNodes() {
+      return (this.workflow.wfnodes || []).filter(function (n) { return n._delete !== true })
+    },
     nodeMap() {
       var m = {}
-      ;(this.workflow.wfnodes || []).forEach(function (n) { m[n.nodeId] = n })
+      this.activeNodes.forEach(function (n) { m[n.nodeId] = n })
       return m
+    },
+    /** 右键菜单当前节点是否可删除: 开始/结束节点为流程必备, 不允许删除 */
+    canDeleteContextNode() {
+      var n = this.nodeMap[this.contextMenu.nodeId]
+      return !!n && n.nodeType !== 'WFSTART' && n.nodeType !== 'WFSTOP'
     },
     /** 连线: 节点 wfactions 拍平, 并算出起止坐标 */
     edges() {
       var self = this
       var list = []
-      ;(this.workflow.wfnodes || []).forEach(function (node) {
+      ;(this.activeNodes).forEach(function (node) {
         ;(node.wfactions || []).forEach(function (a, i) {
           if (a._delete === true) {
             return
           }
           var target = self.nodeMap[a.memberNodeId]
-          var seg = target ? self.borderSegment(node, target) : null
+          if (!target) {
+            // 目标节点不存在(可能已被删除): 不渲染该连线
+            return
+          }
+          var seg = self.borderSegment(node, target)
           var rawLabel = a.action || a.instruction || ''
           var label = rawLabel ? self.truncateByWidth(rawLabel, 120) : ''
           var item = {
@@ -1030,7 +1053,7 @@ export default {
     },
     actionRows() {
       var rows = []
-      ;(this.workflow.wfnodes || []).forEach(function (n) {
+      ;(this.activeNodes).forEach(function (n) {
         ;(n.wfactions || []).forEach(function (a, i) {
           if (a._delete === true) {
             return
@@ -1043,7 +1066,7 @@ export default {
     },
     assignmentRows() {
       var rows = []
-      ;(this.workflow.wfnodes || []).forEach(function (n) {
+      ;(this.activeNodes).forEach(function (n) {
         ;(n.wfassignment || []).forEach(function (a) {
           if (a._delete === true) {
             return
@@ -1062,7 +1085,7 @@ export default {
         }
         rows.push({ scope: '流程级', uniqueId: x.uniqueId, templateId: x.templateId })
       })
-      ;(wf.wfnodes || []).forEach(function (n) {
+      ;(this.activeNodes).forEach(function (n) {
         ;(n.wfnotifications || []).forEach(function (x) {
           if (x._delete === true) {
             return
@@ -1085,7 +1108,7 @@ export default {
     },
     groupRows() {
       var rows = []
-      ;(this.workflow.wfnodes || []).forEach(function (n) {
+      ;(this.activeNodes).forEach(function (n) {
         ;(n.wfasgngroup || []).forEach(function (g) {
           if (g._delete === true) {
             return
@@ -1106,7 +1129,7 @@ export default {
      */
     originCells() {
       var cells = Math.max(2, Math.ceil(this.ORIGIN_ROOM_PX / (this.gridPx * this.zoom)))
-      ;(this.workflow.wfnodes || []).forEach(function (n) {
+      ;(this.activeNodes).forEach(function (n) {
         cells = Math.max(cells, -(Number(n.x) || 0), -(Number(n.y) || 0))
       })
       return cells
@@ -1121,7 +1144,7 @@ export default {
       var origin = this.originCells * grid
       var w = origin + grid * 2
       var h = origin + grid * 2
-      ;(this.workflow.wfnodes || []).forEach(function (n) {
+      ;(this.activeNodes).forEach(function (n) {
         w = Math.max(w, origin + (Number(n.x) || 0) * grid + 80 + grid)
         h = Math.max(h, origin + (Number(n.y) || 0) * grid + 70 + grid)
       })
@@ -1165,6 +1188,14 @@ export default {
     nodeDialogDef() {
       var n = this.dialogNode
       return n ? (NODE_DIALOGS[n.nodeType] || { label: '节点属性', fields: [], tables: [] }) : { label: '节点属性', fields: [], tables: [] }
+    },
+    /** 类型属性中 basic 标记的字段(如交互节点目标标题), 渲染在「基本信息」卡中 */
+    dialogBasicFields() {
+      return (this.nodeDialogDef.fields || []).filter(function (f) { return f.basic === true })
+    },
+    /** 类型属性中待渲染的字段(过滤掉 basic 标记的字段) */
+    dialogPropFields() {
+      return (this.nodeDialogDef.fields || []).filter(function (f) { return f.basic !== true })
     },
     nodeDialogTitle() {
       var n = this.dialogNode
@@ -1363,7 +1394,7 @@ export default {
     /** 加载后把视口滚到内容附近(原点留白可能很大, 避免打开后看不到节点) */
     scrollToContent() {
       var el = this.$refs.canvasScroll
-      var nodes = this.workflow.wfnodes || []
+      var nodes = this.activeNodes
       if (!el || nodes.length === 0) {
         return
       }
@@ -1506,6 +1537,64 @@ export default {
       this.closeContextMenu()
       this.openActionDetail(nodeId, index)
     },
+    // === 删除节点(右键菜单) ===
+    contextDeleteNode() {
+      var node = this.nodeMap[this.contextMenu.nodeId]
+      this.closeContextMenu()
+      if (!node) {
+        return
+      }
+      // 开始/结束节点为流程必备, 不允许删除(与 canDeleteContextNode 双保险)
+      if (node.nodeType === 'WFSTART' || node.nodeType === 'WFSTOP') {
+        this.$message.warning('开始/结束节点不允许删除')
+        return
+      }
+      var self = this
+      this.$confirm(
+        '确认删除节点 #' + node.nodeId + '（' + this.typeLabel(node.nodeType) + (node.title ? ' ' + node.title : '') + '）? 其连线/通知等将一并移除，保存后生效。',
+        '删除节点',
+        { confirmButtonText: '删除', cancelButtonText: '取消', type: 'warning' }
+      ).then(function () {
+        self.removeNode(node)
+      }).catch(function () {})
+    },
+    /**
+     * 删除节点: 新拖未保存的节点直接从数组移除; 已有记录标记 _delete, 保存提交后由后端删除
+     * (框架会级联删该节点的类型子表/出线/通知及其它节点连向它的出线)。
+     * 前端同时把其它节点指向被删节点的出线也标记删除, 保证界面不再显示悬空连线。
+     */
+    removeNode(node) {
+      var nodes = this.workflow.wfnodes || []
+      var idx = nodes.indexOf(node)
+      if (node._new === true) {
+        if (idx >= 0) {
+          nodes.splice(idx, 1)
+        }
+      } else {
+        this.$set(node, '_delete', true)
+      }
+      // 其它节点连向被删节点的出线: 新建的直接移除, 已有的标记 _delete(倒序遍历, splice 不跳行)
+      var self = this
+      this.activeNodes.forEach(function (n) {
+        var list = n.wfactions || []
+        for (var i = list.length - 1; i >= 0; i--) {
+          var a = list[i]
+          if (a.memberNodeId !== node.nodeId) {
+            continue
+          }
+          if (a._new === true) {
+            list.splice(i, 1)
+          } else {
+            self.$set(a, '_delete', true)
+          }
+        }
+      })
+      if (this.selectedNodeId === node.nodeId) {
+        this.selectedNodeId = null
+      }
+      this.dirty = true
+      this.$message.success('已删除节点 #' + node.nodeId + '，保存后生效')
+    },
     // === 节点连线 ===
     /** 该节点是否已有指定方向的出线(决定右键菜单显示「连线」还是「更改连线」) */
     hasConnect(nodeId, isPositive) {
@@ -1583,7 +1672,8 @@ export default {
         action: '',
         condition: '',
         conditionClass: '',
-        instruction: '',
+        // 默认说明取目标节点标题(与框架 setValue MEMBERNODEID 回填 INSTRUCTION 的行为一致)
+        instruction: target.title || '',
         _new: true
       }
       source.wfactions.push(row)
@@ -1652,7 +1742,16 @@ export default {
         }
       })
       nodeId += 1
-      nodes.push({ nodeId: nodeId, nodeType: nodeType, title: '', description: null, x: x, y: y })
+      var node = { nodeId: nodeId, nodeType: nodeType, title: '', description: null, x: x, y: y }
+      // 新拖的交互节点预建 wfinteraction: 目标标题默认「温馨提示」
+      if (nodeType === 'WFINTERACTION') {
+        var detail = this.buildNodeDetailDefault(nodeType)
+        if (detail) {
+          detail.directions = '温馨提示'
+          node.wfinteraction = detail
+        }
+      }
+      nodes.push(node)
       this.dirty = true
       this.selectedNodeId = nodeId
       this.$message.success('已新增' + TYPE_LABELS[nodeType] + '节点 #' + nodeId + '，双击节点可编辑属性')
@@ -1776,17 +1875,28 @@ export default {
     /** 编辑态下为缺类型子表的节点预建对象(字段预置, 保证 v-model 响应式) */
     ensureNodeDetail(node) {
       var key = TYPE_DETAIL_KEYS[node.nodeType]
-      var def = NODE_DIALOGS[node.nodeType]
-      var fields = def ? def.fields : []
-      if (!key || fields.length === 0 || node[key]) {
+      if (!key || node[key]) {
         return
+      }
+      var detail = this.buildNodeDetailDefault(node.nodeType)
+      if (detail) {
+        this.$set(node, key, detail)
+      }
+    },
+    /** 按字段定义构建类型子表默认对象(bool 取 default, radio 取第一项, 其余空串); 无字段定义返回 null */
+    buildNodeDetailDefault(nodeType) {
+      var key = TYPE_DETAIL_KEYS[nodeType]
+      var def = NODE_DIALOGS[nodeType]
+      var fields = def ? def.fields : []
+      if (!key || fields.length === 0) {
+        return null
       }
       var detail = {}
       fields.forEach(function (f) {
         // bool 用字段定义的 default(对齐 MAXATTRIBUTE 的 DEFAULTVALUE), radio 取第一个选项
         detail[f.prop] = f.type === 'bool' ? f.default === true : (f.type === 'radio' ? f.options[0].value : '')
       })
-      this.$set(node, key, detail)
+      return detail
     },
     /** 属性字段的只读展示值(默认取节点类型子表, 可传入操作等其他对象) */
     propText(field, obj) {
@@ -1988,7 +2098,7 @@ export default {
       }
       var wf = this.workflow
       check(wf.wfnotifications, '流程级')
-      ;(wf.wfnodes || []).forEach(function (node) {
+      ;(this.activeNodes).forEach(function (node) {
         check(node.wfnotifications, '节点 #' + node.nodeId)
         ;(node.wfactions || []).forEach(function (a) {
           if (a._delete === true) {
@@ -2387,6 +2497,14 @@ export default {
 .node-context-menu .menu-item:hover {
   background: #ecf5ff;
   color: #409eff;
+}
+/* 危险操作(删除节点): 红色文案, 悬停红底 */
+.node-context-menu .menu-item-danger {
+  color: #f56c6c;
+}
+.node-context-menu .menu-item-danger:hover {
+  background: #fef0f0;
+  color: #f56c6c;
 }
 .node-dialog-body {
   max-height: 70vh;
