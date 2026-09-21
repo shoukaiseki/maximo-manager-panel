@@ -467,7 +467,8 @@ export default {
     },
 
     copyLogs() {
-      const text = this.logs.join('\n')
+      // 复制当前过滤后显示的日志(原始文本, 不含 ANSI 高亮码)
+      const text = this.filteredLogs.join('\n')
       if (!text) {
         this.$message.info('没有日志可复制')
         return
@@ -480,7 +481,7 @@ export default {
       textarea.select()
       document.execCommand('copy')
       document.body.removeChild(textarea)
-      this.$message.success(`已复制 ${this.logs.length} 行日志到剪贴板`)
+      this.$message.success(`已复制 ${this.filteredLogs.length} 行日志到剪贴板`)
     },
 
     showHelp() {

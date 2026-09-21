@@ -68,8 +68,18 @@
         <el-descriptions-item label="客户端产品ID">{{ detailRow.CLIENT_PRDID || '-' }}</el-descriptions-item>
         <el-descriptions-item label="快照时间">{{ formatDate(detailRow.SNAPSHOT_TIMESTAMP) }}</el-descriptions-item>
       </el-descriptions>
-      <div style="margin-top: 16px; text-align: right;" v-if="detailRow">
+      <div style="margin-top: 16px;" v-if="detailRow">
+        <el-button type="primary" icon="el-icon-view" size="mini" :loading="diagnoseLoading" @click="runDiagnose">诊断</el-button>
         <el-button type="danger" icon="el-icon-close" size="mini" @click="generateSingleForceSql">生成force进程SQL</el-button>
+        <el-button v-if="diagnoseText" icon="el-icon-document-copy" size="mini" @click="copyDiagnoseReport">复制诊断报告</el-button>
+        <span v-if="diagnoseText" style="margin-left: 8px; color: #909399; font-size: 12px;">
+          诊断报告（只读，支持滚动与 Ctrl+F 查找）
+        </span>
+      </div>
+
+      <!-- 诊断报告 Monaco 显示区 -->
+      <div v-if="diagnoseLoading || diagnoseText" style="margin-top: 10px;">
+        <div ref="diagnoseMonacoRef" class="diagnose-monaco-container"></div>
       </div>
       <span slot="footer" class="dialog-footer">
         <el-button @click="detailDialog.visible = false">关 闭</el-button>
@@ -106,7 +116,7 @@
 </template>
 
 <script>
-import { getDb2LockList } from '@/api/db2lock'
+import { getDb2LockList, diagnoseDb2Lock } from '@/api/db2lock'
 import { sksPageMixin } from "sks-plugin-el-erp/lib/sks-page";
 
 // LOCK_MODE 锁说明 markdown 内容
@@ -210,6 +220,10 @@ export default {
       sqlText: '',
       monacoLoaded: false,
       sqlEditor: null,
+      // 锁诊断
+      diagnoseLoading: false,
+      diagnoseText: '',
+      diagnoseEditor: null,
       helpDialogVisible: false,
       helpActiveTab: 'lockmode',
       helpMarkdownHtml: '',
@@ -221,6 +235,14 @@ export default {
       if (!val && this.sqlEditor) {
         this.sqlEditor.dispose()
         this.sqlEditor = null
+      }
+    },
+    'detailDialog.visible'(val) {
+      // 关闭锁详情弹窗时销毁诊断编辑器并清空报告
+      if (!val) {
+        this.disposeDiagnoseEditor()
+        this.diagnoseText = ''
+        this.diagnoseLoading = false
       }
     }
   },
@@ -324,12 +346,113 @@ export default {
       this.tableSelection = selection || []
     },
     handleRowClick(row) {
+      // 切换行时重置上一次的诊断结果
+      this.disposeDiagnoseEditor()
+      this.diagnoseText = ''
+      this.diagnoseLoading = false
       this.detailRow = row
       this.detailDialog.visible = true
     },
     generateSingleForceSql() {
       if (!this.detailRow) return
       this.showSqlDialog([this.detailRow])
+    },
+    // ==================== 锁诊断 ====================
+    runDiagnose() {
+      if (!this.detailRow) return
+      this.disposeDiagnoseEditor()
+      this.diagnoseLoading = true
+      this.diagnoseText = '正在执行诊断SQL，请稍候...'
+      // 按钮 loading 后诊断区才会渲染出来，等 DOM 就绪再初始化编辑器
+      this.$nextTick(() => {
+        setTimeout(() => {
+          this.initDiagnoseEditor()
+        }, 200)
+      })
+
+      const params = {
+        agentId: this.detailRow.AGENT_ID,
+        tabName: this.detailRow.TABNAME
+      }
+      diagnoseDb2Lock(params)
+        .then(res => {
+          if (res && res.code === 200 && res.data) {
+            this.diagnoseText = res.data.reportText || '诊断未返回内容'
+          } else {
+            this.diagnoseText = '诊断失败：' + ((res && res.message) || '未知错误')
+            this.$message.error((res && res.message) || '诊断失败')
+          }
+        })
+        .catch(err => {
+          this.diagnoseText = '诊断请求失败：' + (err.message || String(err))
+        })
+        .finally(() => {
+          this.diagnoseLoading = false
+          this.$nextTick(() => {
+            setTimeout(() => {
+              if (this.diagnoseEditor) {
+                this.diagnoseEditor.setValue(this.diagnoseText)
+              } else {
+                this.initDiagnoseEditor()
+              }
+            }, 100)
+          })
+        })
+    },
+    initDiagnoseEditor() {
+      const el = this.$refs.diagnoseMonacoRef
+      if (!el) return
+      const create = (monaco) => {
+        if (this.diagnoseEditor) {
+          this.diagnoseEditor.setValue(this.diagnoseText)
+          return
+        }
+        this.diagnoseEditor = monaco.editor.create(el, {
+          value: this.diagnoseText,
+          language: 'sql',
+          readOnly: true,
+          theme: 'vs',
+          automaticLayout: true,
+          minimap: { enabled: false },
+          scrollBeyondLastLine: false,
+          fontSize: 12,
+          wordWrap: 'on',
+          folding: false,
+          lineNumbers: 'on',
+          renderLineHighlight: 'none'
+        })
+      }
+      if (!this.monacoLoaded) {
+        import(/* webpackChunkName: "monaco" */ 'monaco-editor').then(monaco => {
+          this.monacoLoaded = true
+          this._monaco = monaco
+          create(monaco)
+        }).catch(err => {
+          console.error('Monaco Editor 加载失败:', err)
+          this.diagnoseText = (this.diagnoseText || '') + '\n\n[Monaco Editor 加载失败: ' + (err.message || err) + ']'
+        })
+      } else {
+        create(this._monaco)
+      }
+    },
+    disposeDiagnoseEditor() {
+      if (this.diagnoseEditor) {
+        this.diagnoseEditor.dispose()
+        this.diagnoseEditor = null
+      }
+    },
+    copyDiagnoseReport() {
+      if (!this.diagnoseText) {
+        this.$message.warning('诊断报告为空')
+        return
+      }
+      if (navigator.clipboard && window.isSecureContext) {
+        navigator.clipboard.writeText(this.diagnoseText)
+          .then(() => this.$message.success('诊断报告已复制到剪贴板'))
+          .catch(() => this.fallbackCopy(this.diagnoseText, '诊断报告已复制到剪贴板'))
+      } else {
+        this.fallbackCopy(this.diagnoseText, '诊断报告已复制到剪贴板')
+      }
     },
     showForceSql() {
       if (this.tableSelection.length === 0) {
@@ -402,12 +525,12 @@ export default {
       if (navigator.clipboard && window.isSecureContext) {
         navigator.clipboard.writeText(this.sqlText)
           .then(() => this.$message.success('SQL已复制到剪贴板'))
-          .catch(() => this.fallbackCopy(this.sqlText))
+          .catch(() => this.fallbackCopy(this.sqlText, 'SQL已复制到剪贴板'))
       } else {
-        this.fallbackCopy(this.sqlText)
+        this.fallbackCopy(this.sqlText, 'SQL已复制到剪贴板')
       }
     },
-    fallbackCopy(text) {
+    fallbackCopy(text, successMsg) {
       const textarea = document.createElement('textarea')
       textarea.value = text
       textarea.style.position = 'fixed'
@@ -417,7 +540,7 @@ export default {
       textarea.select()
       try {
         document.execCommand('copy')
-        this.$message.success('SQL已复制到剪贴板')
+        this.$message.success(successMsg || '已复制到剪贴板')
       } catch (e) {
         this.$message.error('复制失败: ' + e.message)
       }
@@ -514,6 +637,14 @@ export default {
     }
     this.helpMarkdownHtml = this.renderMarkdown(LOCK_MODE_HELP_MD)
     this.maximoHelpMarkdownHtml = this.renderMarkdown(MAXIMO_HELP_MD)
+  },
+  beforeDestroy() {
+    // 组件销毁时释放 Monaco 实例
+    this.disposeDiagnoseEditor()
+    if (this.sqlEditor) {
+      this.sqlEditor.dispose()
+      this.sqlEditor = null
+    }
   }
 }
 </script>
@@ -540,6 +671,12 @@ export default {
   height: 400px;
   border: 1px solid #dcdfe6;
   border-radius: 4px;
+}
+.diagnose-monaco-container {
+  height: 460px;
+  border: 1px solid #dcdfe6;
+  border-radius: 4px;
+  background-color: #fff;
 }
 .md-content {
   font-size: 14px;

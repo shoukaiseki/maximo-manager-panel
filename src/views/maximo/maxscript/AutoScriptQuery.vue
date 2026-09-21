@@ -171,7 +171,10 @@
       <template #title>
         <div class="source-dialog-title">
           <span>源码: {{ sourceDialog.name }}</span>
-          <el-button size="mini" :icon="sourceDialog.fullscreen ? 'el-icon-close' : 'el-icon-full-screen'" @click="toggleSourceFullscreen">{{ sourceDialog.fullscreen ? '退出全屏' : '全屏' }}</el-button>
+          <div>
+            <el-button size="mini" icon="el-icon-document-copy" @click="copyDialogSource(sourceDialog)">复制</el-button>
+            <el-button size="mini" :icon="sourceDialog.fullscreen ? 'el-icon-close' : 'el-icon-full-screen'" @click="toggleSourceFullscreen">{{ sourceDialog.fullscreen ? '退出全屏' : '全屏' }}</el-button>
+          </div>
         </div>
       </template>
       <div v-if="sourceDialog.loading" style="text-align:center;padding:40px">加载中...</div>
@@ -207,7 +210,13 @@
     </el-dialog>
 
     <!-- 历史记录源码弹窗 -->
-    <el-dialog :title="'历史源码: ' + historySourceDialog.name" :visible.sync="historySourceDialog.visible" width="75%" top="5vh">
+    <el-dialog :visible.sync="historySourceDialog.visible" width="75%" top="5vh">
+      <template #title>
+        <div class="source-dialog-title">
+          <span>历史源码: {{ historySourceDialog.name }}</span>
+          <el-button size="mini" icon="el-icon-document-copy" @click="copyDialogSource(historySourceDialog)">复制</el-button>
+        </div>
+      </template>
       <div v-loading="historySourceDialog.loading">
         <div v-if="!historySourceDialog.loading && historySourceDialog.source" ref="historyMonacoContainer" style="height:60vh;border:1px solid #dcdfe6"></div>
         <el-empty v-else-if="!historySourceDialog.loading" description="暂无源码" />
@@ -685,6 +694,23 @@ export default {
         }, 100)
       }
     },
+    // 复制源码弹窗内容(优先取 Monaco Editor 实时值, 兜底 dialog.source)
+    copyDialogSource(dialog) {
+      const text = dialog.editor ? dialog.editor.getValue() : (dialog.source || '')
+      if (!text) {
+        this.$message.info('暂无源码可复制')
+        return
+      }
+      const textarea = document.createElement('textarea')
+      textarea.value = text
+      textarea.style.position = 'fixed'
+      textarea.style.opacity = '0'
+      document.body.appendChild(textarea)
+      textarea.select()
+      document.execCommand('copy')
+      document.body.removeChild(textarea)
+      this.$message.success('源码已复制到剪贴板')
+    },
     showDetail(row) {
       this.detailDialog.visible = true
       this.detailDialog.name = row.AUTOSCRIPT
@@ -938,6 +964,7 @@ export default {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding-right: 30px;
+  /* 预留右侧空间, 避免标题按钮与 el-dialog 原生关闭按钮重叠 */
+  padding-right: 60px;
 }
 </style>

@@ -117,7 +117,7 @@ module.exports = {
     },
     plugins: [
       new MonacoWebpackPlugin({
-        languages: ['json', 'javascript', 'typescript','python']
+        languages: ['json', 'javascript', 'typescript','python','sql']
       })
     ],
       module: {

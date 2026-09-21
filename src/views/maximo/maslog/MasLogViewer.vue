@@ -69,6 +69,16 @@
           清空日志
         </el-button>
         
+        <el-button
+          v-if="logs.length > 0"
+          type="primary"
+          icon="el-icon-document-copy"
+          size="mini"
+          @click="copyLogs"
+        >
+          复制日志
+        </el-button>
+
         <el-divider direction="vertical" />
         
         <el-switch
@@ -470,6 +480,24 @@ export default {
       this.lastScrollTop = e.target.scrollTop
     },
     
+    copyLogs() {
+      // 复制当前过滤后显示的日志(原始文本, 不含 ANSI 高亮码)
+      const text = this.filteredLogs.join('\n')
+      if (!text) {
+        this.$message.info('没有日志可复制')
+        return
+      }
+      const textarea = document.createElement('textarea')
+      textarea.value = text
+      textarea.style.position = 'fixed'
+      textarea.style.opacity = '0'
+      document.body.appendChild(textarea)
+      textarea.select()
+      document.execCommand('copy')
+      document.body.removeChild(textarea)
+      this.$message.success(`已复制 ${this.filteredLogs.length} 行日志到剪贴板`)
+    },
+
     clearLogs() {
       // 清空日志
       this.$confirm('确定要清空所有日志吗？', '提示', {

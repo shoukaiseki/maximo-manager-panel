@@ -2,6 +2,22 @@ solon.app.name: maximo-management-panel
 server:
   port: 8081
 
+# ============================================================
+# DB2 锁诊断配置（公共默认值，app-dev.yml / app-hd.yml 可按环境覆盖）
+# ============================================================
+db2:
+  diagnose:
+    # 诊断SQL集标识：
+    #   v115 = DB2 11.5 通用监控函数集
+    #          （SYSIBMADM.LOCKS_HELD / SYSIBMADM.LOCKWAITS / MON_GET_UNIT_OF_WORK / MON_GET_ACTIVITY）
+    # 若不同环境 DB2 版本差异较大、所需监控函数不同，可在 app-dev.yml、app-hd.yml
+    # 中分别配置不同的 sqlSet 值，后端据此执行不同的诊断查询集合。
+    sqlSet: "v115"
+    # 单条诊断SQL的超时时间（秒），避免监控视图查询把连接拖死
+    queryTimeout: 15
+    # 长事务判定阈值（分钟）：事务持续时间超过该值，报告中判定为长事务
+    longRunningMinutes: 30
+
 # 文件上传配置
 server.request.maxFileSize: "100MB"
 server.request.maxBodySize: "100MB"

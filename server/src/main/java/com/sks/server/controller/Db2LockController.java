@@ -28,4 +28,17 @@ public class Db2LockController {
         Map<String, Object> data = db2LockService.queryList(tabName, pageNum, pageSize);
         return RestResult.ok(data);
     }
+
+    /**
+     * 锁诊断：对指定进程执行固定诊断 SQL 集，返回汇总分析报告
+     * GET /solonapi/db2lock/diagnose?agentId=36485&tabName=IBM_DO
+     *
+     * @param agentId 目标进程号
+     * @param tabName 表名（可空，作为兜底；后端优先使用锁信息中解析出的表名）
+     */
+    @Mapping(value = "/db2lock/diagnose", method = MethodType.GET)
+    public RestResult<Map<String, Object>> diagnose(@Param long agentId, String tabName) {
+        Map<String, Object> data = db2LockService.diagnose(agentId, tabName);
+        return RestResult.ok(data);
+    }
 }
