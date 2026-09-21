@@ -15,7 +15,7 @@
               size="mini"
               placeholder="流程描述"
               style="max-width: 460px;"
-              @input="dirty = true" />
+              @input="markDirty" />
           </div>
         </div>
         <div class="header-actions">
@@ -55,14 +55,6 @@
         <el-descriptions-item label="自动启动">{{ boolText(workflow.autoInitiate) }}</el-descriptions-item>
       </el-descriptions>
 
-      <el-alert
-        v-if="editMode"
-        class="edit-tip"
-        title="编辑模式：拖拽节点调整坐标（自动吸附网格），双击节点或右键「编辑节点」打开节点对话框，可修改标题/描述并维护出线操作、任务分配、分配组、通知，完成后点击右上角「保存」。"
-        type="info"
-        :closable="false"
-        show-icon />
-
       <el-tabs v-model="activeTab" class="detail-tabs">
         <!-- ============ 画布 Tab ============ -->
         <el-tab-pane label="流程图" name="canvas">
@@ -74,6 +66,11 @@
                 <el-button size="mini" icon="el-icon-zoom-in" @click="zoomIn" title="放大"></el-button>
                 <el-button size="mini" icon="el-icon-full-screen" @click="fitZoom" title="适应宽度"></el-button>
               </el-button-group>
+              <!-- 撤销/重做: 仅编辑模式显示, 与画布缩放按钮同排 -->
+              <el-button-group v-if="editMode" class="history-group">
+                <el-button size="mini" icon="el-icon-refresh-left" :disabled="!canUndo" title="撤销 (Ctrl+Z)" @click="undo"></el-button>
+                <el-button size="mini" icon="el-icon-refresh-right" :disabled="!canRedo" title="重做 (Ctrl+Y)" @click="redo"></el-button>
+              </el-button-group>
               <!-- 节点间距: 拉开网格, 避免节点标题过长时左右压字 -->
               <span class="canvas-spacing">
                 <span class="spacing-label">节点间距</span>
@@ -84,10 +81,12 @@
             <span class="canvas-legend">
               <i class="legend-item"><span class="line-pos"></span>正向连线</i>
               <i class="legend-item"><span class="line-neg"></span>负向连线</i>
-              <span class="canvas-tip" :class="{ connecting: !!connectMode }">
-                <template v-if="connectMode">连线中：点击目标节点完成「{{ connectMode.isPositive ? '正向' : '负向' }}连线」，Esc 或点击空白处取消</template>
-                <template v-else>点击节点查看节点详情，右键节点可选择「查看节点」{{ editMode ? '；编辑模式：拖拽节点移动位置、从上方图标拖入新增节点、右键节点连线或编辑属性' : '' }}</template>
-              </span>
+              <!-- 问号图标: 点击弹窗显示画布操作说明 -->
+              <i
+                class="el-icon-question canvas-tip-toggle"
+                title="操作说明"
+                @click="tipDialogVisible = true" />
+              <span v-if="connectMode" class="canvas-tip connecting">连线中：点击目标节点完成「{{ connectMode.isPositive ? '正向' : '负向' }}连线」，Esc 或点击空白处取消</span>
               <el-button size="mini" icon="el-icon-download" @click="saveCanvasImage">保存图片</el-button>
             </span>
           </div>
@@ -759,6 +758,17 @@
       :target-keys="lookup.targetKeys"
       :relation-object="lookup.relationObject"
       @selectrecord="markDirty" />
+    <!-- 画布操作说明对话框(问号图标打开) -->
+    <el-dialog title="操作说明" :visible.sync="tipDialogVisible" width="560px" append-to-body>
+      <div class="tip-content">
+        <p>点击节点查看节点详情，右键节点可选择「查看节点」。</p>
+        <p>编辑模式：拖拽节点移动位置、从上方图标拖入新增节点、右键节点连线或编辑属性。</p>
+        <p>编辑模式下可使用画布工具栏的撤销/重做按钮，快捷键 Ctrl+Z 撤销、Ctrl+Y 重做。</p>
+      </div>
+      <span slot="footer">
+        <el-button size="mini" type="primary" @click="tipDialogVisible = false">知道了</el-button>
+      </span>
+    </el-dialog>
     </div>
   </section>
 </template>
@@ -975,7 +985,10 @@ export default {
       editMode: false,
       dirty: false,
       editSnapshot: null, // 进入编辑模式时的整包快照, 取消时恢复
+      undoStack: [], // 撤销栈: 每次修改前的工作流 JSON 快照(编辑模式专用)
+      redoStack: [], // 重做栈: 撤销时被恢复回的快照
       activeTab: 'canvas',
+      tipDialogVisible: false, // 操作说明对话框
       workflow: {},
       selectedNodeId: null,
       zoom: 1,
@@ -1003,6 +1016,13 @@ export default {
       var m = {}
       this.activeNodes.forEach(function (n) { m[n.nodeId] = n })
       return m
+    },
+    /** 是否可撤销/重做(仅编辑模式) */
+    canUndo() {
+      return this.editMode && this.undoStack.length > 0
+    },
+    canRedo() {
+      return this.editMode && this.redoStack.length > 0
     },
     /** 右键菜单当前节点是否可删除: 开始/结束节点为流程必备, 不允许删除 */
     canDeleteContextNode() {
@@ -1418,6 +1438,10 @@ export default {
         return
       }
       this.editSnapshot = JSON.parse(JSON.stringify(this.workflow))
+      this.undoStack = []
+      this.redoStack = []
+      this._stableSnap = JSON.stringify(this.workflow)
+      this._histAt = 0
       this.dirty = false
       this.editMode = true
       this.$message.success('已进入编辑模式：拖拽节点调整位置，双击节点或右键「编辑节点」打开节点对话框')
@@ -1437,6 +1461,10 @@ export default {
       this.editMode = false
       this.dirty = false
       this.editSnapshot = null
+      this.undoStack = []
+      this.redoStack = []
+      this._stableSnap = null
+      this._histAt = 0
       this.selectedNodeId = null
       this.dragState = null
       this.saveDialog.visible = false
@@ -1475,7 +1503,8 @@ export default {
       if (nx !== d.node.x || ny !== d.node.y) {
         d.node.x = nx
         d.node.y = ny
-        this.dirty = true
+        // 拖拽过程中的连续移动会按 600ms 窗口合并为一步撤销
+        this.markDirty()
       }
     },
     onDragEnd() {
@@ -1592,7 +1621,7 @@ export default {
       if (this.selectedNodeId === node.nodeId) {
         this.selectedNodeId = null
       }
-      this.dirty = true
+      this.markDirty(true)
       this.$message.success('已删除节点 #' + node.nodeId + '，保存后生效')
     },
     // === 节点连线 ===
@@ -1651,7 +1680,7 @@ export default {
       })
       if (exist) {
         exist.memberNodeId = target.nodeId
-        this.dirty = true
+        this.markDirty(true)
         this.$message.success('已将' + direction + '连线改到节点 #' + target.nodeId)
         return
       }
@@ -1677,7 +1706,7 @@ export default {
         _new: true
       }
       source.wfactions.push(row)
-      this.dirty = true
+      this.markDirty(true)
       this.$message.success('已新增' + direction + '连线到节点 #' + target.nodeId + '，请选择操作(ACTION)')
       // 出线的操作(ACTION)是流程运行的必要信息, 建好后直接打开属性对话框
       this.$nextTick(function () {
@@ -1752,7 +1781,7 @@ export default {
         }
       }
       nodes.push(node)
-      this.dirty = true
+      this.markDirty(true)
       this.selectedNodeId = nodeId
       this.$message.success('已新增' + TYPE_LABELS[nodeType] + '节点 #' + nodeId + '，双击节点可编辑属性')
     },
@@ -1940,7 +1969,97 @@ export default {
       this.markDirty()
     },
     markDirty() {
+      this.pushHistory(false)
       this.dirty = true
+    },
+    // === 撤销/重做(快照式: 每次修改前把整包工作流压入撤销栈) ===
+    /** 当前工作流的 JSON 快照 */
+    workflowSnapshot() {
+      return JSON.stringify(this.workflow)
+    },
+    /** 记录一次可撤销的修改: force=true 时强制入栈(结构性操作如连线/增删), 否则 600ms 内的连续修改(击键/拖拽)合并为一步。
+     *  调用点都在修改之后, 因此用 _stableSnap 保存"上一次记录时的状态"(即本次修改前的状态)入栈 */
+    pushHistory(force) {
+      if (!this.editMode) {
+        return
+      }
+      if (!this._stableSnap) {
+        this._stableSnap = this.workflowSnapshot()
+      }
+      var snap = this.workflowSnapshot()
+      var now = Date.now()
+      // 合并窗口内(连续击键/拖拽移动): 只推进稳定快照, 不新增撤销步
+      if (force !== true && this._histAt && now - this._histAt < 600) {
+        this._stableSnap = snap
+        this._histAt = now
+        return
+      }
+      // 状态与上次记录时相同(无实际变化)则不重复记录
+      if (snap === this._stableSnap) {
+        this._histAt = now
+        return
+      }
+      this.undoStack.push(this._stableSnap)
+      if (this.undoStack.length > 50) {
+        this.undoStack.shift()
+      }
+      this.redoStack = []
+      this._stableSnap = snap
+      this._histAt = now
+    },
+    /** 撤销: 恢复到最近一次修改前 */
+    undo() {
+      if (!this.canUndo) {
+        return
+      }
+      this.closeContextMenu()
+      this.cancelConnect()
+      this.redoStack.push(this.workflowSnapshot())
+      var snap = this.undoStack.pop()
+      this.workflow = JSON.parse(snap)
+      this._stableSnap = snap
+      this._histAt = 0
+      this.dirty = true
+      this.$message.success('已撤销')
+    },
+    /** 重做: 恢复被撤销的修改 */
+    redo() {
+      if (!this.canRedo) {
+        return
+      }
+      this.closeContextMenu()
+      this.cancelConnect()
+      this.undoStack.push(this.workflowSnapshot())
+      var snap = this.redoStack.pop()
+      this.workflow = JSON.parse(snap)
+      this._stableSnap = snap
+      this._histAt = 0
+      this.dirty = true
+      this.$message.success('已重做')
+    },
+    /** Ctrl+Z 撤销 / Ctrl+Y 或 Ctrl+Shift+Z 重做; 焦点在输入控件内时交给浏览器原生撤销 */
+    onHistoryKeydown(event) {
+      if (!this.editMode || !(event.ctrlKey || event.metaKey)) {
+        return
+      }
+      var key = String(event.key || '').toLowerCase()
+      if (key !== 'z' && key !== 'y') {
+        return
+      }
+      var target = event.target || {}
+      var tag = target.tagName
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || target.isContentEditable) {
+        return
+      }
+      if (key === 'z' && !event.shiftKey) {
+        if (this.canUndo) {
+          event.preventDefault()
+          this.undo()
+        }
+      } else if (this.canRedo) {
+        event.preventDefault()
+        this.redo()
+      }
     },
     /** 按上下左右图标微调节点坐标(每次 ±1 格); 与画布拖动一致, 下限为画布原点留白 */
     nudgeNode(node, dx, dy) {
@@ -2068,7 +2187,7 @@ export default {
         this.$set(node, name, [])
       }
       node[name].push(row)
-      this.dirty = true
+      this.markDirty(true)
     },
     deleteSubRow(list, index) {
       var row = list[index]
@@ -2080,11 +2199,11 @@ export default {
       } else {
         this.$set(row, '_delete', true)
       }
-      this.dirty = true
+      this.markDirty(true)
     },
     undoSubRow(row) {
       this.$set(row, '_delete', false)
-      this.dirty = true
+      this.markDirty(true)
     },
     /** 保存前校验: 通知必须有通讯模板(后端缺 templateId 会整包回滚) */
     validateNotifications() {
@@ -2294,9 +2413,11 @@ export default {
   mounted() {
     this.fetchDetail()
     window.addEventListener('resize', this.onWindowResize)
+    document.addEventListener('keydown', this.onHistoryKeydown)
   },
   beforeDestroy() {
     window.removeEventListener('resize', this.onWindowResize)
+    document.removeEventListener('keydown', this.onHistoryKeydown)
     document.removeEventListener('mousemove', this.onDragMove)
     document.removeEventListener('mouseup', this.onDragEnd)
     document.removeEventListener('click', this.closeContextMenu)
@@ -2328,6 +2449,25 @@ export default {
 .header-actions .state-dropdown {
   margin-left: 10px;
 }
+/* 撤销/重做按钮组: 与缩放按钮组保持间距 */
+.canvas-tools .history-group {
+  margin-left: 10px;
+}
+/* 画布操作说明的问号图标 */
+.canvas-tip-toggle {
+  cursor: pointer;
+  font-size: 16px;
+  color: #909399;
+}
+.canvas-tip-toggle:hover {
+  color: #409eff;
+}
+/* 操作说明对话框内容 */
+.tip-content p {
+  margin: 0 0 8px 0;
+  line-height: 1.8;
+  color: #606266;
+}
 .header-title .rev {
   font-size: 13px;
   color: #909399;
@@ -2340,9 +2480,6 @@ export default {
 }
 .wf-desc {
   margin-bottom: 8px;
-}
-.edit-tip {
-  margin-bottom: 10px;
 }
 .detail-tabs {
   margin-top: 6px;
