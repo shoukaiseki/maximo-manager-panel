@@ -443,10 +443,13 @@
                   <span v-else>{{ dialogNode.description || '-' }}</span>
                 </el-form-item>
               </el-col>
-              <!-- 类型属性中 basic 标记的字段(交互节点目标标题等)渲染到基本信息中 -->
+              <!-- 类型属性中 basic 标记的字段(交互节点目标标题/目标主体)渲染到基本信息中 -->
               <el-col v-for="f in dialogBasicFields" :key="f.prop" :span="f.span || 12">
                 <el-form-item :label="f.label">
-                  <el-input v-if="editMode && !f.readonly" v-model="dialogDetail[f.prop]" size="mini" @input="markDirty" />
+                  <template v-if="editMode && !f.readonly">
+                    <el-input v-if="f.type === 'textarea'" v-model="dialogDetail[f.prop]" type="textarea" :rows="3" @input="markDirty" />
+                    <el-input v-else v-model="dialogDetail[f.prop]" size="mini" @input="markDirty" />
+                  </template>
                   <span v-else>{{ propText(f) }}</span>
                 </el-form-item>
               </el-col>
@@ -923,7 +926,7 @@ var NODE_DIALOGS = {
       { prop: 'launchProcess', label: '启动过程', span: 12 },
       // 目标标题: 需求要求放到「基本信息」卡中显示(basic 标记, 渲染层过滤)
       { prop: 'directions', label: '目标标题', span: 12, basic: true },
-      { prop: 'directionsLongDescription', label: '目标主体', type: 'textarea', span: 24 }
+      { prop: 'directionsLongDescription', label: '目标主体', type: 'textarea', span: 24, basic: true }
     ],
     tables: []
   },
