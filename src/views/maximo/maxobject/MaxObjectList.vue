@@ -6,7 +6,10 @@
           <h2>MaxObject 查询</h2>
           <p class="page-summary">对象名支持精确匹配(=开头)和通配符(%模糊)，关键词搜索描述。点击行跳转详情。</p>
         </div>
-        <saved-query-panel ref="savedQuery" appname="MAXOBJECT" :default-where="savedWhere" @whereChange="handleQuery" />
+        <div class="page-actions">
+          <saved-query-panel ref="savedQuery" appname="MAXOBJECT" :default-where="savedWhere" @whereChange="handleQuery" />
+          <el-button type="success" icon="el-icon-upload2" size="mini" style="margin-left: 8px;" @click="openImportDialog">导入</el-button>
+        </div>
       </div>
 
       <el-form :model="formData" ref="queryForm" :inline="true" label-width="90px" @submit.native.prevent>
@@ -56,11 +59,29 @@
       </div>
       <div ref="todoMonacoContainer" style="height:50vh;border:1px solid #dcdfe6"></div>
     </el-dialog>
+
+    <el-dialog title="导入对象配置" :visible.sync="importDialog.visible" width="840px" top="5vh" :close-on-click-modal="false" @opened="onImportDialogOpened">
+      <p style="margin:0 0 8px;color:#909399;font-size:12px;">
+        粘贴对象配置 JSON（{"maxObjects": [...]} 或数组、单个对象，格式同「导出数据库配置」）；按 object 名称存在则更新、不存在则新增。
+      </p>
+      <div v-loading="importDialog.loading" element-loading-text="导入中...">
+        <div ref="importMonacoContainer" style="height:340px;border:1px solid #dcdfe6"></div>
+      </div>
+      <p style="margin:8px 0 0;color:#f56c6c;font-size:12px;" v-if="importDialog.error">{{ importDialog.error }}</p>
+      <div v-if="importDialog.stackTrace" style="margin-top:8px;">
+        <p style="margin:0 0 4px;color:#909399;font-size:12px;">错误堆栈</p>
+        <pre class="import-stack">{{ importDialog.stackTrace }}</pre>
+      </div>
+      <span slot="footer" class="dialog-footer">
+        <el-button @click="importDialog.visible = false">关 闭</el-button>
+        <el-button type="primary" :loading="importDialog.loading" @click="submitImport">导 入</el-button>
+      </span>
+    </el-dialog>
   </section>
 </template>
 
 <script>
-import { getMaxObjectList } from '@/api/maxobject'
+import { getMaxObjectList, importMaxObjects } from '@/api/maxobject'
 import SavedQueryPanel from '@/views/components/SavedQueryPanel.vue'
 
 export default {
@@ -81,6 +102,8 @@ export default {
         keyword: ''
       },
       todoSqlDialog: { visible: false, sql: '', editor: null },
+      importDialog: { visible: false, loading: false, error: '', stackTrace: '', text: '' },
+      importEditor: null,
       // 后端返回的本次执行 where 条件，用于保存查询预填
       savedWhere: ''
     }
@@ -196,6 +219,92 @@ select 1 from WFASSIGNMENT
       document.execCommand('copy')
       document.body.removeChild(el)
       this.$message.success('已复制到剪贴板')
+    },
+    // ===== 导入对象配置(SKS.AUTOSCRIPT.LIBRARY) =====
+    openImportDialog() {
+      this.importDialog = { visible: true, loading: false, error: '', stackTrace: '', text: '' }
+    },
+    onImportDialogOpened() {
+      this.$nextTick(() => {
+        setTimeout(() => this.initImportEditor(), 200)
+      })
+    },
+    initImportEditor() {
+      const container = this.$refs.importMonacoContainer
+      if (!container) return
+      if (this.importEditor) {
+        this.importEditor.dispose()
+        this.importEditor = null
+      }
+      import(/* webpackChunkName: "monaco" */ 'monaco-editor').then(monaco => {
+        this.importEditor = monaco.editor.create(container, {
+          value: this.importDialog.text || '',
+          language: 'json',
+          readOnly: false,
+          theme: 'vs',
+          automaticLayout: true,
+          minimap: { enabled: false },
+          scrollBeyondLastLine: false,
+          fontSize: 13,
+          wordWrap: 'on',
+          tabSize: 2
+        })
+      }).catch(err => {
+        console.error('Monaco Editor 加载失败:', err)
+      })
+    },
+    disposeImportEditor() {
+      if (this.importEditor) {
+        this.importEditor.dispose()
+        this.importEditor = null
+      }
+    },
+    submitImport() {
+      const d = this.importDialog
+      const text = (this.importEditor ? this.importEditor.getValue() : d.text || '').trim()
+      if (!text) {
+        d.error = '请粘贴 JSON 内容'
+        return
+      }
+      let parsed
+      try {
+        parsed = JSON.parse(text)
+      } catch (err) {
+        d.error = 'JSON 解析失败: ' + err.message
+        return
+      }
+      // 支持数组 / {"maxObjects":[...]} 原样 / 单个对象定义, 统一归一成 {maxObjects:[...]}
+      let importData
+      if (Array.isArray(parsed)) {
+        importData = { maxObjects: parsed }
+      } else if (Array.isArray(parsed.maxObjects)) {
+        importData = parsed
+      } else if (parsed.object) {
+        importData = { maxObjects: [parsed] }
+      } else {
+        d.error = 'JSON 中未找到 maxObjects 数组或 object 名称'
+        return
+      }
+      d.loading = true
+      d.error = ''
+      d.stackTrace = ''
+      importMaxObjects(importData).then(res => {
+        const data = res.data || res
+        if (res.status !== 200 || (data && data.status === 'error')) {
+          d.error = (data && data.message) || '导入失败'
+          d.stackTrace = (data && data.stackTrace) || ''
+          return
+        }
+        this.$message.success((data && data.message) || '导入完成')
+        d.visible = false
+        if (this.hasSearched) {
+          this.handleQuery()
+        }
+      }).catch(err => {
+        d.error = '导入失败: ' + (err.message || String(err))
+      }).finally(() => {
+        d.loading = false
+      })
     }
   },
   watch: {
@@ -204,6 +313,11 @@ select 1 from WFASSIGNMENT
         this.todoSqlDialog.editor.dispose()
         this.todoSqlDialog.editor = null
       }
+    },
+    'importDialog.visible'(val) {
+      if (!val) {
+        this.disposeImportEditor()
+      }
     }
   },
   beforeDestroy() {
@@ -211,6 +325,7 @@ select 1 from WFASSIGNMENT
       this.todoSqlDialog.editor.dispose()
       this.todoSqlDialog.editor = null
     }
+    this.disposeImportEditor()
   }
 }
 </script>
@@ -224,6 +339,23 @@ select 1 from WFASSIGNMENT
   justify-content: space-between;
   align-items: flex-start;
   margin-bottom: 16px;
+}
+.page-actions {
+  display: flex;
+  align-items: center;
+}
+.import-stack {
+  max-height: 180px;
+  overflow: auto;
+  margin: 0;
+  padding: 8px;
+  background: #f5f7fa;
+  border: 1px solid #ebeef5;
+  border-radius: 4px;
+  color: #f56c6c;
+  font-size: 12px;
+  white-space: pre-wrap;
+  word-break: break-all;
 }
 .page-summary {
   color: #606266;

@@ -44,7 +44,7 @@
         </div>
       </div>
 
-      <el-descriptions :column="4" border size="small" class="wf-desc">
+      <el-descriptions v-if="!zenMode" :column="4" border size="small" class="wf-desc">
         <el-descriptions-item label="主对象">{{ workflow.objectName || '-' }}</el-descriptions-item>
         <el-descriptions-item label="启用">
           <el-tag :type="workflow.enabled ? 'success' : 'info'" size="mini">{{ boolText(workflow.enabled) }}</el-tag>
@@ -55,7 +55,93 @@
         <el-descriptions-item label="自动启动">{{ boolText(workflow.autoInitiate) }}</el-descriptions-item>
       </el-descriptions>
 
-      <el-tabs v-model="activeTab" class="detail-tabs">
+      <!-- Zen 模式: 隐藏 tabs/toolbar/palette, 画布独立全屏渲染 -->
+      <div v-if="zenMode" class="zen-canvas-wrap">
+        <div class="zen-toolbar">
+          <div class="zen-tools">
+            <el-button-group size="mini">
+              <el-button icon="el-icon-zoom-out" @click="zoomOut" title="缩小"></el-button>
+              <el-button @click="resetZoom">{{ Math.round(zoom * 100) }}%</el-button>
+              <el-button icon="el-icon-zoom-in" @click="zoomIn" title="放大"></el-button>
+              <el-button icon="el-icon-full-screen" @click="fitZoom" title="适应宽度"></el-button>
+            </el-button-group>
+            <el-button size="mini" icon="el-icon-download" @click="saveCanvasImage">保存图片</el-button>
+          </div>
+          <span class="zen-title">流程图 — {{ workflow.processName }} v{{ workflow.processRev }}</span>
+          <el-button size="mini" icon="el-icon-circle-check" @click="toggleZen" title="退出 Zen 模式 (Esc)">Zen 模式</el-button>
+        </div>
+        <div
+          class="canvas-scroll zen-scroll"
+          ref="canvasScroll"
+          :class="{ connecting: !!connectMode }"
+          @scroll="closeContextMenu"
+          @contextmenu.prevent
+          @dragover.prevent="onCanvasDragOver"
+          @drop.prevent="onCanvasDrop">
+          <svg
+            ref="wfSvg"
+            :width="canvasSize.width * zoom"
+            :height="canvasSize.height * zoom"
+            :viewBox="'0 0 ' + canvasSize.width + ' ' + canvasSize.height"
+            class="wf-svg">
+            <defs>
+              <marker id="arrow-pos-zen" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+                <path d="M0,0 L8,3 L0,6 z" fill="#5a5a5a" />
+              </marker>
+              <marker id="arrow-neg-zen" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+                <path d="M0,0 L8,3 L0,6 z" fill="#f00" />
+              </marker>
+              <pattern id="wf-grid-minor-zen" :width="gridPx / 5" :height="gridPx / 5" patternUnits="userSpaceOnUse">
+                <path :d="'M ' + (gridPx / 5) + ' 0 L 0 0 0 ' + (gridPx / 5)" fill="none" stroke="#eceff3" stroke-width="1" vector-effect="non-scaling-stroke" />
+              </pattern>
+              <pattern id="wf-grid-zen" :width="gridPx" :height="gridPx" patternUnits="userSpaceOnUse">
+                <rect :width="gridPx" :height="gridPx" fill="url(#wf-grid-minor-zen)" />
+                <path :d="'M ' + gridPx + ' 0 L 0 0 0 ' + gridPx" fill="none" stroke="#dfe3e8" stroke-width="1" vector-effect="non-scaling-stroke" />
+              </pattern>
+            </defs>
+            <rect x="0" y="0" :width="canvasSize.width" :height="canvasSize.height" fill="url(#wf-grid-zen)" @click="cancelConnect" />
+            <g :transform="contentTransform">
+              <g class="edges">
+                <template v-for="edge in edges">
+                  <line
+                    :key="'e-zen-' + edge.from + '-' + edge.actionId"
+                    :x1="edge.x1" :y1="edge.y1" :x2="edge.x2" :y2="edge.y2"
+                    :stroke="edge.isPositive === false ? '#f00' : '#5a5a5a'"
+                    :stroke-width="edge.isPositive === false ? 1.5 : 1.2"
+                    :marker-end="edge.isPositive === false ? 'url(#arrow-neg-zen)' : 'url(#arrow-pos-zen)'" />
+                  <line
+                    :key="'hit-zen-' + edge.from + '-' + edge.actionId"
+                    :x1="edge.x1" :y1="edge.y1" :x2="edge.x2" :y2="edge.y2"
+                    stroke="transparent" stroke-width="10" fill="none" class="edge-hit"
+                    @contextmenu.prevent="onEdgeContextMenu($event, edge)" />
+                  <g v-if="edge.label" :key="'l-zen-' + edge.from + '-' + edge.actionId" :transform="'translate(' + edge.lx + ',' + edge.ly + ')'"
+                     class="edge-label" @contextmenu.prevent="onEdgeContextMenu($event, edge)">
+                    <rect :x="-(edge.labelW / 2)" y="-9" :width="edge.labelW + 8" height="16" rx="2" fill="#fff" stroke="#c0c4cc" stroke-width="0.6" />
+                    <text x="0" y="3" font-size="10" fill="#606266" text-anchor="middle">{{ edge.label }}</text>
+                  </g>
+                </template>
+              </g>
+              <g
+                v-for="node in activeNodes"
+                :key="'n-zen-' + node.nodeId"
+                :transform="'translate(' + (node.x * gridPx) + ',' + (node.y * gridPx) + ')'"
+                class="wf-node" :class="{ selected: selectedNodeId === node.nodeId }"
+                @click="selectNode(node)">
+                <rect v-if="selectedNodeId === node.nodeId" class="selection-ring" x="-4" y="-4" :width="shapeBox(node).w + 8" :height="shapeBox(node).h + 18"
+                      rx="4" fill="none" stroke="#409eff" stroke-width="2" stroke-dasharray="4,2" />
+                <wf-node-shape :node-type="node.nodeType" />
+                <text x="27" y="48" font-size="11" fill="#303133" text-anchor="middle" class="node-label">
+                  {{ truncate(node.title || (typeLabel(node.nodeType) + ' ' + node.nodeId), 12) }}
+                  <title>{{ node.title || (typeLabel(node.nodeType) + ' ' + node.nodeId) }}</title>
+                </text>
+              </g>
+            </g>
+          </svg>
+          <div v-if="connectMode" class="zen-tip">连线中：点击目标节点完成「{{ connectMode.isPositive ? '正向' : '负向' }}连线」，Esc 或点击空白处取消</div>
+        </div>
+      </div>
+
+      <el-tabs v-if="!zenMode" v-model="activeTab" class="detail-tabs">
         <!-- ============ 画布 Tab ============ -->
         <el-tab-pane label="流程图" name="canvas">
           <div class="canvas-toolbar">
@@ -77,6 +163,14 @@
                 <el-slider v-model="spacing" :min="1" :max="2.5" :step="0.1" class="spacing-slider" />
                 <span class="spacing-value">{{ Math.round(spacing * 100) }}%</span>
               </span>
+              <!-- 画线方式: 直线 / 正交折线 -->
+              <span class="line-style-wrap">
+                <span class="spacing-label">画线方式</span>
+                <el-select v-model="lineStyle" size="mini" class="line-style-select">
+                  <el-option label="直线方式" value="straight" />
+                  <el-option label="正交方式" value="orthogonal" />
+                </el-select>
+              </span>
             </div>
             <span class="canvas-legend">
               <i class="legend-item"><span class="line-pos"></span>正向连线</i>
@@ -88,6 +182,7 @@
                 @click="tipDialogVisible = true" />
               <span v-if="connectMode" class="canvas-tip connecting">连线中：点击目标节点完成「{{ connectMode.isPositive ? '正向' : '负向' }}连线」，Esc 或点击空白处取消</span>
               <el-button size="mini" icon="el-icon-download" @click="saveCanvasImage">保存图片</el-button>
+              <el-button size="mini" icon="el-icon-circle-check" @click="toggleZen" title="Zen 模式 (Esc 退出)">Zen</el-button>
             </span>
           </div>
           <!-- 节点图标: 编辑模式下拖到画布即可新增节点 -->
@@ -146,17 +241,36 @@
                 <!-- 连线 -->
                 <g class="edges">
                   <template v-for="edge in edges">
+                    <!-- 直线 -->
                     <line
+                      v-if="!edge.isOrthogonal"
                       :key="'e-' + edge.from + '-' + edge.actionId"
                       :x1="edge.x1" :y1="edge.y1" :x2="edge.x2" :y2="edge.y2"
                       :stroke="edge.isPositive === false ? '#f00' : '#5a5a5a'"
                       :stroke-width="edge.isPositive === false ? 1.5 : 1.2"
                       :marker-end="edge.isPositive === false ? 'url(#arrow-neg)' : 'url(#arrow-pos)'" />
-                    <!-- 透明加宽命中区: 细线本身难以点中, 供右键弹出「查看」 -->
+                    <!-- 正交折线 -->
+                    <polyline
+                      v-else
+                      :key="'e-' + edge.from + '-' + edge.actionId"
+                      :points="polylinePoints(edge.points)"
+                      fill="none"
+                      :stroke="edge.isPositive === false ? '#f00' : '#5a5a5a'"
+                      :stroke-width="edge.isPositive === false ? 1.5 : 1.2"
+                      :marker-end="edge.isPositive === false ? 'url(#arrow-neg)' : 'url(#arrow-pos)'" />
+                    <!-- 透明加宽命中区: 直线 -->
                     <line
+                      v-if="!edge.isOrthogonal"
                       :key="'hit-' + edge.from + '-' + edge.actionId"
                       :x1="edge.x1" :y1="edge.y1" :x2="edge.x2" :y2="edge.y2"
                       stroke="transparent" stroke-width="10" fill="none" class="edge-hit"
+                      @contextmenu.prevent="onEdgeContextMenu($event, edge)" />
+                    <!-- 透明加宽命中区: 折线 -->
+                    <polyline
+                      v-else
+                      :key="'hit-' + edge.from + '-' + edge.actionId"
+                      :points="polylinePoints(edge.points)"
+                      fill="none" stroke="transparent" stroke-width="10" class="edge-hit"
                       @contextmenu.prevent="onEdgeContextMenu($event, edge)" />
                     <g v-if="edge.label" :key="'l-' + edge.from + '-' + edge.actionId" :transform="'translate(' + edge.lx + ',' + edge.ly + ')'"
                        class="edge-label" @contextmenu.prevent="onEdgeContextMenu($event, edge)">
@@ -198,6 +312,7 @@
               :style="{ left: contextMenu.x + 'px', top: contextMenu.y + 'px' }">
               <template v-if="contextMenu.type === 'edge'">
                 <div class="menu-item" @click="contextViewEdge">查看</div>
+                <div v-if="editMode" class="menu-item menu-item-danger" @click="contextDeleteEdge">删除连线</div>
               </template>
               <template v-else>
                 <div class="menu-item" @click="contextViewNode">查看节点</div>
@@ -992,6 +1107,8 @@ export default {
       redoStack: [], // 重做栈: 撤销时被恢复回的快照
       activeTab: 'canvas',
       tipDialogVisible: false, // 操作说明对话框
+      zenMode: false, // Zen 模式: 隐藏工具栏/面板等, 只保留画布
+      lineStyle: 'straight', // 画线方式: straight 直线 / orthogonal 正交折线
       workflow: {},
       selectedNodeId: null,
       zoom: 1,
@@ -1032,43 +1149,49 @@ export default {
       var n = this.nodeMap[this.contextMenu.nodeId]
       return !!n && n.nodeType !== 'WFSTART' && n.nodeType !== 'WFSTOP'
     },
-    /** 连线: 节点 wfactions 拍平, 并算出起止坐标 */
+    /** 连线: 节点 wfactions 拍平, 并算出起止坐标(支持直线 / 正交折线两种画线方式)。
+     *  正交模式按 Maximo Channel 系统: 每条线分配 source-after / middle / target-before 三个通道,
+     *  通道内按排序 index 递增偏移 spacing, 确保无两条线共享同一条 x/y 位置 -> 绝对不重叠。
+     *  参考: psdi.workflow.diagram.Diagram / DiagramLineChannel */
     edges() {
       var self = this
       var list = []
+      var rawEdges = [] // 先收集所有边的基础数据
       ;(this.activeNodes).forEach(function (node) {
         ;(node.wfactions || []).forEach(function (a, i) {
-          if (a._delete === true) {
-            return
-          }
+          if (a._delete === true) { return }
           var target = self.nodeMap[a.memberNodeId]
-          if (!target) {
-            // 目标节点不存在(可能已被删除): 不渲染该连线
-            return
-          }
+          if (!target) { return }
           var seg = self.borderSegment(node, target)
+          if (!seg) { return }
           var rawLabel = a.action || a.instruction || ''
-          var label = rawLabel ? self.truncateByWidth(rawLabel, 120) : ''
-          var item = {
+          rawEdges.push({
             from: node.nodeId,
+            fromNode: node,
+            to: target.nodeId,
+            toNode: target,
             actionId: a.actionId,
-            // 原始 wfactions 数组下标: 新建未保存的出线没有 actionId, 用下标定位原始对象
             index: i,
             isPositive: a.isPositive,
-            label: label,
-            labelW: self.textWidth(label)
-          }
-          if (seg) {
-            item.x1 = seg.x1
-            item.y1 = seg.y1
-            item.x2 = seg.x2
-            item.y2 = seg.y2
-            item.lx = (seg.x1 + seg.x2) / 2
-            item.ly = (seg.y1 + seg.y2) / 2
-          }
-          list.push(item)
+            label: rawLabel ? self.truncateByWidth(rawLabel, 120) : '',
+            labelW: self.textWidth(rawLabel ? self.truncateByWidth(rawLabel, 120) : ''),
+            x1: seg.x1, y1: seg.y1, x2: seg.x2, y2: seg.y2
+          })
         })
       })
+      if (this.lineStyle === 'orthogonal') {
+        list = this._routeOrthogonal(rawEdges)
+      } else {
+        rawEdges.forEach(function (r) {
+          list.push({
+            from: r.from, to: r.to, actionId: r.actionId, index: r.index,
+            isPositive: r.isPositive, label: r.label, labelW: r.labelW,
+            isOrthogonal: false,
+            x1: r.x1, y1: r.y1, x2: r.x2, y2: r.y2,
+            lx: (r.x1 + r.x2) / 2, ly: (r.y1 + r.y2) / 2
+          })
+        })
+      }
       return list
     },
     selectedNode() {
@@ -1266,6 +1389,117 @@ export default {
     }
   },
   methods: {
+    /** Maximo Channel 系统正交路由: 三通道分配 + 通道内偏移, 绝对不重叠 */
+    _routeOrthogonal(edgesIn) {
+      if (!Array.isArray(edgesIn)) { return [] }
+      var self = this
+      var GAP = 8 // 通道内线条间 spacing(与 Maximo Line 偏移量对齐)
+      var NODE_GAP = 14 // 节点边界到第一个通道的距离
+
+      // === 1. 构建三个通道 Map ===
+      var sourceChannels = {}, targetChannels = {}, middleChannels = {}
+
+      edgesIn.forEach(function (e) {
+        var b1 = self.shapeBox(e.fromNode), p1 = self.nodeOrigin(e.fromNode)
+        var b2 = self.shapeBox(e.toNode), p2 = self.nodeOrigin(e.toNode)
+        var dx = e.x2 - e.x1
+        var fromRight = p1.x + b1.w
+        var fromLeft = p1.x
+        var sourceBaseX = dx >= 0 ? fromRight + NODE_GAP : fromLeft - NODE_GAP
+        var fromCol = Math.round(p1.x / self.gridPx)
+        var targetBaseX, toCol
+        if (dx >= 0) {
+          targetBaseX = p2.x - NODE_GAP
+          toCol = Math.round(p2.x / self.gridPx)
+        } else {
+          targetBaseX = p2.x + b2.w + NODE_GAP
+          toCol = Math.round(p2.x / self.gridPx)
+        }
+        var fromTop = p1.y, fromBottom = p1.y + b1.h
+        var toTop = p2.y, toBottom = p2.y + b2.h
+        var aboveTop = Math.min(fromTop, toTop) - NODE_GAP
+        var belowBottom = Math.max(fromBottom, toBottom) + NODE_GAP
+        var midY = (e.y1 + e.y2) / 2
+        // 选上方/下方离中点更近的那个(避开 from/to 节点)
+        var midBaseY = Math.abs(midY - aboveTop) <= Math.abs(belowBottom - midY)
+          ? aboveTop : belowBottom
+        var midRow = Math.round(midBaseY / self.gridPx)
+
+        e._sourceBaseX = sourceBaseX
+        e._targetBaseX = targetBaseX
+        e._midBaseY = midBaseY
+        e._dxSign = dx >= 0 ? 1 : -1
+
+        self._addToChannel(sourceChannels, fromCol, e, sourceBaseX)
+        self._addToChannel(targetChannels, toCol, e, targetBaseX)
+        self._addToChannel(middleChannels, midRow, e, midBaseY)
+      })
+
+      // === 2. 通道内排序 + 分配 ndx ===
+      var edgeLocation = {}
+      self._assignChannelLocations(sourceChannels, edgeLocation, GAP, 'x1')
+      self._assignChannelLocations(targetChannels, edgeLocation, GAP, 'x2')
+      self._assignChannelLocations(middleChannels, edgeLocation, GAP, 'y1')
+
+      // === 3. 用通道位置生成 5 段折线 ===
+      var result = []
+      edgesIn.forEach(function (e) {
+        var loc = edgeLocation[e._edgeKey] || { x1: e._sourceBaseX, x2: e._targetBaseX, y1: e._midBaseY }
+        var xStart = e.x1, yStart = e.y1
+        var xFinish = e.x2, yFinish = e.y2
+        var points
+        if (Math.abs(xFinish - xStart) < 8 || Math.abs(yFinish - yStart) < 8) {
+          points = [[xStart, yStart], [xFinish, yFinish]]
+        } else {
+          points = [
+            [xStart, yStart],
+            [loc.x1, yStart],
+            [loc.x1, loc.y1],
+            [loc.x2, loc.y1],
+            [loc.x2, yFinish],
+            [xFinish, yFinish]
+          ]
+        }
+        var lx, ly
+        if (points.length === 2) {
+          // 退化直线: 两连点中点
+          lx = (points[0][0] + points[1][0]) / 2
+          ly = (points[0][1] + points[1][1]) / 2
+        } else {
+          // 5 段折线: 中间水平段中点
+          lx = (points[1][0] + points[points.length - 2][0]) / 2
+          ly = points[2][1]
+        }
+        result.push({
+          from: e.from, to: e.to, actionId: e.actionId, index: e.index,
+          isPositive: e.isPositive, label: e.label, labelW: e.labelW,
+          isOrthogonal: true, points: points, lx: lx, ly: ly
+        })
+      })
+      return result
+    },
+    /** 收集一条边到指定通道 Map */
+    _addToChannel(channelMap, key, edge, base) {
+      edge._edgeKey = edge.from + '→' + edge.to + '→' + edge.index
+      if (!channelMap[key]) { channelMap[key] = [] }
+      channelMap[key].push({ edge: edge, base: base })
+    },
+    /** 通道内排序 + 分配 ndx, 计算每条边在该通道的实际位置 */
+    _assignChannelLocations(channelMap, edgeLocation, spacing, field) {
+      Object.keys(channelMap).forEach(function (key) {
+        var entries = channelMap[key]
+        entries.sort(function (a, b) {
+          var diff = a.base - b.base
+          if (diff !== 0) { return diff }
+          return (a.edge.y1 || 0) - (b.edge.y1 || 0)
+        })
+        entries.forEach(function (entry, ndx) {
+          var loc = edgeLocation[entry.edge._edgeKey] || {}
+          loc[field] = entry.base + ndx * (1 + spacing) + spacing
+          edgeLocation[entry.edge._edgeKey] = loc
+        })
+      })
+    },
     boolText: function (v) {
       return v === true ? '是' : '否'
     },
@@ -1335,6 +1569,11 @@ export default {
         y2: c2y - dy * (isFinite(t2) ? t2 : 0)
       }
     },
+    /** 把 [[x,y],[x,y]] 数组转成 SVG polyline 的 points 属性字符串 */
+    polylinePoints(points) {
+      if (!points || !points.length) return ''
+      return points.map(function (p) { return p[0] + ',' + p[1] }).join(' ')
+    },
     /** 节点类型子表拍平为 key/value(布尔转是/否, null 跳过) */
     typeDetailItems: function (node) {
       var key = TYPE_DETAIL_KEYS[node.nodeType]
@@ -1389,6 +1628,28 @@ export default {
         return
       }
       this.zoom = Math.max(0.2, Math.round((w / contentWidth) * 100) / 100)
+    },
+    // === Zen 模式 ===
+    toggleZen() {
+      this.zenMode = !this.zenMode
+      this.closeContextMenu()
+      this.cancelConnect()
+      if (this.zenMode) {
+        // 进入 Zen: 强制 activeTab=canvas, 退出编辑态(Zen 模式是纯查看)
+        this.activeTab = 'canvas'
+        this.$message.info('已进入 Zen 模式，按 Esc 退出')
+      } else {
+        this.$message.info('已退出 Zen 模式')
+      }
+      this.$nextTick(() => {
+        this.fitZoom()
+        this.updateViewport()
+      })
+    },
+    onZenKeydown(e) {
+      if (e.key === 'Escape' && this.zenMode) {
+        this.toggleZen()
+      }
     },
     /** 记录画布容器可视尺寸: 画布尺寸要按它铺满, 缩小时才能看到更多网格 */
     updateViewport(retry) {
@@ -1568,6 +1829,47 @@ export default {
       var index = this.contextMenu.edgeIndex
       this.closeContextMenu()
       this.openActionDetail(nodeId, index)
+    },
+    // === 删除连线(右键菜单) ===
+    contextDeleteEdge() {
+      var node = this.nodeMap[this.contextMenu.nodeId]
+      var index = this.contextMenu.edgeIndex
+      this.closeContextMenu()
+      if (!node) {
+        return
+      }
+      var list = node.wfactions || []
+      var action = list[index]
+      if (!action) {
+        return
+      }
+      var target = this.nodeMap[action.memberNodeId]
+      var targetLabel = target ? '→ #' + target.nodeId + ' ' + (target.title || this.typeLabel(target.nodeType)) : '→ #' + action.memberNodeId
+      var self = this
+      this.$confirm(
+        '确认删除「' + (action.isPositive === false ? '负向' : '正向') + '连线」 #' + node.nodeId + ' ' + targetLabel + ' ? 保存后生效。',
+        '删除连线',
+        { confirmButtonText: '删除', cancelButtonText: '取消', type: 'warning' }
+      ).then(function () {
+        self.removeEdge(node, index)
+      }).catch(function () {})
+    },
+    /** 删除连线: 新建未保存的 action 直接从 wfactions 移除; 已有记录标记 _delete=true, 保存后由后端删除 */
+    removeEdge(node, index) {
+      var list = node.wfactions || []
+      var action = list[index]
+      if (!action) {
+        return
+      }
+      if (action._new === true) {
+        list.splice(index, 1)
+      } else {
+        this.$set(action, '_delete', true)
+      }
+      this.markDirty(true)
+      var target = this.nodeMap[action.memberNodeId]
+      var targetLabel = target ? '→ #' + target.nodeId : ''
+      this.$message.success('已删除' + (action.isPositive === false ? '负向' : '正向') + '连线 ' + targetLabel + '，保存后生效')
     },
     // === 删除节点(右键菜单) ===
     contextDeleteNode() {
@@ -2417,10 +2719,12 @@ export default {
     this.fetchDetail()
     window.addEventListener('resize', this.onWindowResize)
     document.addEventListener('keydown', this.onHistoryKeydown)
+    document.addEventListener('keydown', this.onZenKeydown)
   },
   beforeDestroy() {
     window.removeEventListener('resize', this.onWindowResize)
     document.removeEventListener('keydown', this.onHistoryKeydown)
+    document.removeEventListener('keydown', this.onZenKeydown)
     document.removeEventListener('mousemove', this.onDragMove)
     document.removeEventListener('mouseup', this.onDragEnd)
     document.removeEventListener('click', this.closeContextMenu)
@@ -2515,6 +2819,15 @@ export default {
   font-size: 12px;
   color: #909399;
   width: 36px;
+}
+/* 画线方式下拉框 */
+.line-style-wrap {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 14px;
+}
+.line-style-select {
+  width: 100px;
 }
 /* 节点图标面板: 拖到画布新增节点 */
 .node-palette {
@@ -2738,5 +3051,56 @@ export default {
   font-size: 13px;
   color: #606266;
   line-height: 1.6;
+}
+/* === Zen 模式 === */
+.zen-canvas-wrap {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 2000;
+  background: #fafbfc;
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+}
+.zen-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 16px;
+  background: #fff;
+  border-bottom: 1px solid #e4e7ed;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+}
+.zen-tools {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.zen-title {
+  font-size: 14px;
+  font-weight: 500;
+  color: #303133;
+}
+.zen-scroll {
+  flex: 1;
+  height: auto !important;
+  border: none !important;
+  border-radius: 0 !important;
+}
+.zen-tip {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #409eff;
+  color: #fff;
+  padding: 6px 14px;
+  border-radius: 4px;
+  font-size: 13px;
+  z-index: 10;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.15);
 }
 </style>

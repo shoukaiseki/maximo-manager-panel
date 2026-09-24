@@ -79,6 +79,24 @@ export function getMaxAttributeList(params) {
 }
 
 /**
+ * 导入对象配置（走 SKS.AUTOSCRIPT.LIBRARY 脚本，需 develop=true）
+ * @param {Object} data 纯数据包 {"maxObjects":[...]}，每项为对象定义（object/description/attributes/indexes...）
+ *                     或 {object:'XXX', delete:true}
+ * 响应: {status:'success'|'error', message, stackTrace?}
+ */
+export function importMaxObjects(data) {
+  return request({
+    url: 'api/script/SKS.AUTOSCRIPT.LIBRARY',
+    method: 'post',
+    params: {
+      develop: 'true',
+      _langcode: 'zh'
+    },
+    data: data
+  })
+}
+
+/**
  * 导出数据库配置对象信息
  * @param {string} objectName 对象名
  * @param {boolean} ignoreDefVal 是否忽略默认值（精简模式）

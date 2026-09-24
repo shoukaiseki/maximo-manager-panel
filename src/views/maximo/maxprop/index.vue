@@ -63,7 +63,7 @@
     </el-dialog>
 
     <!-- 导入 JSON 弹窗 -->
-    <el-dialog title="导入属性定义" :visible.sync="importDialog.visible" width="800px" top="3vh" :close-on-click-modal="true">
+    <el-dialog title="导入属性定义" :visible.sync="importDialog.visible" width="800px" top="3vh" :close-on-click-modal="false">
       <p style="margin:0 0 8px;color:#909399;font-size:12px;">粘贴 JSON（数组 或 {"maxprops": [...]}），支持精简模式导出结果直接导入；子记录复制：属性会自动更新或创建，MAXPROPVALUE 按 服务器+服务器主机 匹配更新。</p>
       <el-input v-model="importDialog.text" type="textarea" :rows="12" placeholder='[{"propname":"mx.sysprop","description":"系统属性","maxpropvalue":[{"servername":"SERVER1","propvalue":"1"}]}]' />
       <p style="margin:8px 0 0;color:#f56c6c;font-size:12px" v-if="importDialog.error">{{ importDialog.error }}</p>

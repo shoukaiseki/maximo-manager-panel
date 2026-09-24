@@ -290,7 +290,7 @@
       </div>
     </el-dialog>
 
-    <el-dialog title="导入项目" :visible.sync="showImportDialog" width="600px">
+    <el-dialog title="导入项目" :visible.sync="showImportDialog" width="600px" :close-on-click-modal="false">
       <div class="import-container">
         <el-form label-width="90px">
           <el-form-item label="项目名称">

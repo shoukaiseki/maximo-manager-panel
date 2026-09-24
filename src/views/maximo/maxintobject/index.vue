@@ -74,7 +74,7 @@
     </el-dialog>
 
     <!-- 导入 JSON 弹窗 -->
-    <el-dialog title="导入对象结构" :visible.sync="importDialog.visible" width="800px" top="3vh" :close-on-click-modal="true" @opened="onImportDialogOpened">
+    <el-dialog title="导入对象结构" :visible.sync="importDialog.visible" width="800px" top="3vh" :close-on-click-modal="false" @opened="onImportDialogOpened">
       <p style="margin:0 0 8px;color:#909399;font-size:12px;">粘贴 JSON（数组 或 {"integrationobjects": [...]}），支持导出结果直接导入；按 intObjectName 匹配更新或创建。</p>
       <div v-loading="importDialog.loading" element-loading-text="导入中..." class="monaco-wrapper">
         <div ref="importMonacoRef" class="monaco-container import-monaco"></div>

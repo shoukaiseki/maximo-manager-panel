@@ -69,20 +69,23 @@
     </el-dialog>
 
     <!-- 导入 JSON 弹窗 -->
-    <el-dialog title="导入条件定义" :visible.sync="importDialog.visible" width="800px" top="3vh" :close-on-click-modal="true">
-      <p style="margin:0 0 8px;color:#909399;font-size:12px;">粘贴 JSON（数组 或 {"conditions": [...]}），支持精简模式导出结果直接导入；按 conditionnum 匹配更新或创建，描述支持 description / en_description。</p>
-      <el-input v-model="importDialog.text" type="textarea" :rows="12" placeholder='[{"conditionnum":"COND1","type":"EXPRESSION","expression":"status = '"'"'APPR'"'"'","description":"示例条件"}]' />
+    <el-dialog title="导入条件定义" :visible.sync="importDialog.visible" width="800px" top="3vh" :close-on-click-modal="false" @opened="onImportDialogOpened">
+      <p style="margin:0 0 8px;color:#909399;font-size:12px;">粘贴 JSON（数组 或 {"conditions": [...]}），支持精简模式导出结果直接导入；按 conditionnum 匹配更新或创建，描述支持 description / en_description。<br />示例：[{"conditionnum":"COND1","type":"EXPRESSION","expression":"status = 'APPR'","description":"示例条件"}]</p>
+      <div class="monaco-wrapper">
+        <div ref="importMonacoRef" class="monaco-container import-monaco"></div>
+      </div>
       <p style="margin:8px 0 0;color:#f56c6c;font-size:12px" v-if="importDialog.error">{{ importDialog.error }}</p>
       <div v-if="importDialog.summary" class="import-summary">
         <p>导入完成：共 {{ importDialog.summary.total }} 条，成功 {{ importDialog.summary.success }} 条，失败 {{ importDialog.summary.failed }} 条</p>
-        <el-table :data="importDialog.result" border stripe size="mini" max-height="260" style="width: 100%">
+        <el-table :data="importDialog.result" border stripe size="mini" max-height="260" style="width: 100%" v-if="importDialog.result.length">
           <el-table-column prop="conditionnum" label="条件名称" min-width="140" show-overflow-tooltip />
           <el-table-column prop="status" label="状态" width="100">
             <template slot-scope="scope">
               <el-tag :type="scope.row.status === 'SUCCESS' ? 'success' : 'danger'" size="mini">{{ scope.row.status }}</el-tag>
             </template>
           </el-table-column>
-          <el-table-column prop="message" label="消息" min-width="240" show-overflow-tooltip />
+          <el-table-column prop="expression" label="表达式" min-width="220" show-overflow-tooltip />
+          <el-table-column prop="message" label="消息" min-width="200" show-overflow-tooltip />
         </el-table>
       </div>
       <span slot="footer" class="dialog-footer">
@@ -117,9 +120,12 @@
         </el-descriptions-item>
       </el-descriptions>
 
+      <el-tabs v-model="detailJsonTab" @tab-click="onDetailJsonTabClick">
+        <el-tab-pane v-for="t in detailJsonTabs" :key="t.name" :label="t.label" :name="t.name"></el-tab-pane>
+      </el-tabs>
       <div class="detail-toolbar" v-if="detailJson">
-        <span style="color:#606266;line-height:32px;">单个条件导出 JSON</span>
-        <el-button type="primary" size="mini" icon="el-icon-document-copy" @click="copyToClipboard(detailJson, '详情JSON')">复制 JSON</el-button>
+        <span style="color:#606266;line-height:32px;">{{ currentDetailJsonTab.label }} · {{ currentDetailJsonTab.importable ? '包装为 {conditions:[...]}，可直接粘贴到「导入」对话框' : '单条条件对象（无包装）' }}</span>
+        <el-button type="primary" size="mini" icon="el-icon-document-copy" @click="copyToClipboard(detailJson, currentDetailJsonTab.label)">复制 JSON</el-button>
       </div>
       <div v-loading="detailLoading" element-loading-text="加载中..." class="monaco-wrapper">
         <div ref="detailMonacoRef" v-show="detailJson" class="monaco-container detail-monaco"></div>
@@ -166,12 +172,40 @@ export default {
       _exportMonaco: null,
       // 导入
       importDialog: { visible: false, text: '', error: '', loading: false, summary: null, result: [] },
+      importEditor: null,
       // 详情
       dialogVisible: false,
+      detailJsonTab: 'simpleSingle',
+      // 详情 JSON 视图: 单个=裸对象(无包装), 非单个=包装成 {conditions:[...]}(可直接导入)
+      detailJsonTabs: [
+        { name: 'simpleSingle', label: '精简 JSON（单个）', importable: false },
+        { name: 'fullSingle', label: '完整 JSON（单个）', importable: false },
+        { name: 'simple', label: '精简 JSON', importable: true },
+        { name: 'full', label: '完整 JSON', importable: true }
+      ],
       currentRow: null,
       detailJson: '',
+      detailJsonSimpleSingle: '',
+      detailJsonFullSingle: '',
+      detailJsonSimple: '',
+      detailJsonFull: '',
       detailLoading: false,
       detailEditor: null
+    }
+  },
+  computed: {
+    currentDetailJsonTab() {
+      const list = this.detailJsonTabs.filter(t => t.name === this.detailJsonTab)
+      return list.length > 0 ? list[0] : {}
+    },
+    // 各标签页对应的 JSON 文本
+    detailJsonMap() {
+      return {
+        simpleSingle: this.detailJsonSimpleSingle,
+        fullSingle: this.detailJsonFullSingle,
+        simple: this.detailJsonSimple,
+        full: this.detailJsonFull
+      }
     }
   },
   watch: {
@@ -183,6 +217,11 @@ export default {
     dialogVisible(val) {
       if (!val) {
         this.disposeDetailEditor()
+      }
+    },
+    'importDialog.visible'(val) {
+      if (!val) {
+        this.disposeImportEditor()
       }
     }
   },
@@ -352,6 +391,13 @@ export default {
     openImportDialog() {
       this.importDialog = { visible: true, text: '', error: '', loading: false, summary: null, result: [] }
     },
+    onImportDialogOpened() {
+      this.$nextTick(() => {
+        setTimeout(() => {
+          this.initImportEditor()
+        }, 200)
+      })
+    },
     submitImport() {
       const d = this.importDialog
       const text = (d.text || '').trim()
@@ -380,7 +426,8 @@ export default {
         } else {
           this.$message.success((data.message || '导入完成') + '：共 ' + data.summary.total + ' 条，成功 ' + data.summary.success + ' 条，失败 ' + data.summary.failed + ' 条')
           d.summary = data.summary
-          d.result = data.result || []
+          // 脚本返回 resultSuccess(成功明细) + resultFailed(失败明细), 兼容旧字段 result
+          d.result = (data.resultSuccess || []).concat(data.resultFailed || data.result || [])
           this.hasSearched = true
           this.fetchList()
         }
@@ -394,32 +441,51 @@ export default {
     handleRowClick(row) {
       this.currentRow = row
       this.detailJson = ''
+      this.detailJsonSimpleSingle = ''
+      this.detailJsonFullSingle = ''
+      this.detailJsonSimple = ''
+      this.detailJsonFull = ''
+      this.detailJsonTab = 'simpleSingle'
       this.detailLoading = true
       this.dialogVisible = true
       const whereClause = "c.CONDITIONNUM = '" + this.escapeSql(row.conditionnum) + "'"
-      exportConditions({
-        _langcode: 'ZH',
-        apiType: 'manage',
-        ignoreDefVal: 'false'
-      }, {
-        where: whereClause
-      }).then(res => {
-        const data = res.data || res
-        if (data.status === 'error') {
-          this.$message.error(data.message || '获取详情失败')
+      const baseParams = { _langcode: 'ZH', apiType: 'manage' }
+      // 并行导出: 精简(省略默认值) + 完整(含默认值)
+      Promise.all([
+        exportConditions(Object.assign({}, baseParams, { ignoreDefVal: 'true' }), { where: whereClause }),
+        exportConditions(Object.assign({}, baseParams, { ignoreDefVal: 'false' }), { where: whereClause })
+      ]).then(([simpleRes, fullRes]) => {
+        const simpleData = simpleRes.data || simpleRes
+        const fullData = fullRes.data || fullRes
+        if (simpleData.status === 'error' || fullData.status === 'error') {
+          this.$message.error(simpleData.message || fullData.message || '获取详情失败')
           return
         }
-        const list = data.conditions || []
-        if (list.length > 0) {
-          this.currentRow = Object.assign({}, row, list[0])
-          this.detailJson = JSON.stringify(list[0], null, 2)
-          this.$nextTick(() => this.initDetailEditor())
+        const simpleList = simpleData.conditions || []
+        const fullList = fullData.conditions || []
+        if (fullList.length > 0) {
+          this.currentRow = Object.assign({}, row, fullList[0])
         }
+        // 单个: 裸条件对象; 非单个: 包装成 {conditions:[...]}, 可直接粘贴导入
+        this.detailJsonSimpleSingle = simpleList.length > 0 ? JSON.stringify(simpleList[0], null, 2) : ''
+        this.detailJsonFullSingle = fullList.length > 0 ? JSON.stringify(fullList[0], null, 2) : ''
+        this.detailJsonSimple = JSON.stringify({ conditions: simpleList }, null, 2)
+        this.detailJsonFull = JSON.stringify({ conditions: fullList }, null, 2)
+        this.detailJson = this.detailJsonMap[this.detailJsonTab] || ''
+        this.$nextTick(() => this.initDetailEditor())
       }).catch(err => {
         this.$message.error('获取详情失败: ' + (err.message || String(err)))
       }).finally(() => {
         this.detailLoading = false
       })
+    },
+    onDetailJsonTabClick() {
+      this.detailJson = this.detailJsonMap[this.detailJsonTab] || ''
+      if (this.detailEditor) {
+        this.detailEditor.setValue(this.detailJson)
+      } else if (this.detailJson) {
+        this.$nextTick(() => this.initDetailEditor())
+      }
     },
     // === Monaco Editor ===
     initExportEditor() {
@@ -503,6 +569,50 @@ export default {
       if (this.detailEditor) {
         this.detailEditor.dispose()
         this.detailEditor = null
+      }
+    },
+    // === 导入 Monaco Editor（可编辑）===
+    initImportEditor() {
+      if (!this.exportMonacoLoaded) {
+        import(/* webpackChunkName: "monaco" */ 'monaco-editor').then(monaco => {
+          this.exportMonacoLoaded = true
+          this._exportMonaco = monaco
+          this.createImportEditor()
+        }).catch(err => {
+          console.error('Monaco Editor 加载失败:', err)
+        })
+      } else {
+        this.createImportEditor()
+      }
+    },
+    createImportEditor() {
+      const monaco = this._exportMonaco
+      if (this.$refs.importMonacoRef && !this.importEditor) {
+        this.importEditor = monaco.editor.create(this.$refs.importMonacoRef, {
+          value: this.importDialog.text || '',
+          language: 'json',
+          theme: 'vs',
+          automaticLayout: true,
+          minimap: { enabled: false },
+          scrollBeyondLastLine: false,
+          fontSize: 13,
+          wordWrap: 'on',
+          folding: true,
+          lineNumbers: 'on',
+          tabSize: 2,
+          formatOnPaste: true
+        })
+        this.importEditor.onDidChangeModelContent(() => {
+          this.importDialog.text = this.importEditor.getValue()
+        })
+      } else if (this.importEditor) {
+        this.importEditor.setValue(this.importDialog.text || '')
+      }
+    },
+    disposeImportEditor() {
+      if (this.importEditor) {
+        this.importEditor.dispose()
+        this.importEditor = null
       }
     },
     copyToClipboard(text, label) {
@@ -594,6 +704,9 @@ export default {
 }
 .detail-monaco {
   height: 320px;
+}
+.import-monaco {
+  height: 300px;
 }
 .import-summary {
   margin-top: 12px;

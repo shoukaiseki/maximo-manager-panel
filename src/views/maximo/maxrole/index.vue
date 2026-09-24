@@ -105,7 +105,7 @@
     </el-dialog>
 
     <!-- 导入 JSON 弹窗 -->
-    <el-dialog title="导入角色" :visible.sync="importDialog.visible" width="820px" top="3vh" :close-on-click-modal="true" @opened="onImportDialogOpened">
+    <el-dialog title="导入角色" :visible.sync="importDialog.visible" width="820px" top="3vh" :close-on-click-modal="false" @opened="onImportDialogOpened">
       <p style="margin:0 0 8px;color:#909399;font-size:12px;">粘贴 JSON（数组 或 {"maxroles": [...]}），支持导出结果直接导入；按 maxrole 名称匹配更新或创建。</p>
       <div class="import-opts">
         <span class="import-opts-label">导入模式</span>

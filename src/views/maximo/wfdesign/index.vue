@@ -87,7 +87,7 @@
     </el-dialog>
 
     <!-- 导入 JSON 弹窗 -->
-    <el-dialog title="导入工作流" :visible.sync="importDialog.visible" width="840px" top="3vh" :close-on-click-modal="true" @opened="onImportDialogOpened">
+    <el-dialog title="导入工作流" :visible.sync="importDialog.visible" width="840px" top="3vh" :close-on-click-modal="false" @opened="onImportDialogOpened">
       <p style="margin:0 0 8px;color:#909399;font-size:12px;">粘贴 JSON（数组 或 {"workflows": [...]}，含 actions/maxroles 的迁移包也可直接导入）；按 processName+processRev 匹配更新或创建。</p>
       <div class="import-opts">
         <span class="import-opts-label">导入模式</span>

@@ -240,7 +240,7 @@
     </el-dialog>
 
     <!-- 日志级别配置 JSON 导入弹窗 -->
-    <el-dialog title="导入 JSON（增量）" :visible.sync="importConfigDialog.visible" width="680px" append-to-body>
+    <el-dialog title="导入 JSON（增量）" :visible.sync="importConfigDialog.visible" width="680px" append-to-body :close-on-click-modal="false">
       <p style="margin:0 0 8px;color:#606266;font-size:13px">
         粘贴 JSON：<code>{"loggers":[{"loggerName":"maximo.sql","level":"ERROR","ignore":false}]}</code>。
         默认配置按 loggerName 去重，已存在的跳过；<template v-if="!isDefaultGroup">当前分组<b>{{ currentGroupLabel }}</b>以 JSON 中的级别导入（已存在的更新级别），若默认配置中不存在该日志器则先自动补齐默认配置。</template><template v-else>导入到默认配置。</template>
@@ -365,7 +365,7 @@
     </el-dialog>
 
     <!-- MXLogger JSON 导入弹窗：粘贴符合 SKS_LOGGER_MANAGE 格式的数组 -->
-    <el-dialog title="导入 MXLogger JSON" :visible.sync="mxImportDialog.visible" width="720px" append-to-body>
+    <el-dialog title="导入 MXLogger JSON" :visible.sync="mxImportDialog.visible" width="720px" append-to-body :close-on-click-modal="false">
       <p style="margin:0 0 8px;color:#606266;font-size:13px">
         粘贴 JSON 数组（格式与 SKS_LOGGER_MANAGE 请求体一致：<code>logger / loglevel / logkey / active / children</code>）。解析合并到当前组“<b>{{ currentMxGroupLabel }}</b>”：主记录已存在则合并其子级（避免重复），不存在则整条新增。
       </p>
