@@ -39,8 +39,9 @@ public class MafAppDataService {
 
     /**
      * 分页列表（不读 BLOB）
+     * where：保存查询传入的自定义条件（不含 WHERE 关键字），与表单条件 AND 组合
      */
-    public Map<String, Object> queryList(String appid, String status, String ismobile, int pageNum, int pageSize) {
+    public Map<String, Object> queryList(String appid, String status, String ismobile, int pageNum, int pageSize, String where) {
         StringBuilder whereSql = new StringBuilder(" WHERE 1=1");
         List<Object> params = new ArrayList<>();
         if (appid != null && !appid.trim().isEmpty()) {
@@ -60,6 +61,10 @@ public class MafAppDataService {
         if (ismobile != null && !ismobile.trim().isEmpty()) {
             whereSql.append(" AND t.ISMOBILE = ?");
             params.add("1".equals(ismobile.trim()) ? 1 : 0);
+        }
+        // 保存查询自定义 where：与表单条件 AND 组合（无占位符，直接拼接）
+        if (where != null && !where.trim().isEmpty()) {
+            whereSql.append(" AND (").append(where.trim()).append(")");
         }
         String whereStr = whereSql.toString();
 

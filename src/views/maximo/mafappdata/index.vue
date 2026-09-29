@@ -6,6 +6,9 @@
           <h2>MAFAPPDATA 应用包管理</h2>
           <p class="page-summary">查询 MAXIMO.MAFAPPDATA 表（graphite 移动端应用包），支持应用名 APPID 搜索、应用包上传导入与导出下载。直接操作 DB2，覆盖 ACTIVE 应用会立即影响Graphite路由，请谨慎操作。</p>
         </div>
+        <div class="page-actions">
+          <saved-query-panel ref="savedQuery" appname="MAFAPPDATA" :default-where="buildWhere()" @whereChange="handleWhereChange" />
+        </div>
       </div>
 
       <el-form :model="formData" ref="queryForm" :inline="true" label-width="80px" @submit.native.prevent>
@@ -194,9 +197,11 @@
 
 <script>
 import { getMafAppDataList, getMafAppDetail, analyzeMafApp, importMafApp, exportMafApp, clearAppCache } from '@/api/mafappdata'
+import SavedQueryPanel from '@/views/components/SavedQueryPanel.vue'
 
 export default {
   name: 'MafAppData',
+  components: { SavedQueryPanel },
   data() {
     return {
       loading: false,
@@ -249,6 +254,36 @@ export default {
         deployby: 'MANAGE-PANEL'
       }
     },
+    // 表单条件构建的 where 字面量（作为保存查询的默认 where / 预填）
+    escapeSql(v) {
+      return String(v || '').replace(/'/g, "''")
+    },
+    buildWhere() {
+      const conds = []
+      const appid = (this.formData.appid || '').trim()
+      if (appid) {
+        if (appid.startsWith('=')) {
+          conds.push("APPID = '" + this.escapeSql(appid.slice(1).toUpperCase()) + "'")
+        } else {
+          conds.push("UPPER(APPID) LIKE '%" + this.escapeSql(appid.toUpperCase()) + "%'")
+        }
+      }
+      if (this.formData.status) {
+        conds.push("STATUS = '" + this.escapeSql(this.formData.status) + "'")
+      }
+      if (this.formData.ismobile !== '') {
+        conds.push('ISMOBILE = ' + (this.formData.ismobile === '1' ? 1 : 0))
+      }
+      return conds.length > 0 ? conds.join(' AND ') : '1=1'
+    },
+    // 保存查询生效的自定义 where
+    getCustomWhere() {
+      return this.$refs.savedQuery ? this.$refs.savedQuery.getWhere() : ''
+    },
+    // 保存查询选择/清除后重新查询
+    handleWhereChange() {
+      this.handleQuery()
+    },
     handleQuery() {
       this.hasSearched = true
       this.pageNum = 1
@@ -258,6 +293,7 @@ export default {
       this.formData = { appid: '', status: '', ismobile: '' }
       this.hasSearched = false
       this.pageNum = 1
+      if (this.$refs.savedQuery) this.$refs.savedQuery.setWhere('')
       this.fetchList()
     },
     onSelectionChange(rows) {
@@ -272,6 +308,8 @@ export default {
         pageNum: this.pageNum,
         pageSize: this.pageSize
       }
+      const customWhere = this.getCustomWhere()
+      if (customWhere) params.where = customWhere
       getMafAppDataList(params).then(res => {
         if (res.code === 200 && res.data) {
           this.list = res.data.rows || []
@@ -594,10 +632,19 @@ export default {
   padding: 16px;
 }
 .page-header-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
   margin-bottom: 16px;
   h2 {
     margin: 0 0 6px 0;
   }
+}
+.page-actions {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  margin-left: 16px;
 }
 .page-summary {
   color: #606266;

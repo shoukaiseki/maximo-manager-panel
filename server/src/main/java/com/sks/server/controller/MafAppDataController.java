@@ -27,14 +27,15 @@ public class MafAppDataController {
 
     /**
      * 分页列表（不返回 APP BLOB）
-     * GET /solonapi/mafappdata/list?appid=&status=&ismobile=&pageNum=1&pageSize=20
+     * GET /solonapi/mafappdata/list?appid=&status=&ismobile=&pageNum=1&pageSize=20&where=自定义where(可选)
      */
     @Mapping(value = "/mafappdata/list", method = MethodType.GET)
     public RestResult<Map<String, Object>> list(
             String appid, String status, String ismobile,
             @Param(defaultValue = "1") int pageNum,
-            @Param(defaultValue = "20") int pageSize) {
-        return RestResult.ok(mafAppDataService.queryList(appid, status, ismobile, pageNum, pageSize));
+            @Param(defaultValue = "20") int pageSize,
+            String where) {
+        return RestResult.ok(mafAppDataService.queryList(appid, status, ismobile, pageNum, pageSize, where));
     }
 
     /**

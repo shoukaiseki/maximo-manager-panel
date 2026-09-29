@@ -9,6 +9,7 @@ import request from '@/utils/request'
  * @param {string} params.ismobile 是否移动端（0/1）
  * @param {number} params.pageNum
  * @param {number} params.pageSize
+ * @param {string} [params.where] 保存查询自定义 where（不含 WHERE 关键字），与表单条件 AND 组合
  */
 export function getMafAppDataList(params) {
   return solonRequest({
