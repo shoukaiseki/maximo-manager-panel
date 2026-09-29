@@ -77,7 +77,7 @@ public class MafAppDataController {
             UploadedFile file,
             String appid, String version, String appmode, String status,
             String ismobile, Integer revision, String deployby,
-            Long id, Boolean updateOnly) {
+            Long id, Boolean updateOnly, Boolean autoMeta) {
         if (file == null || file.getContent() == null) {
             return RestResult.error("请上传应用包文件(.zip/.apkg)");
         }
@@ -85,7 +85,7 @@ public class MafAppDataController {
             byte[] bytes = readAll(file.getContent());
             Map<String, Object> result = mafAppDataService.importApp(
                     bytes, file.getName(), appid, version, appmode, status, ismobile, revision, deployby,
-                    id, updateOnly);
+                    id, updateOnly, autoMeta);
             return RestResult.ok(result);
         } catch (Exception e) {
             return RestResult.error("导入失败: " + e.getMessage());

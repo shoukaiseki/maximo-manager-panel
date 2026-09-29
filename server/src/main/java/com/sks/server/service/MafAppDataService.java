@@ -160,8 +160,12 @@ public class MafAppDataService {
                     try {
                         JSONObject build = JSON.parseObject(new String(readAll(zis), "UTF-8"));
                         if (build != null) {
-                            appid = firstNonBlank(build.getString("appName"), build.getString("appId"),
-                                    build.getString("APPID"), build.getString("app"));
+                            // Graphite 构建产物使用 applicationId/applicationTitle；兼容各家写法
+                            appid = firstNonBlank(build.getString("applicationId"), build.getString("appName"),
+                                    build.getString("appId"), build.getString("APPID"), build.getString("app"));
+                            if (appid != null && !appid.trim().isEmpty()) {
+                                appid = appid.trim().toUpperCase();
+                            }
                             version = firstNonBlank(build.getString("version"), build.getString("VERSION"),
                                     build.getString("appVersion"));
                         }
@@ -206,7 +210,7 @@ public class MafAppDataService {
                                          String formAppid, String formVersion,
                                          String appmode, String status,
                                          String ismobile, Integer revision, String deployby,
-                                         Long targetId, Boolean updateOnly) {
+                                         Long targetId, Boolean updateOnly, Boolean autoMeta) {
         List<Map<String, Object>> rows = new ArrayList<>();
         if (fileBytes == null || fileBytes.length == 0) {
             throw new RuntimeException("上传文件为空");
@@ -287,8 +291,10 @@ public class MafAppDataService {
                 if (targetId == null || targetId <= 0) {
                     throw new RuntimeException("更新模式必须指定目标记录 ID");
                 }
-                action = updateRow(targetId, appid, appBytes, version, metaAppmode, metaStatus,
-                        metaIsmobile, metaRevision, metaDeployby, checksum);
+                boolean doUpdateMeta = Boolean.TRUE.equals(updateOnly) && Boolean.TRUE.equals(autoMeta);
+                action = updateRow(targetId, appid, appBytes, checksum,
+                        doUpdateMeta, version, metaAppmode, metaStatus,
+                        metaIsmobile, metaRevision, metaDeployby);
             } else {
                 action = upsertRow(appBytes, appid, version, metaAppmode, metaStatus,
                         metaIsmobile, metaRevision, metaDeployby, checksum, buildTimestamp);
@@ -312,11 +318,13 @@ public class MafAppDataService {
 
     /**
      * 更新模式（详情"导入更新"）：按 MAFAPPDATAID 更新已有记录，绝不新增。
-     * 校验包内 APPID 与目标记录一致；保留 APPID/BUILDTIMESTAMP/ROWSTAMP/PRIVATEKEY，
-     * 其余元数据与 APP BLOB 更新为本次导入内容，DEPLOYDATETIME 置为当前时间。
+     * 保留 APPID/BUILDTIMESTAMP/ROWSTAMP/PRIVATEKEY；DEPLOYDATETIME 置为当前时间。
+     * doUpdateMeta=false 时仅更新 APP + CHECKSUM + DEPLOYDATETIME（只换包）；
+     * doUpdateMeta=true 时同步覆盖 VERSION/APPMODE/DEPLOYBY/STATUS/REVISION/ISMOBILE。
      */
-    private String updateRow(long targetId, String appid, byte[] appBytes, String version, String appmode,
-                             String status, int ismobile, int revision, String deployby, String checksum)
+    private String updateRow(long targetId, String appid, byte[] appBytes, String checksum,
+                            boolean doUpdateMeta, String version, String appmode,
+                            String status, int ismobile, int revision, String deployby)
             throws SQLException {
         try (Connection conn = dataSource.getConnection()) {
             conn.setAutoCommit(false);
@@ -337,23 +345,36 @@ public class MafAppDataService {
                     throw new RuntimeException("包内 APPID 与目标记录不一致（" + curAppid + " != " + appid + "），更新模式仅支持更新同一应用");
                 }
 
-                String updateSql = "UPDATE " + TABLE +
-                        " SET APP = ?, APPMODE = ?, DEPLOYDATETIME = CURRENT TIMESTAMP, " +
-                        " DEPLOYBY = ?, STATUS = ?, VERSION = ?, REVISION = ?, " +
-                        " CHECKSUM = ?, ISMOBILE = ? " +
-                        " WHERE MAFAPPDATAID = ?";
                 int affected;
-                try (PreparedStatement ps = conn.prepareStatement(updateSql)) {
-                    ps.setBinaryStream(1, new ByteArrayInputStream(appBytes), appBytes.length);
-                    ps.setString(2, appmode);
-                    ps.setString(3, deployby);
-                    ps.setString(4, status);
-                    ps.setString(5, version);
-                    ps.setInt(6, revision);
-                    ps.setString(7, checksum);
-                    ps.setInt(8, ismobile);
-                    ps.setLong(9, targetId);
-                    affected = ps.executeUpdate();
+                if (!doUpdateMeta) {
+                    // 只换包，不动元数据
+                    String updateSql = "UPDATE " + TABLE +
+                            " SET APP = ?, CHECKSUM = ?, DEPLOYDATETIME = CURRENT TIMESTAMP" +
+                            " WHERE MAFAPPDATAID = ?";
+                    try (PreparedStatement ps = conn.prepareStatement(updateSql)) {
+                        ps.setBinaryStream(1, new ByteArrayInputStream(appBytes), appBytes.length);
+                        ps.setString(2, checksum);
+                        ps.setLong(3, targetId);
+                        affected = ps.executeUpdate();
+                    }
+                } else {
+                    String updateSql = "UPDATE " + TABLE +
+                            " SET APP = ?, APPMODE = ?, DEPLOYDATETIME = CURRENT TIMESTAMP, " +
+                            " DEPLOYBY = ?, STATUS = ?, VERSION = ?, REVISION = ?, " +
+                            " CHECKSUM = ?, ISMOBILE = ? " +
+                            " WHERE MAFAPPDATAID = ?";
+                    try (PreparedStatement ps = conn.prepareStatement(updateSql)) {
+                        ps.setBinaryStream(1, new ByteArrayInputStream(appBytes), appBytes.length);
+                        ps.setString(2, appmode);
+                        ps.setString(3, deployby);
+                        ps.setString(4, status);
+                        ps.setString(5, version);
+                        ps.setInt(6, revision);
+                        ps.setString(7, checksum);
+                        ps.setInt(8, ismobile);
+                        ps.setLong(9, targetId);
+                        affected = ps.executeUpdate();
+                    }
                 }
                 conn.commit();
                 if (affected <= 0) {

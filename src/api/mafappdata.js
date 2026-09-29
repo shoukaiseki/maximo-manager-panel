@@ -1,4 +1,5 @@
 import solonRequest from './solonapi'
+import request from '@/utils/request'
 
 /**
  * 查询 MAFAPPDATA 列表（不含 APP BLOB，含 APPLEN）
@@ -72,5 +73,32 @@ export function exportMafApp(ids) {
     params: { ids },
     responseType: 'blob',
     timeout: 300000
+  })
+}
+
+/**
+ * 调用 SKS_APP_MANAGE 脚本清除 Graphite 服务器应用缓存目录
+ * （root = MAF_APP_ROOT > MicUtil.getMeaGlobalDir()/maximo/maf > mxe.int.globaldir/maximo/maf，
+ * 应用缓存为 root 下同名子目录；确认框里会回显脚本解析到的 root 路径）
+ * @param {Object} options
+ * @param {string|string[]} [options.appid] 要清除的应用（省略且 all=false 时脚本不做操作）
+ * @param {boolean} [options.all] 清除全部应用缓存
+ * @param {boolean} confirm false=预览（返回待清除目录与大小），true=执行删除
+ * @returns {Promise} { status, data: { mode, root, targets|appsCleared, freedBytes, message, ... } }
+ */
+export function clearAppCache({ appid, all = false, confirm }) {
+  const params = {
+    _action: 'clearMafappCache',
+    _confirm: confirm ? 'true' : 'false',
+    _langcode: 'zh'
+  }
+  if (all) params._all = 'true'
+  const data = {}
+  if (appid) data.appid = appid
+  return request({
+    url: 'api/script/SKS_APP_MANAGE',
+    method: 'post',
+    params,
+    data
   })
 }

@@ -4,7 +4,7 @@
       <div class="page-header-row">
         <div>
           <h2>MAFAPPDATA 应用包管理</h2>
-          <p class="page-summary">查询 MAXIMO.MAFAPPDATA 表（graphite 移动端应用包），支持应用名 APPID 搜索、应用包上传导入与导出下载。直接操作 DB2，覆盖 ACTIVE 应用会立即影响石墨路由，请谨慎操作。</p>
+          <p class="page-summary">查询 MAXIMO.MAFAPPDATA 表（graphite 移动端应用包），支持应用名 APPID 搜索、应用包上传导入与导出下载。直接操作 DB2，覆盖 ACTIVE 应用会立即影响Graphite路由，请谨慎操作。</p>
         </div>
       </div>
 
@@ -35,6 +35,7 @@
           <el-button type="primary" icon="el-icon-upload2" size="mini" @click="openUploadDialog">上传导入</el-button>
           <el-button type="success" icon="el-icon-download" size="mini" :disabled="!selection.length" @click="handleBatchExport">批量导出({{ selection.length }})</el-button>
           <el-button icon="el-icon-refresh" size="mini" @click="fetchList">刷新</el-button>
+          <el-button type="warning" icon="el-icon-delete" size="mini" :loading="cacheClearing" @click="handleClearAllCache">清除服务器缓存</el-button>
         </div>
 
         <el-table :data="list" border style="width:100%" v-loading="loading" @selection-change="onSelectionChange">
@@ -68,9 +69,10 @@
           <el-table-column prop="DEPLOYBY" label="部署人" width="110" />
           <el-table-column prop="BUILDTIMESTAMP" label="构建时间" min-width="160" show-overflow-tooltip />
           <el-table-column prop="MAFAPPDATAID" label="ID" width="80" />
-          <el-table-column label="操作" width="90" fixed="right">
+          <el-table-column label="操作" width="150" fixed="right">
             <template slot-scope="scope">
               <el-button type="text" size="mini" @click="handleExportRow(scope.row)">导出</el-button>
+              <el-button type="text" size="mini" @click="handleClearRowCache(scope.row)">清除缓存</el-button>
             </template>
           </el-table-column>
         </el-table>
@@ -88,7 +90,7 @@
     <!-- 上传导入弹窗 -->
     <el-dialog :title="uploadDialog.updateOnly ? '上传应用包（更新 MAFAPPDATA）' : '上传应用包（导入 MAFAPPDATA）'" :visible.sync="uploadDialog.visible" width="640px" :close-on-click-modal="false" @closed="onUploadClosed">
       <el-alert type="warning" :closable="false" show-icon style="margin-bottom:12px"
-        title="直接写入 DB2 MAFAPPDATA 表。覆盖 ACTIVE 应用将立即影响石墨路由，建议先导出原包备份。同一 APPID+构建时间戳 已存在时执行覆盖更新。" />
+        title="直接写入 DB2 MAFAPPDATA 表。覆盖 ACTIVE 应用将立即影响Graphite路由，建议先导出原包备份。同一 APPID+构建时间戳 已存在时执行覆盖更新。" />
 
       <el-upload
         ref="uploader"
@@ -110,32 +112,47 @@
           :title="'更新模式：本次导入仅更新记录 [' + uploadDialog.form.appid + ']（MAFAPPDATAID=' + uploadDialog.targetId + '），不会新增记录。请上传与该应用一致的新构建包。'" />
         <el-alert v-if="uploadDialog.analyzeMsg" :type="uploadDialog.analyzeValid ? 'success' : 'error'" :title="uploadDialog.analyzeMsg" :closable="false" show-icon style="margin-bottom:10px" />
 
-        <el-form label-width="90px" size="small" :disabled="uploadDialog.isApkg">
-          <el-form-item label="应用 APPID" required>
-            <el-input v-model="uploadDialog.form.appid" placeholder="如 MASUSER（<=40字符）" :disabled="uploadDialog.updateOnly" />
-          </el-form-item>
-          <el-form-item label="版本 VERSION">
-            <el-input v-model="uploadDialog.form.version" placeholder="如 9.1.77.0（<=15字符）" />
-          </el-form-item>
-          <el-form-item label="模式 APPMODE">
-            <el-input v-model="uploadDialog.form.appmode" placeholder="DEBUG" />
-          </el-form-item>
-          <el-form-item label="状态 STATUS">
-            <el-select v-model="uploadDialog.form.status" style="width:100%">
-              <el-option label="ACTIVE" value="ACTIVE" />
-              <el-option label="INACTIVE" value="INACTIVE" />
-            </el-select>
-          </el-form-item>
-          <el-form-item label="移动端">
-            <el-switch v-model="uploadDialog.form.ismobileBool" />
-          </el-form-item>
-          <el-form-item label="修订 REVISION">
-            <el-input-number v-model="uploadDialog.form.revision" :min="0" controls-position="right" style="width:100%" />
-          </el-form-item>
-          <el-form-item label="部署人">
-            <el-input v-model="uploadDialog.form.deployby" placeholder="MANAGE-PANEL" />
-          </el-form-item>
-        </el-form>
+        <div v-if="uploadDialog.updateOnly && !uploadDialog.isApkg" style="margin-bottom:10px">
+          <el-switch v-model="uploadDialog.autoMeta" active-text="自动设置版本号等信息" inactive-text="仅更新包文件，其它字段保留原值" />
+        </div>
+
+        <el-collapse v-model="uploadMetaCollapse" style="margin-bottom:10px">
+          <el-collapse-item name="meta">
+            <template slot="title">
+              <span style="font-size:13px">
+                {{ uploadDialog.updateOnly
+                  ? (uploadDialog.autoMeta ? '元数据设置（已启用，将覆盖版本号等字段）' : '元数据设置（当前未启用，仅更新包文件）')
+                  : '元数据设置' }}
+              </span>
+            </template>
+            <el-form label-width="90px" size="small" :disabled="uploadDialog.isApkg || (uploadDialog.updateOnly && !uploadDialog.autoMeta)">
+              <el-form-item label="应用 APPID" required>
+                <el-input v-model="uploadDialog.form.appid" placeholder="如 MASUSER（<=40字符）" :disabled="uploadDialog.updateOnly" />
+              </el-form-item>
+              <el-form-item label="版本 VERSION">
+                <el-input v-model="uploadDialog.form.version" placeholder="如 9.1.77.0（<=15字符）" />
+              </el-form-item>
+              <el-form-item label="模式 APPMODE">
+                <el-input v-model="uploadDialog.form.appmode" placeholder="DEBUG" />
+              </el-form-item>
+              <el-form-item label="状态 STATUS">
+                <el-select v-model="uploadDialog.form.status" style="width:100%">
+                  <el-option label="ACTIVE" value="ACTIVE" />
+                  <el-option label="INACTIVE" value="INACTIVE" />
+                </el-select>
+              </el-form-item>
+              <el-form-item label="移动端">
+                <el-switch v-model="uploadDialog.form.ismobileBool" />
+              </el-form-item>
+              <el-form-item label="修订 REVISION">
+                <el-input-number v-model="uploadDialog.form.revision" :min="0" controls-position="right" style="width:100%" />
+              </el-form-item>
+              <el-form-item label="部署人">
+                <el-input v-model="uploadDialog.form.deployby" placeholder="MANAGE-PANEL" />
+              </el-form-item>
+            </el-form>
+          </el-collapse-item>
+        </el-collapse>
         <el-alert v-if="uploadDialog.isApkg" type="info" :closable="false" show-icon
           title="检测到 .apkg 完整包，元数据从包内 appdata.json 自动还原（上表仅展示，不可编辑）。" />
       </div>
@@ -176,7 +193,7 @@
 </template>
 
 <script>
-import { getMafAppDataList, getMafAppDetail, analyzeMafApp, importMafApp, exportMafApp } from '@/api/mafappdata'
+import { getMafAppDataList, getMafAppDetail, analyzeMafApp, importMafApp, exportMafApp, clearAppCache } from '@/api/mafappdata'
 
 export default {
   name: 'MafAppData',
@@ -207,8 +224,14 @@ export default {
         // 更新模式（从详情"导入更新"进入）：仅更新指定记录，不新增
         updateOnly: false,
         targetId: null,
+        // 仅更新模式下的开关：false(默认)=只换包不动元数据；true=按表单覆盖
+        autoMeta: false,
         form: this.defaultUploadForm()
-      }
+      },
+      // 元数据折叠面板：空数组=默认折叠
+      uploadMetaCollapse: [],
+      // 清除全部服务器缓存按钮 loading
+      cacheClearing: false
     }
   },
   created() {
@@ -346,6 +369,71 @@ export default {
       })
     },
 
+    // ============ 清除服务器缓存 ============
+    // 行内：只清该应用的缓存目录
+    handleClearRowCache(row) {
+      this.doClearCacheFlow({ appid: row.APPID, all: false, label: row.APPID })
+    },
+    // 工具栏：清除全部应用缓存
+    handleClearAllCache() {
+      this.doClearCacheFlow({ appid: null, all: true, label: '全部应用' })
+    },
+    // 先预览（不删除）→ 确认框展示待清除目录与大小 → 确认后执行删除
+    doClearCacheFlow({ appid, all, label }) {
+      this.cacheClearing = true
+      clearAppCache({ appid, all, confirm: false }).then(res => {
+        const body = res.data || {}
+        if (body.status === 'error') {
+          this.$message.error(body.message || '查询缓存目录失败')
+          return
+        }
+        const preview = body.data || {}
+        const targets = preview.targets || []
+        if (!targets.length) {
+          this.$message.info((preview.message && preview.message.indexOf('未指定') >= 0)
+            ? preview.message
+            : ('[' + label + '] 没有可清除的缓存目录' + ((preview.notFound || []).length ? '（未找到: ' + preview.notFound.join(', ') + '）' : '')))
+          return
+        }
+        const listTxt = targets.slice(0, 10).map(t => t.app + '(' + this.formatSize(t.bytes) + ')').join('、')
+        const more = targets.length > 10 ? (' 等 ' + targets.length + ' 个') : ''
+        return this.$confirm(
+          '缓存根目录：' + preview.root + '\n待清除 ' + targets.length + ' 个目录，共 ' + this.formatSize(preview.totalBytes) + '：\n' + listTxt + more +
+          '\n\n删除后 Graphite 会在下次访问时从 MAFAPPDATA 重新解压应用包。确认清除？',
+          '清除服务器缓存',
+          { type: 'warning', confirmButtonText: '确认清除', cancelButtonText: '取消', customClass: 'clear-cache-confirm' }
+        ).then(() => this.execClearCache({ appid, all, label })).catch(() => {})
+      }).catch(err => {
+        this.$message.error('清除缓存失败: ' + (err.message || String(err)))
+      }).finally(() => {
+        this.cacheClearing = false
+      })
+    },
+    execClearCache({ appid, all, label }) {
+      this.cacheClearing = true
+      return clearAppCache({ appid, all, confirm: true }).then(res => {
+        const body = res.data || {}
+        if (body.status === 'error') {
+          this.$message.error(body.message || '清除缓存失败')
+          return
+        }
+        const d = body.data || {}
+        const failed = d.appsFailed || []
+        const notFound = d.notFound || []
+        if (failed.length || notFound.length) {
+          this.$message.warning((d.message || '部分清除失败') +
+            (failed.length ? ('；失败: ' + failed.join(', ')) : '') +
+            (notFound.length ? ('；未找到: ' + notFound.join(', ')) : ''))
+        } else {
+          this.$message.success('[' + label + '] ' + (d.message || '缓存已清除'))
+        }
+      }).catch(err => {
+        this.$message.error('清除缓存失败: ' + (err.message || String(err)))
+      }).finally(() => {
+        this.cacheClearing = false
+      })
+    },
+
     // ============ 上传导入 ============
     openUploadDialog(prefillAppid, prefillVersion, targetId, updateOnly) {
       this.uploadDialog.visible = true
@@ -357,6 +445,9 @@ export default {
       // 更新模式标记（从详情"导入更新"进入）
       this.uploadDialog.updateOnly = !!updateOnly
       this.uploadDialog.targetId = targetId || null
+      // 默认只换包不动元数据，折叠面板默认折叠
+      this.uploadDialog.autoMeta = false
+      this.uploadMetaCollapse = []
       const form = this.defaultUploadForm()
       // 从详情"导入更新"进入时预填 APPID/版本
       if (prefillAppid) form.appid = prefillAppid
@@ -368,6 +459,7 @@ export default {
       this.uploadDialog.fileList = []
       this.uploadDialog.analyzeValid = false
       this.uploadDialog.analyzeMsg = ''
+      this.uploadDialog.autoMeta = false
       if (this.$refs.uploader) this.$refs.uploader.clearFiles()
     },
     onFileChange(file) {
@@ -404,7 +496,7 @@ export default {
               this.uploadDialog.analyzeMsg = 'ZIP 校验通过，已从 build.json 识别 APPID=' + d.appid + (d.version ? ('，版本=' + d.version) : '') + '（大小 ' + sizeTxt + '）'
               if (d.version) this.uploadDialog.form.version = d.version
             } else {
-              this.uploadDialog.analyzeMsg = 'ZIP 校验通过（大小 ' + sizeTxt + '），包内未找到 build.json，请手动填写 APPID/版本'
+              this.uploadDialog.analyzeMsg = 'ZIP 校验通过（大小 ' + sizeTxt + '），未能从包内 build.json 识别 APPID（读取 applicationId / appName / appId 字段），请手动填写 APPID/版本'
             }
           } else {
             this.uploadDialog.analyzeValid = false
@@ -452,6 +544,10 @@ export default {
         fd.append('ismobile', f.ismobileBool ? '1' : '0')
         fd.append('revision', f.revision != null ? String(f.revision) : '0')
         fd.append('deployby', f.deployby || 'MANAGE-PANEL')
+        // 仅更新模式下：0=只换包不动元数据（默认）；1=按表单覆盖
+        if (this.uploadDialog.updateOnly) {
+          fd.append('autoMeta', this.uploadDialog.autoMeta ? '1' : '0')
+        }
 
         this.uploadDialog.importing = true
         importMafApp(fd).then(res => {
@@ -480,7 +576,7 @@ export default {
       // 覆盖 ACTIVE 二次确认
       const f = this.uploadDialog.form
       if (f.status === 'ACTIVE') {
-        this.$confirm('将以 STATUS=ACTIVE 导入，若应用已存在将立即覆盖在线石墨路由版本。确认继续？', '覆盖确认', {
+        this.$confirm('将以 STATUS=ACTIVE 导入，若应用已存在将立即覆盖在线Graphite路由版本。确认继续？', '覆盖确认', {
           confirmButtonText: '确认导入',
           cancelButtonText: '取消',
           type: 'warning'
@@ -512,5 +608,12 @@ export default {
 }
 .toolbar {
   margin-bottom: 10px;
+}
+</style>
+
+<style lang="scss">
+/* 清除缓存确认框（MessageBox 挂在 body 下，需全局样式）：多行文本按 \n 换行 */
+.clear-cache-confirm .el-message-box__message p {
+  white-space: pre-line;
 }
 </style>
