@@ -317,25 +317,15 @@ export default {
       this.logs = []
 
       try {
-        // 从缓存中获取环境配置
-        const envStr = localStorage.getItem('maximo-env-settings')
-        let baseUrl = process.env.VUE_APP_BASE_API || ''
-        if (envStr) {
-          try {
-            const env = JSON.parse(envStr)
-            if (env.apiUrl) {
-              baseUrl = env.apiUrl
-            }
-          } catch (e) {}
-        }
-
         const params = new URLSearchParams({
           marker: 'get',
           startuuid: this.startUuid,
           enduuid: this.endUuid,
           logfileIndex: this.logfileIndex
         })
-        const url = `${baseUrl}/maximo/api/script/SKS_LOG_MARKER?${params}`
+        // 与 utils/request 保持一致的地址规则：固定 /maximo 前缀的相对地址。
+        // 不能拼 process.env.VUE_APP_BASE_API / 环境 apiUrl，打包后（如 /prod-api）会指向错误路径。
+        const url = `/maximo/api/script/SKS_LOG_MARKER?${params}`
 
         const response = await fetch(url, {
           headers: {
