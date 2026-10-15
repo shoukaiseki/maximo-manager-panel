@@ -1441,61 +1441,104 @@ export default {
       var GAP = 8 // 通道内线条间 spacing(与 Maximo Line 偏移量对齐)
       var NODE_GAP = 14 // 节点边界到第一个通道的距离
 
-      // === 1. 构建三个通道 Map ===
+      // === 1. 每条边的几何基准(通道归属稍后处理) ===
       var sourceChannels = {}, targetChannels = {}, middleChannels = {}
 
       edgesIn.forEach(function (e) {
         var b1 = self.shapeBox(e.fromNode), p1 = self.nodeOrigin(e.fromNode)
         var b2 = self.shapeBox(e.toNode), p2 = self.nodeOrigin(e.toNode)
         var dx = e.x2 - e.x1
-        var fromRight = p1.x + b1.w
-        var fromLeft = p1.x
-        var sourceBaseX = dx >= 0 ? fromRight + NODE_GAP : fromLeft - NODE_GAP
-        var fromCol = Math.round(p1.x / self.gridPx)
-        var targetBaseX, toCol
-        if (dx >= 0) {
-          targetBaseX = p2.x - NODE_GAP
-          toCol = Math.round(p2.x / self.gridPx)
-        } else {
-          targetBaseX = p2.x + b2.w + NODE_GAP
-          toCol = Math.round(p2.x / self.gridPx)
-        }
+        var sourceBaseX = dx >= 0 ? p1.x + b1.w + NODE_GAP : p1.x - NODE_GAP
+        var targetBaseX = dx >= 0 ? p2.x - NODE_GAP : p2.x + b2.w + NODE_GAP
         var fromTop = p1.y, fromBottom = p1.y + b1.h
         var toTop = p2.y, toBottom = p2.y + b2.h
         var aboveTop = Math.min(fromTop, toTop) - NODE_GAP
         var belowBottom = Math.max(fromBottom, toBottom) + NODE_GAP
         var midY = (e.y1 + e.y2) / 2
         // 选上方/下方离中点更近的那个(避开 from/to 节点)
-        var midBaseY = Math.abs(midY - aboveTop) <= Math.abs(belowBottom - midY)
-          ? aboveTop : belowBottom
-        var midRow = Math.round(midBaseY / self.gridPx)
+        var useAbove = Math.abs(midY - aboveTop) <= Math.abs(belowBottom - midY)
 
+        e._edgeKey = e.from + '→' + e.to + '→' + e.index
         e._sourceBaseX = sourceBaseX
         e._targetBaseX = targetBaseX
-        e._midBaseY = midBaseY
+        e._fromCol = Math.round(p1.x / self.gridPx)
+        e._toCol = Math.round(p2.x / self.gridPx)
+        e._aboveY = aboveTop
+        e._belowY = belowBottom
+        e._side = useAbove ? 'above' : 'below'
         e._dxSign = dx >= 0 ? 1 : -1
-
-        self._addToChannel(sourceChannels, fromCol, e, sourceBaseX)
-        self._addToChannel(targetChannels, toCol, e, targetBaseX)
-        self._addToChannel(middleChannels, midRow, e, midBaseY)
+        // 相邻节点(水平或垂直相邻)时, 正交折线会退化成一条直线
+        e._degenerate = Math.abs(e.x2 - e.x1) < 8 || Math.abs(e.y2 - e.y1) < 8
       })
 
-      // === 2. 通道内排序 + 分配 ndx ===
+      // === 2. 互指边对: 同一对节点正反向都有连线时, 正向边优先占位,
+      //        其余边让位到对侧(上<->下), 避免两条线完全重叠而无法选中 ===
+      var pairMap = {}
+      edgesIn.forEach(function (e) {
+        var key = Math.min(e.from, e.to) + '-' + Math.max(e.from, e.to)
+        if (!pairMap[key]) { pairMap[key] = [] }
+        pairMap[key].push(e)
+      })
+      Object.keys(pairMap).forEach(function (key) {
+        var group = pairMap[key]
+        if (group.length < 2) { return }
+        var fromIds = {}
+        group.forEach(function (e) { fromIds[e.from] = true })
+        // 组内同时存在 A→B 和 B→A 才算互指
+        var mutual = group.some(function (e) { return e.from !== e.to && fromIds[e.to] === true })
+        if (!mutual) { return }
+        var positives = group.filter(function (e) { return e.isPositive !== false })
+        // 正向优先: 没有正向边时, 首条边保留原侧
+        var keepSide = (positives.length ? positives[0] : group[0])._side
+        var altSide = keepSide === 'above' ? 'below' : 'above'
+        group.forEach(function (e) {
+          var isRef = positives.length ? e.isPositive !== false : e === group[0]
+          if (isRef) { return }
+          e._side = altSide
+          // 正向线本身是直线时, 反向线同样退化 -> 必须绕行, 否则两条直线仍完全重合
+          if (e._degenerate) { e._detour = true }
+        })
+      })
+
+      // === 3. 注册三个通道(绕行边不使用通道) ===
+      edgesIn.forEach(function (e) {
+        e._midBaseY = e._side === 'above' ? e._aboveY : e._belowY
+        if (e._detour) { return }
+        self._addToChannel(sourceChannels, e._fromCol, e, e._sourceBaseX)
+        self._addToChannel(targetChannels, e._toCol, e, e._targetBaseX)
+        self._addToChannel(middleChannels, Math.round(e._midBaseY / self.gridPx), e, e._midBaseY)
+      })
+
+      // === 4. 通道内排序 + 分配 ndx ===
       var edgeLocation = {}
       self._assignChannelLocations(sourceChannels, edgeLocation, GAP, 'x1')
       self._assignChannelLocations(targetChannels, edgeLocation, GAP, 'x2')
       self._assignChannelLocations(middleChannels, edgeLocation, GAP, 'y1')
 
-      // === 3. 用通道位置生成 5 段折线 ===
+      // === 5. 用通道位置生成 5 段折线 ===
       var result = []
+      var LL = 6 // 退化边绕行时, 端口外/内的短距离
       edgesIn.forEach(function (e) {
-        var loc = edgeLocation[e._edgeKey] || { x1: e._sourceBaseX, x2: e._targetBaseX, y1: e._midBaseY }
         var xStart = e.x1, yStart = e.y1
         var xFinish = e.x2, yFinish = e.y2
         var points
-        if (Math.abs(xFinish - xStart) < 8 || Math.abs(yFinish - yStart) < 8) {
+        if (e._detour && Math.abs(yFinish - yStart) < 8) {
+          // 水平直线让位: 在两端节点之间做 U 形绕行, 中段走对侧
+          var dirX = (xFinish - xStart) >= 0 ? 1 : -1
+          var detourY = e._midBaseY + GAP
+          points = [
+            [xStart, yStart],
+            [xStart + dirX * LL, yStart],
+            [xStart + dirX * LL, detourY],
+            [xFinish - dirX * LL, detourY],
+            [xFinish - dirX * LL, yFinish],
+            [xFinish, yFinish]
+          ]
+        } else if (!e._detour && (Math.abs(xFinish - xStart) < 8 || Math.abs(yFinish - yStart) < 8)) {
+          // 退化直线(相邻节点): 两点直连
           points = [[xStart, yStart], [xFinish, yFinish]]
         } else {
+          var loc = edgeLocation[e._edgeKey] || { x1: e._sourceBaseX, x2: e._targetBaseX, y1: e._midBaseY }
           points = [
             [xStart, yStart],
             [loc.x1, yStart],
