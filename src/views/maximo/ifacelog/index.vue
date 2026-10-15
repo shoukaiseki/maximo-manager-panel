@@ -89,6 +89,9 @@
             <el-descriptions-item label="外部系统">
               <el-input :value="detailRow.EXTSYSTEM || '-'" readonly size="small" />
             </el-descriptions-item>
+            <el-descriptions-item label="端点URL">
+              <el-input :value="detailRow.ENDPOINTURL || '-'" readonly size="small" />
+            </el-descriptions-item>
             <el-descriptions-item label="OWNERID">
               <el-input :value="detailRow.OWNERID || '-'" readonly size="small" />
             </el-descriptions-item>
@@ -185,10 +188,12 @@ export default {
             { prop: 'OWNERTABLE', label: '所属表', minWidth: 120 },
             { prop: 'STATUS', label: '状态', minWidth: 100 },
             { prop: 'IFACESTATUS', label: '接口状态', minWidth: 100 },
-            { prop: 'EXTSYSTEM', label: '外部系统', minWidth: 120 },
+            { prop: 'EXTSYSTEM', label: '外部系统', minWidth: 120, visible: false },
+            { prop: 'ENDPOINTURL', label: '端点URL', minWidth: 200 },
             { prop: 'SITEID', label: '地点', width: 100 },
             { prop: 'CHANGEBY', label: '修改人', width: 100 },
-            { prop: 'CHANGEDATE', label: '修改日期', minWidth: 160 }
+            { prop: 'CHANGEDATE', label: '修改日期', minWidth: 160 },
+            { prop: 'MEMO', label: '意见', minWidth: 180, visible: false }
           ]),
         queryParamsColumnListEnable: false,
         queryParamsColumnList: []

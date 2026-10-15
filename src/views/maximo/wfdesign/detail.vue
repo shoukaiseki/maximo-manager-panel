@@ -103,16 +103,36 @@
             <g :transform="contentTransform">
               <g class="edges">
                 <template v-for="edge in edges">
+                  <!-- 直线 -->
                   <line
+                    v-if="!edge.isOrthogonal"
                     :key="'e-zen-' + edge.from + '-' + edge.actionId"
                     :x1="edge.x1" :y1="edge.y1" :x2="edge.x2" :y2="edge.y2"
                     :stroke="edge.isPositive === false ? '#f00' : '#5a5a5a'"
                     :stroke-width="edge.isPositive === false ? 1.5 : 1.2"
                     :marker-end="edge.isPositive === false ? 'url(#arrow-neg-zen)' : 'url(#arrow-pos-zen)'" />
+                  <!-- 正交折线 -->
+                  <polyline
+                    v-else
+                    :key="'e-zen-' + edge.from + '-' + edge.actionId"
+                    :points="polylinePoints(edge.points)"
+                    fill="none"
+                    :stroke="edge.isPositive === false ? '#f00' : '#5a5a5a'"
+                    :stroke-width="edge.isPositive === false ? 1.5 : 1.2"
+                    :marker-end="edge.isPositive === false ? 'url(#arrow-neg-zen)' : 'url(#arrow-pos-zen)'" />
+                  <!-- 透明加宽命中区: 直线 -->
                   <line
+                    v-if="!edge.isOrthogonal"
                     :key="'hit-zen-' + edge.from + '-' + edge.actionId"
                     :x1="edge.x1" :y1="edge.y1" :x2="edge.x2" :y2="edge.y2"
                     stroke="transparent" stroke-width="10" fill="none" class="edge-hit"
+                    @contextmenu.prevent="onEdgeContextMenu($event, edge)" />
+                  <!-- 透明加宽命中区: 折线 -->
+                  <polyline
+                    v-else
+                    :key="'hit-zen-' + edge.from + '-' + edge.actionId"
+                    :points="polylinePoints(edge.points)"
+                    fill="none" stroke="transparent" stroke-width="10" class="edge-hit"
                     @contextmenu.prevent="onEdgeContextMenu($event, edge)" />
                   <g v-if="edge.label" :key="'l-zen-' + edge.from + '-' + edge.actionId" :transform="'translate(' + edge.lx + ',' + edge.ly + ')'"
                      class="edge-label" @contextmenu.prevent="onEdgeContextMenu($event, edge)">
@@ -126,7 +146,8 @@
                 :key="'n-zen-' + node.nodeId"
                 :transform="'translate(' + (node.x * gridPx) + ',' + (node.y * gridPx) + ')'"
                 class="wf-node" :class="{ selected: selectedNodeId === node.nodeId }"
-                @click="selectNode(node)">
+                @click="selectNode(node)"
+                @contextmenu.prevent="onNodeContextMenu($event, node)">
                 <rect v-if="selectedNodeId === node.nodeId" class="selection-ring" x="-4" y="-4" :width="shapeBox(node).w + 8" :height="shapeBox(node).h + 18"
                       rx="4" fill="none" stroke="#409eff" stroke-width="2" stroke-dasharray="4,2" />
                 <wf-node-shape :node-type="node.nodeType" />
@@ -137,6 +158,30 @@
               </g>
             </g>
           </svg>
+
+          <!-- 画布右键菜单(Zen 模式): 与常规画布同一套菜单, 相对 canvas-scroll 定位 -->
+          <div
+            v-if="contextMenu.visible"
+            class="node-context-menu"
+            :style="{ left: contextMenu.x + 'px', top: contextMenu.y + 'px' }">
+            <template v-if="contextMenu.type === 'edge'">
+              <div class="menu-item" @click="contextViewEdge">查看</div>
+              <div v-if="editMode" class="menu-item menu-item-danger" @click="contextDeleteEdge">删除连线</div>
+            </template>
+            <template v-else>
+              <div class="menu-item" @click="contextViewNode">查看节点</div>
+              <div v-if="editMode" class="menu-item" @click="contextEditNode">编辑节点</div>
+              <div v-if="editMode" class="menu-item" @click="contextStartConnect(true)">
+                {{ hasConnect(contextMenu.nodeId, true) ? '更改正向连线' : '正向连线' }}
+              </div>
+              <div v-if="editMode" class="menu-item" @click="contextStartConnect(false)">
+                {{ hasConnect(contextMenu.nodeId, false) ? '更改负向连线' : '负向连线' }}
+              </div>
+              <!-- 开始/结束节点为流程必备, 不允许删除 -->
+              <div v-if="editMode && canDeleteContextNode" class="menu-item menu-item-danger" @click="contextDeleteNode">删除节点</div>
+            </template>
+          </div>
+
           <div v-if="connectMode" class="zen-tip">连线中：点击目标节点完成「{{ connectMode.isPositive ? '正向' : '负向' }}连线」，Esc 或点击空白处取消</div>
         </div>
       </div>

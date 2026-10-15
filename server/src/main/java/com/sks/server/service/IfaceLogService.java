@@ -91,7 +91,7 @@ public class IfaceLogService {
 
         // 分页数据
         String dataSql = "SELECT IBM_IFACELOGID, DESCRIPTION, OWNERTABLE, STATUS, " +
-                "CHANGEBY, CHANGEDATE, MEMO, ORGID, SITEID, OWNERID, APP, EXTSYSTEM, IFACESTATUS " +
+                "CHANGEBY, CHANGEDATE, MEMO, ORGID, SITEID, OWNERID, APP, EXTSYSTEM, IFACESTATUS, ENDPOINTURL " +
                 "FROM IBM_IFACELOG" + whereStr +
                 " ORDER BY CHANGEDATE DESC, IBM_IFACELOGID DESC " +
                 "OFFSET ? ROWS FETCH NEXT ? ROWS ONLY";
@@ -128,7 +128,7 @@ public class IfaceLogService {
      */
     public Map<String, Object> getDetail(Long logId) {
         String sql = "SELECT IBM_IFACELOGID, DESCRIPTION, OWNERTABLE, STATUS, " +
-                "CHANGEBY, CHANGEDATE, MEMO, ORGID, SITEID, OWNERID, APP, EXTSYSTEM, IFACESTATUS, " +
+                "CHANGEBY, CHANGEDATE, MEMO, ORGID, SITEID, OWNERID, APP, EXTSYSTEM, IFACESTATUS, ENDPOINTURL, " +
                 "REQBODY, RESPBODY " +
                 "FROM IBM_IFACELOG WHERE IBM_IFACELOGID = ?";
         try (Connection conn = dataSource.getConnection();
@@ -150,6 +150,7 @@ public class IfaceLogService {
                     row.put("APP", rs.getString("APP"));
                     row.put("EXTSYSTEM", rs.getString("EXTSYSTEM"));
                     row.put("IFACESTATUS", rs.getString("IFACESTATUS"));
+                    row.put("ENDPOINTURL", rs.getString("ENDPOINTURL"));
                     row.put("REQBODY", getClobString(rs, "REQBODY"));
                     row.put("RESPBODY", getClobString(rs, "RESPBODY"));
                     return row;
@@ -187,6 +188,7 @@ public class IfaceLogService {
         row.put("APP", rs.getString("APP"));
         row.put("EXTSYSTEM", rs.getString("EXTSYSTEM"));
         row.put("IFACESTATUS", rs.getString("IFACESTATUS"));
+        row.put("ENDPOINTURL", rs.getString("ENDPOINTURL"));
         return row;
     }
 }
