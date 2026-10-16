@@ -154,6 +154,12 @@ export const constantRoutes = [
                 component: (resolve) => require(['/src/views/maximo/maxsession/MaxSession'], resolve),
                 name: 'MaxSession',
                 meta: { title: '在线用户', icon: 'user', noCache: false }
+            },
+            {
+                path: 'maxcache',
+                component: (resolve) => require(['/src/views/maximo/maxcache/index'], resolve),
+                name: 'MaxCache',
+                meta: { title: '缓存管理', icon: 'tool', noCache: false }
             }
         ]
     },
