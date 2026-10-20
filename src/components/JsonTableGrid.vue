@@ -29,7 +29,7 @@
 </template>
 
 <script>
-import { buildTableGrid } from '@/views/maximo/excelimport/tableGridBuilder'
+import { buildTableGrid } from '@/views/common/excelimport/tableGridBuilder'
 
 export default {
   name: 'JsonTableGrid',

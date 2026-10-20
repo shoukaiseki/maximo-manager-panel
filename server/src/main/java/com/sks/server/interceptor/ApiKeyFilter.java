@@ -23,6 +23,12 @@ public class ApiKeyFilter implements Filter {
             return;
         }
 
+        // 无需 apiKey 校验的公开接口统一使用 /api/anon/ 前缀（如 /api/anon/pubfiles/list）
+        if (path.startsWith("/api/anon/")) {
+            chain.doFilter(ctx);
+            return;
+        }
+
         // 验证 apiKey（支持从请求头或 URL 参数获取）
         String apiKey = ctx.header("X-API-Key");
         if (apiKey == null || apiKey.isEmpty()) {

@@ -52,7 +52,7 @@
 - "更新到 Maximo"：`activeGroupId==='default'` 时 `:disabled="true"`
 - "保存当前分组" / "添加行" / "重新加载"
 - "跨组添加"（多选其它组的 logger 名加入当前组）
-- 默认组：el-upload 导入 JSON（`auto-upload=false` + FileReader，对齐 [ApiCaller.vue](file:///e:/gitwork/maximo-manager-panel/src/views/maximo/apicaller/ApiCaller.vue) L302/L987）
+- 默认组：el-upload 导入 JSON（`auto-upload=false` + FileReader，对齐 [ApiCaller.vue](file:///e:/gitwork/maximo-manager-panel/src/views/common/apicaller/ApiCaller.vue) L302/L987）
 - 用户组："重命名"
 
 ### C3. 查询 tab 改造：el-table 加 `type="selection"` 列 + `@selection-change`；工具栏加"加入分组"按钮 → 弹窗选目标组。

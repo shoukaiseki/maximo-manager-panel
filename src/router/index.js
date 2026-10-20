@@ -400,27 +400,33 @@ export const constantRoutes = [
         children: [
             {
                 path: 'excelimport',
-                component: (resolve) => require(['/src/views/maximo/excelimport/ExcelImportConfig'], resolve),
+                component: (resolve) => require(['/src/views/common/excelimport/ExcelImportConfig'], resolve),
                 name: 'ExcelImportConfig',
                 meta: { title: 'Excel导入', icon: 'excel', noCache: false }
             },
             {
                 path: 'jsonpreview',
-                component: (resolve) => require(['/src/views/maximo/excelimport/ExcelPreview'], resolve),
+                component: (resolve) => require(['/src/views/common/excelimport/ExcelPreview'], resolve),
                 name: 'JsonPreview',
                 meta: { title: 'JSON预览', icon: 'clipboard', noCache: false }
             },
             {
                 path: 'dataformat',
-                component: (resolve) => require(['/src/views/maximo/dataformat/index'], resolve),
+                component: (resolve) => require(['/src/views/common/dataformat/index'], resolve),
                 name: 'DataFormat',
                 meta: { title: '数据处理', icon: 'edit', noCache: false }
             },
             {
                 path: 'apicaller',
-                component: (resolve) => require(['/src/views/maximo/apicaller/ApiCaller'], resolve),
+                component: (resolve) => require(['/src/views/common/apicaller/ApiCaller'], resolve),
                 name: 'ApiCaller',
                 meta: { title: 'API调用', icon: 'link', noCache: false }
+            },
+            {
+                path: 'pubfile',
+                component: (resolve) => require(['/src/views/common/pubfile/index'], resolve),
+                name: 'PublicFile',
+                meta: { title: '公开文件管理', icon: 'image', noCache: false }
             }
         ]
     },

@@ -22,6 +22,19 @@ db2:
 server.request.maxFileSize: "100MB"
 server.request.maxBodySize: "100MB"
 
+# ============================================================
+# 公开文件管理配置（上传的图片等对外公开访问，用于主页图片链接）
+# ============================================================
+pubfile:
+  # 文件存储目录（不存在时自动创建）
+  docpath: "${user.home}/maximo-panel/pubfiles"
+  # 公开访问 URL 前缀：即文件的公开访问基址（已包含 /api/anon/pubfiles 路径），后端只在其后拼文件名
+  # （例如 http://l166.shoukaiseki.cn:28766/api/anon/pubfiles
+  #   则 url = http://l166.shoukaiseki.cn:28766/api/anon/pubfiles/xxx.png；
+  #   留空则返回相对路径 /api/anon/pubfiles/xxx.png，由前端代理 /solonapi 或当前域名补全）
+  url-prefix: ""
+  #url-prefix: "http://l166.shoukaiseki.cn:28766/api/anon/pubfiles"
+
 # log
 solon.logging.appender:
   console:
