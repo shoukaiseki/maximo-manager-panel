@@ -69,6 +69,7 @@
             <el-button icon="el-icon-sort" size="mini" :disabled="tableSelection.length === 0" @click="openBatchLevelDialog">批量改级别</el-button>
             <!-- 导入 JSON（增量）：默认分组或用户分组均可导入 -->
             <el-button icon="el-icon-upload2" size="mini" @click="openImportConfigDialog">导入JSON(增量)</el-button>
+            <el-button icon="el-icon-download" size="mini" @click="openExportConfigDialog">导出JSON</el-button>
             <!-- 用户分组：重命名 -->
             <el-button v-if="!isDefaultGroup" icon="el-icon-edit" size="mini" @click="openGroupEditDialog(activeGroup)">重命名</el-button>
           </div>
@@ -173,6 +174,7 @@
             <el-button type="warning" icon="el-icon-folder-checked" size="mini" :loading="mxSaving" :disabled="!mxGroupId || (!mxDirty && mxTree.length === 0)" @click="saveMxTree">保存{{ mxDirty ? '(有改动)' : '' }}</el-button>
             <el-button type="danger" icon="el-icon-s-promotion" size="mini" :loading="mxPushing" :disabled="!mxGroupId || mxTree.length === 0" @click="pushMxToMaximo">更新到 Maximo</el-button>
             <el-button type="info" icon="el-icon-download" size="mini" @click="openMxImportDialog">导入 JSON</el-button>
+            <el-button type="info" icon="el-icon-download" size="mini" :disabled="!mxGroupId || mxTree.length === 0" @click="openMxExportDialog">导出 JSON</el-button>
             <span class="count-tip" v-if="mxTree.length">共 {{ mxTree.length }} 个根节点</span>
           </div>
           <el-table :data="mxTree" row-key="key" border size="small" style="width:100%" v-loading="mxLoading" ref="mxTable"
@@ -250,6 +252,19 @@
       <div slot="footer">
         <el-button size="mini" @click="importConfigDialog.visible = false">取消</el-button>
         <el-button type="primary" size="mini" :loading="importConfigDialog.loading" @click="submitImportConfigDialog">导入</el-button>
+      </div>
+    </el-dialog>
+
+    <!-- 导出 JSON 弹窗（日志级别配置 / MXLogger 共用），导出的内容可直接在对应“导入JSON”中粘贴导入到任意分组 -->
+    <el-dialog :title="exportDialog.title" :visible.sync="exportDialog.visible" width="720px" append-to-body :close-on-click-modal="false">
+      <p style="margin:0 0 8px;color:#606266;font-size:13px">
+        导出内容取自当前分组“<b>{{ exportDialog.groupName }}</b>”，格式与导入一致：可先新建/选择目标分组，再在“导入JSON”中粘贴导入。
+      </p>
+      <el-input :value="exportDialog.text" type="textarea" :rows="14" readonly />
+      <div slot="footer">
+        <el-button size="mini" @click="exportDialog.visible = false">关闭</el-button>
+        <el-button size="mini" icon="el-icon-document-copy" @click="copyExportText">复制</el-button>
+        <el-button type="primary" size="mini" icon="el-icon-download" @click="downloadExportFile">下载文件</el-button>
       </div>
     </el-dialog>
 
@@ -505,6 +520,8 @@ export default {
 
       // 弹窗
       importConfigDialog: { visible: false, text: '', error: '', loading: false },
+      // 导出弹窗（日志级别配置 / MXLogger 共用）
+      exportDialog: { visible: false, title: '', groupName: '', fileName: '', text: '' },
       groupEditDialog: { visible: false, mode: 'create', id: null, name: '', description: '', loading: false },
       crossGroupDialog: {
         visible: false,
@@ -1098,6 +1115,78 @@ export default {
           if (t) this.toggleMxExpandQuiet(t)
         })
       })
+    },
+
+    // ============ 导出 JSON（与导入格式一致，可直接导入到分组） ============
+    openExportConfigDialog() {
+      const rows = this.currentItems || []
+      const loggers = rows
+        .filter(r => (r.loggerName || '').trim())
+        .map(r => ({
+          loggerName: r.loggerName.trim(),
+          level: (r.level || 'INFO').toUpperCase(),
+          ignore: !!r.ignored,
+          description: r.description || ''
+        }))
+      if (loggers.length === 0) {
+        this.$message.warning('当前分组暂无可导出的配置')
+        return
+      }
+      this.showExportDialog('导出日志级别配置', this.currentGroupLabel, 'logger-config', { groupName: this.currentGroupLabel, loggers })
+    },
+    openMxExportDialog() {
+      if (!this.mxGroupId) { this.$message.warning('请先选择组'); return }
+      const list = this.buildMxPushList()
+      if (list.length === 0) { this.$message.warning('当前组暂无可导出的节点'); return }
+      this.showExportDialog('导出 MXLogger JSON', this.currentMxGroupLabel, 'logger-mx', list)
+    },
+    showExportDialog(title, groupName, filePrefix, payload) {
+      this.exportDialog = {
+        visible: true,
+        title: title,
+        groupName: groupName,
+        fileName: filePrefix + '-' + this.safeFileName(groupName) + '.json',
+        text: JSON.stringify(payload, null, 2)
+      }
+    },
+    safeFileName(name) {
+      return String(name || '').replace(/[\\/:*?"<>|\s]+/g, '_') || 'group'
+    },
+    copyExportText() {
+      const text = this.exportDialog.text
+      if (!text) return
+      const fallback = () => {
+        const area = document.createElement('textarea')
+        area.value = text
+        area.style.position = 'fixed'
+        area.style.opacity = '0'
+        document.body.appendChild(area)
+        area.select()
+        let ok = false
+        try { ok = document.execCommand('copy') } catch (e) { ok = false }
+        document.body.removeChild(area)
+        ok ? this.$message.success('已复制到剪贴板') : this.$message.error('复制失败，请手动选择文本复制')
+      }
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(() => {
+          this.$message.success('已复制到剪贴板')
+        }).catch(fallback)
+      } else {
+        fallback()
+      }
+    },
+    downloadExportFile() {
+      const d = this.exportDialog
+      if (!d.text) return
+      const blob = new Blob([d.text], { type: 'application/json;charset=utf-8' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = d.fileName
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
     },
 
     // ============ 查询 tab ============

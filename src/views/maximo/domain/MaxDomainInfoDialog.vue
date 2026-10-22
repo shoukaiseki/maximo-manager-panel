@@ -214,7 +214,7 @@
 </template>
 
 <script>
-import { exportDomains, exportDomainObjects, getDomainSubtables } from '@/api/domain'
+import { exportDomains, getDomainSubtables } from '@/api/domain'
 
 export default {
   name: 'MaxDomainInfoDialog',
@@ -372,27 +372,24 @@ export default {
       }
 
       Promise.all([
+        // 精简导出(忽略默认值)：列表展示用
         exportDomains({
           _langcode: 'ZH',
-          apiType: 'manage',
           _action: 'export',
           ignoreDefVal: 'true'
         }, {
-          where: whereClause
+          where: whereClause,
+          apiType: 'manage'
         }),
+        // 完整导出：原始 JSON + 结构化详情（同一脚本，含域值子记录与条件/where子句）
         exportDomains({
           _langcode: 'ZH',
-          apiType: 'manage',
           _action: 'export'
         }, {
-          where: whereClause
-        }),
-        exportDomainObjects({
-          _langcode: 'ZH'
-        }, {
-          where: whereClause
+          where: whereClause,
+          apiType: 'manage'
         })
-      ]).then(([simpleRes, fullRes, structRes]) => {
+      ]).then(([simpleRes, fullRes]) => {
         const simpleData = simpleRes.data || simpleRes
         const fullData = fullRes.data || fullRes
 
@@ -402,22 +399,17 @@ export default {
           this.apiSimpleDomains = simpleData.domains
         }
 
+        // 完整导出同时用作结构化详情数据源
         if (fullData && fullData.status === 'error') {
           this.$message.error('获取域完整失败: ' + (fullData.message || '未知错误'))
         } else if (fullData && fullData.domains && fullData.domains.length > 0) {
           this.apiFullDomains = fullData.domains
+          this.structDomain = fullData.domains[0]
           this.currentRow = Object.assign({}, this.currentRow, fullData.domains[0])
           // 打开时未传入 domaintype（如从字段详情进入），用解析出的类型加载子表
           if (!this.domaintype && this.currentRow.domaintype) {
             this.loadSubtables(this.currentRow.domaintype)
           }
-        }
-
-        const structData = structRes.data || structRes
-        if (structData && structData.status === 'error') {
-          this.$message.error('获取结构化域详情失败: ' + (structData.message || '未知错误'))
-        } else if (structData && structData.domains && structData.domains.length > 0) {
-          this.structDomain = structData.domains[0]
         }
       }).catch(err => {
         this.$message.error('获取域详情失败: ' + (err.message || String(err)))

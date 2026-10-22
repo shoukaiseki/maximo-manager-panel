@@ -2,15 +2,16 @@ import request from '@/utils/request'
 import solonRequest from '@/api/solonapi'
 
 /**
- * 调用 SKS_EXPORT_DOMAIN 脚本
- * params: _action=list(列表) / export(完整导出), _langcode, apiType, ignoreDefVal, pageNum, pageSize
- * data:   { where: "SQL条件" }
+ * 调用 SKS.AUTOSCRIPT.OBJECTS 脚本(域列表/导出)
+ * URL 查询参数: _type=domains, _action=list(列表) / export(完整导出), _langcode, ignoreDefVal(精简导出)
+ * body: { where: "SQL条件", apiType: "manage", pageNum?, pageSize? }
+ * 注意: apiType / pageNum / pageSize 由脚本从请求体读取，不要放到 URL 参数中
  */
 export function exportDomains(params, data) {
   return request({
-    url: '/api/script/SKS_EXPORT_DOMAIN',
+    url: '/api/script/SKS.AUTOSCRIPT.OBJECTS',
     method: 'post',
-    params: params,
+    params: Object.assign({ _type: 'domains' }, params),
     data: data
   })
 }
@@ -25,20 +26,6 @@ export function getDomainSubtables(domainid, domaintype) {
     url: '/domain/subtables',
     method: 'get',
     params: { domainid, domaintype }
-  })
-}
-
-/**
- * 调用 SKS.AUTOSCRIPT.OBJECTS 脚本(域结构化详情)
- * 含各值 maxdomvalcond 条件、TABLE/CROSSOVER 的 where 子句与错误消息键、CROSSOVER 字段映射
- * 契约: URL 固定 _type=domains&_action=export; data 为纯查询条件 { where: "SQL条件" }
- */
-export function exportDomainObjects(params, data) {
-  return request({
-    url: '/api/script/SKS.AUTOSCRIPT.OBJECTS',
-    method: 'post',
-    params: Object.assign({ _type: 'domains', _action: 'export' }, params),
-    data: data
   })
 }
 

@@ -216,12 +216,12 @@ export default {
       this.loading = true
       exportDomains({
         _langcode: 'ZH',
+        _action: 'list'
+      }, {
+        where: this.getEffectiveWhere(),
         apiType: 'manage',
-        _action: 'list',
         pageNum: this.mainTable.queryParams.pageNum,
         pageSize: this.mainTable.queryParams.pageSize
-      }, {
-        where: this.getEffectiveWhere()
       }).then(res => {
         const data = res.data || res
         if (data.status === 'error') {
@@ -264,10 +264,10 @@ export default {
       this.exportTotal = 0
       exportDomains({
         _langcode: 'ZH',
-        apiType: 'manage',
         _action: 'export'
       }, {
-        where: this.getEffectiveWhere()
+        where: this.getEffectiveWhere(),
+        apiType: 'manage'
       }).then(res => {
         const data = res.data || res
         if (data.status === 'error') {
