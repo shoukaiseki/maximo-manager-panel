@@ -91,6 +91,13 @@
               <marker id="arrow-neg-zen" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
                 <path d="M0,0 L8,3 L0,6 z" fill="#f00" />
               </marker>
+              <!-- 选中连线用蓝色箭头 -->
+              <marker id="arrow-pos-sel-zen" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+                <path d="M0,0 L8,3 L0,6 z" fill="#409eff" />
+              </marker>
+              <marker id="arrow-neg-sel-zen" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+                <path d="M0,0 L8,3 L0,6 z" fill="#409eff" />
+              </marker>
               <pattern id="wf-grid-minor-zen" :width="gridPx / 5" :height="gridPx / 5" patternUnits="userSpaceOnUse">
                 <path :d="'M ' + (gridPx / 5) + ' 0 L 0 0 0 ' + (gridPx / 5)" fill="none" stroke="#eceff3" stroke-width="1" vector-effect="non-scaling-stroke" />
               </pattern>
@@ -99,7 +106,7 @@
                 <path :d="'M ' + gridPx + ' 0 L 0 0 0 ' + gridPx" fill="none" stroke="#dfe3e8" stroke-width="1" vector-effect="non-scaling-stroke" />
               </pattern>
             </defs>
-            <rect x="0" y="0" :width="canvasSize.width" :height="canvasSize.height" fill="url(#wf-grid-zen)" @click="cancelConnect" />
+            <rect x="0" y="0" :width="canvasSize.width" :height="canvasSize.height" fill="url(#wf-grid-zen)" @click="onCanvasClick" />
             <g :transform="contentTransform">
               <g class="edges">
                 <template v-for="edge in edges">
@@ -120,12 +127,26 @@
                     :stroke="edge.isPositive === false ? '#f00' : '#5a5a5a'"
                     :stroke-width="edge.isPositive === false ? 1.5 : 1.2"
                     :marker-end="edge.isPositive === false ? 'url(#arrow-neg-zen)' : 'url(#arrow-pos-zen)'" />
+                  <!-- 选中高亮(交互态, 导出图片时剔除) -->
+                  <line
+                    v-if="selectedEdgeKey === edgeKeyOf(edge) && !edge.isOrthogonal"
+                    :key="'sel-zen-' + edge.from + '-' + edge.actionId"
+                    :x1="edge.x1" :y1="edge.y1" :x2="edge.x2" :y2="edge.y2"
+                    stroke="#409eff" stroke-width="2.6" fill="none" class="edge-sel"
+                    :marker-end="edge.isPositive === false ? 'url(#arrow-neg-sel-zen)' : 'url(#arrow-pos-sel-zen)'" pointer-events="none" />
+                  <polyline
+                    v-else-if="selectedEdgeKey === edgeKeyOf(edge)"
+                    :key="'sel-zen-' + edge.from + '-' + edge.actionId"
+                    :points="polylinePoints(edge.points)"
+                    fill="none" stroke="#409eff" stroke-width="2.6" class="edge-sel"
+                    :marker-end="edge.isPositive === false ? 'url(#arrow-neg-sel-zen)' : 'url(#arrow-pos-sel-zen)'" pointer-events="none" />
                   <!-- 透明加宽命中区: 直线 -->
                   <line
                     v-if="!edge.isOrthogonal"
                     :key="'hit-zen-' + edge.from + '-' + edge.actionId"
                     :x1="edge.x1" :y1="edge.y1" :x2="edge.x2" :y2="edge.y2"
                     stroke="transparent" stroke-width="10" fill="none" class="edge-hit"
+                    @click.stop="selectEdge(edge)"
                     @contextmenu.prevent="onEdgeContextMenu($event, edge)" />
                   <!-- 透明加宽命中区: 折线 -->
                   <polyline
@@ -133,11 +154,15 @@
                     :key="'hit-zen-' + edge.from + '-' + edge.actionId"
                     :points="polylinePoints(edge.points)"
                     fill="none" stroke="transparent" stroke-width="10" class="edge-hit"
+                    @click.stop="selectEdge(edge)"
                     @contextmenu.prevent="onEdgeContextMenu($event, edge)" />
                   <g v-if="edge.label" :key="'l-zen-' + edge.from + '-' + edge.actionId" :transform="'translate(' + edge.lx + ',' + edge.ly + ')'"
-                     class="edge-label" @contextmenu.prevent="onEdgeContextMenu($event, edge)">
-                    <rect :x="-(edge.labelW / 2)" y="-9" :width="edge.labelW + 8" height="16" rx="2" fill="#fff" stroke="#c0c4cc" stroke-width="0.6" />
-                    <text x="0" y="3" font-size="10" fill="#606266" text-anchor="middle">{{ edge.label }}</text>
+                     class="edge-label" :class="{ selected: selectedEdgeKey === edgeKeyOf(edge) }"
+                     @click.stop="selectEdge(edge)"
+                     @contextmenu.prevent="onEdgeContextMenu($event, edge)">
+                    <rect :x="-(edge.labelW / 2)" y="-9" :width="edge.labelW + 8" height="16" rx="2" fill="#fff"
+                          :stroke="selectedEdgeKey === edgeKeyOf(edge) ? '#409eff' : '#c0c4cc'" :stroke-width="selectedEdgeKey === edgeKeyOf(edge) ? 1.2 : 0.6" />
+                    <text x="0" y="3" font-size="10" :fill="selectedEdgeKey === edgeKeyOf(edge) ? '#409eff' : '#606266'" text-anchor="middle">{{ edge.label }}</text>
                   </g>
                 </template>
               </g>
@@ -269,6 +294,13 @@
                 <marker id="arrow-neg" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
                   <path d="M0,0 L8,3 L0,6 z" fill="#f00" />
                 </marker>
+                <!-- 选中连线用蓝色箭头 -->
+                <marker id="arrow-pos-sel" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+                  <path d="M0,0 L8,3 L0,6 z" fill="#409eff" />
+                </marker>
+                <marker id="arrow-neg-sel" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+                  <path d="M0,0 L8,3 L0,6 z" fill="#409eff" />
+                </marker>
                 <!-- 网格: 次网格 = 主网格/5, 主网格 = 节点间距(默认 80px = GRID), 与节点坐标同一坐标系, 随缩放一起变化 -->
                 <pattern id="wf-grid-minor" :width="gridPx / 5" :height="gridPx / 5" patternUnits="userSpaceOnUse">
                   <path :d="'M ' + (gridPx / 5) + ' 0 L 0 0 0 ' + (gridPx / 5)" fill="none" stroke="#eceff3" stroke-width="1" vector-effect="non-scaling-stroke" />
@@ -279,7 +311,7 @@
                 </pattern>
               </defs>
 
-              <rect x="0" y="0" :width="canvasSize.width" :height="canvasSize.height" fill="url(#wf-grid)" @click="cancelConnect" />
+              <rect x="0" y="0" :width="canvasSize.width" :height="canvasSize.height" fill="url(#wf-grid)" @click="onCanvasClick" />
 
               <!-- 内容整体平移到画布左上留白处, 画布尺寸按内容包围盒计算, 再由外层居中 -->
               <g :transform="contentTransform">
@@ -303,12 +335,26 @@
                       :stroke="edge.isPositive === false ? '#f00' : '#5a5a5a'"
                       :stroke-width="edge.isPositive === false ? 1.5 : 1.2"
                       :marker-end="edge.isPositive === false ? 'url(#arrow-neg)' : 'url(#arrow-pos)'" />
+                    <!-- 选中高亮(交互态, 导出图片时剔除) -->
+                    <line
+                      v-if="selectedEdgeKey === edgeKeyOf(edge) && !edge.isOrthogonal"
+                      :key="'sel-' + edge.from + '-' + edge.actionId"
+                      :x1="edge.x1" :y1="edge.y1" :x2="edge.x2" :y2="edge.y2"
+                      stroke="#409eff" stroke-width="2.6" fill="none" class="edge-sel"
+                      :marker-end="edge.isPositive === false ? 'url(#arrow-neg-sel)' : 'url(#arrow-pos-sel)'" pointer-events="none" />
+                    <polyline
+                      v-else-if="selectedEdgeKey === edgeKeyOf(edge)"
+                      :key="'sel-' + edge.from + '-' + edge.actionId"
+                      :points="polylinePoints(edge.points)"
+                      fill="none" stroke="#409eff" stroke-width="2.6" class="edge-sel"
+                      :marker-end="edge.isPositive === false ? 'url(#arrow-neg-sel)' : 'url(#arrow-pos-sel)'" pointer-events="none" />
                     <!-- 透明加宽命中区: 直线 -->
                     <line
                       v-if="!edge.isOrthogonal"
                       :key="'hit-' + edge.from + '-' + edge.actionId"
                       :x1="edge.x1" :y1="edge.y1" :x2="edge.x2" :y2="edge.y2"
                       stroke="transparent" stroke-width="10" fill="none" class="edge-hit"
+                      @click.stop="selectEdge(edge)"
                       @contextmenu.prevent="onEdgeContextMenu($event, edge)" />
                     <!-- 透明加宽命中区: 折线 -->
                     <polyline
@@ -316,11 +362,15 @@
                       :key="'hit-' + edge.from + '-' + edge.actionId"
                       :points="polylinePoints(edge.points)"
                       fill="none" stroke="transparent" stroke-width="10" class="edge-hit"
+                      @click.stop="selectEdge(edge)"
                       @contextmenu.prevent="onEdgeContextMenu($event, edge)" />
                     <g v-if="edge.label" :key="'l-' + edge.from + '-' + edge.actionId" :transform="'translate(' + edge.lx + ',' + edge.ly + ')'"
-                       class="edge-label" @contextmenu.prevent="onEdgeContextMenu($event, edge)">
-                      <rect :x="-(edge.labelW / 2)" y="-9" :width="edge.labelW + 8" height="16" rx="2" fill="#fff" stroke="#c0c4cc" stroke-width="0.6" />
-                      <text x="0" y="3" font-size="10" fill="#606266" text-anchor="middle">{{ edge.label }}</text>
+                       class="edge-label" :class="{ selected: selectedEdgeKey === edgeKeyOf(edge) }"
+                       @click.stop="selectEdge(edge)"
+                       @contextmenu.prevent="onEdgeContextMenu($event, edge)">
+                      <rect :x="-(edge.labelW / 2)" y="-9" :width="edge.labelW + 8" height="16" rx="2" fill="#fff"
+                            :stroke="selectedEdgeKey === edgeKeyOf(edge) ? '#409eff' : '#c0c4cc'" :stroke-width="selectedEdgeKey === edgeKeyOf(edge) ? 1.2 : 0.6" />
+                      <text x="0" y="3" font-size="10" :fill="selectedEdgeKey === edgeKeyOf(edge) ? '#409eff' : '#606266'" text-anchor="middle">{{ edge.label }}</text>
                     </g>
                   </template>
                 </g>
@@ -1156,6 +1206,7 @@ export default {
       lineStyle: 'straight', // 画线方式: straight 直线 / orthogonal 正交折线
       workflow: {},
       selectedNodeId: null,
+      selectedEdgeKey: null, // 选中连线标识: from + '-' + action 下标; null 表示未选中
       zoom: 1,
       spacing: 1.5, // 节点间距倍率(1 = Maximo 默认 80px/格), 只影响画布显示, 不改节点的网格坐标
       nodePalette: ['WFSTART', 'WFSTOP', 'WFTASK', 'WFCONDITION', 'WFINPUT', 'WFINTERACTION', 'WFSUBPROCESS', 'WFWAIT'],
@@ -1682,6 +1733,21 @@ export default {
       })
       return items
     },
+    // === 连线选中 ===
+    edgeKeyOf(edge) {
+      return edge.from + '-' + edge.index
+    },
+    selectEdge(edge) {
+      var key = this.edgeKeyOf(edge)
+      this.selectedEdgeKey = this.selectedEdgeKey === key ? null : key
+      this.selectedNodeId = null
+      this.closeContextMenu()
+    },
+    // 点击画布空白处: 取消连线选中 + 退出连线模式
+    onCanvasClick() {
+      this.selectedEdgeKey = null
+      this.cancelConnect()
+    },
     selectNode: function (node) {
       // 拖拽结束后的第一次 click 不改变选中
       if (this.suppressClick) {
@@ -1694,6 +1760,7 @@ export default {
         return
       }
       this.selectedNodeId = node.nodeId
+      this.selectedEdgeKey = null
     },
     // === 缩放 ===
     zoomIn() {
@@ -1818,6 +1885,7 @@ export default {
       this._stableSnap = null
       this._histAt = 0
       this.selectedNodeId = null
+      this.selectedEdgeKey = null
       this.dragState = null
       this.saveDialog.visible = false
       this.closeContextMenu()
@@ -1876,6 +1944,7 @@ export default {
       }
       var rect = el.getBoundingClientRect()
       this.selectedNodeId = node.nodeId
+      this.selectedEdgeKey = null
       this.contextMenu.type = 'node'
       this.contextMenu.nodeId = node.nodeId
       this.contextMenu.x = event.clientX - rect.left + el.scrollLeft
@@ -1954,6 +2023,10 @@ export default {
       } else {
         this.$set(action, '_delete', true)
       }
+      // 被删除的连线若正处于选中态, 清空选中
+      if (this.selectedEdgeKey === this.edgeKeyOf({ from: node.nodeId, index: index })) {
+        this.selectedEdgeKey = null
+      }
       this.markDirty(true)
       var target = this.nodeMap[action.memberNodeId]
       var targetLabel = target ? '→ #' + target.nodeId : ''
@@ -2013,6 +2086,10 @@ export default {
       })
       if (this.selectedNodeId === node.nodeId) {
         this.selectedNodeId = null
+      }
+      // 该节点的出线已移除, 选中态一并清空
+      if (this.selectedEdgeKey && this.selectedEdgeKey.indexOf(node.nodeId + '-') === 0) {
+        this.selectedEdgeKey = null
       }
       this.markDirty(true)
       this.$message.success('已删除节点 #' + node.nodeId + '，保存后生效')
@@ -2176,6 +2253,7 @@ export default {
       nodes.push(node)
       this.markDirty(true)
       this.selectedNodeId = nodeId
+      this.selectedEdgeKey = null
       this.$message.success('已新增' + TYPE_LABELS[nodeType] + '节点 #' + nodeId + '，双击节点可编辑属性')
     },
     // === 画布导出图片 ===
@@ -2207,10 +2285,14 @@ export default {
       var pxW = w * scale
       var pxH = h * scale
       var clone = svg.cloneNode(true)
-      // 选中框属于交互态产物, 不进入导出图片
+      // 选中框/选中连线属于交互态产物, 不进入导出图片
       var rings = clone.querySelectorAll('.selection-ring')
       for (var i = 0; i < rings.length; i++) {
         rings[i].parentNode.removeChild(rings[i])
+      }
+      var sels = clone.querySelectorAll('.edge-sel')
+      for (var j = 0; j < sels.length; j++) {
+        sels[j].parentNode.removeChild(sels[j])
       }
       clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg')
       // viewBox 不变, 改 width/height 让浏览器按目标像素栅格化(导出与当前 zoom 无关)
@@ -2287,6 +2369,7 @@ export default {
         return
       }
       this.selectedNodeId = node.nodeId
+      this.selectedEdgeKey = null
       this.closeContextMenu()
       if (this.editMode) {
         this.ensureNodeDetail(node)
@@ -3016,6 +3099,10 @@ export default {
 .edge-hit,
 .edge-label {
   cursor: pointer;
+}
+/* 选中高亮覆盖层只做展示, 不拦截命中区/标签的点击 */
+.edge-sel {
+  pointer-events: none;
 }
 /* 节点右键菜单 */
 .node-context-menu {
