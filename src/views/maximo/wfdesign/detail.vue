@@ -156,13 +156,16 @@
                     fill="none" stroke="transparent" stroke-width="10" class="edge-hit"
                     @click.stop="selectEdge(edge)"
                     @contextmenu.prevent="onEdgeContextMenu($event, edge)" />
-                  <g v-if="edge.label" :key="'l-zen-' + edge.from + '-' + edge.actionId" :transform="'translate(' + edge.lx + ',' + edge.ly + ')'"
+                  <g v-if="edge.labelLines.length" :key="'l-zen-' + edge.from + '-' + edge.actionId" :transform="'translate(' + edge.lx + ',' + edge.ly + ')'"
                      class="edge-label" :class="{ selected: selectedEdgeKey === edgeKeyOf(edge) }"
                      @click.stop="selectEdge(edge)"
                      @contextmenu.prevent="onEdgeContextMenu($event, edge)">
-                    <rect :x="-(edge.labelW / 2)" y="-9" :width="edge.labelW + 8" height="16" rx="2" fill="#fff"
+                    <rect :x="-(edge.labelW / 2)" :y="edge.labelLines.length > 1 ? -13 : -9" :width="edge.labelW + 8"
+                          :height="edge.labelLines.length > 1 ? 26 : 16" rx="2" fill="#fff"
                           :stroke="selectedEdgeKey === edgeKeyOf(edge) ? '#409eff' : '#c0c4cc'" :stroke-width="selectedEdgeKey === edgeKeyOf(edge) ? 1.2 : 0.6" />
-                    <text x="0" y="3" font-size="10" :fill="selectedEdgeKey === edgeKeyOf(edge) ? '#409eff' : '#606266'" text-anchor="middle">{{ edge.label }}</text>
+                    <text x="0" :y="edge.labelLines.length > 1 ? -2 : 3" font-size="10" text-anchor="middle">
+                      <tspan v-for="(ln, li) in edge.labelLines" :key="li" x="0" :dy="li === 0 ? 0 : 12" :fill="ln.color">{{ ln.text }}</tspan>
+                    </text>
                   </g>
                 </template>
               </g>
@@ -239,6 +242,15 @@
                 <el-select v-model="lineStyle" size="mini" class="line-style-select">
                   <el-option label="直线方式" value="straight" />
                   <el-option label="正交方式" value="orthogonal" />
+                </el-select>
+              </span>
+              <!-- 连线文字: 操作(ACTION)/操作说明(INSTRUCTION) 单独或同时显示 -->
+              <span class="line-style-wrap">
+                <span class="spacing-label">连线文字</span>
+                <el-select v-model="edgeLabelMode" size="mini" class="edge-label-select">
+                  <el-option label="操作+说明" value="both" />
+                  <el-option label="仅操作" value="action" />
+                  <el-option label="仅说明" value="instruction" />
                 </el-select>
               </span>
             </div>
@@ -364,13 +376,16 @@
                       fill="none" stroke="transparent" stroke-width="10" class="edge-hit"
                       @click.stop="selectEdge(edge)"
                       @contextmenu.prevent="onEdgeContextMenu($event, edge)" />
-                    <g v-if="edge.label" :key="'l-' + edge.from + '-' + edge.actionId" :transform="'translate(' + edge.lx + ',' + edge.ly + ')'"
+                    <g v-if="edge.labelLines.length" :key="'l-' + edge.from + '-' + edge.actionId" :transform="'translate(' + edge.lx + ',' + edge.ly + ')'"
                        class="edge-label" :class="{ selected: selectedEdgeKey === edgeKeyOf(edge) }"
                        @click.stop="selectEdge(edge)"
                        @contextmenu.prevent="onEdgeContextMenu($event, edge)">
-                      <rect :x="-(edge.labelW / 2)" y="-9" :width="edge.labelW + 8" height="16" rx="2" fill="#fff"
+                      <rect :x="-(edge.labelW / 2)" :y="edge.labelLines.length > 1 ? -13 : -9" :width="edge.labelW + 8"
+                            :height="edge.labelLines.length > 1 ? 26 : 16" rx="2" fill="#fff"
                             :stroke="selectedEdgeKey === edgeKeyOf(edge) ? '#409eff' : '#c0c4cc'" :stroke-width="selectedEdgeKey === edgeKeyOf(edge) ? 1.2 : 0.6" />
-                      <text x="0" y="3" font-size="10" :fill="selectedEdgeKey === edgeKeyOf(edge) ? '#409eff' : '#606266'" text-anchor="middle">{{ edge.label }}</text>
+                      <text x="0" :y="edge.labelLines.length > 1 ? -2 : 3" font-size="10" text-anchor="middle">
+                        <tspan v-for="(ln, li) in edge.labelLines" :key="li" x="0" :dy="li === 0 ? 0 : 12" :fill="ln.color">{{ ln.text }}</tspan>
+                      </text>
                     </g>
                   </template>
                 </g>
@@ -1204,6 +1219,7 @@ export default {
       tipDialogVisible: false, // 操作说明对话框
       zenMode: false, // Zen 模式: 隐藏工具栏/面板等, 只保留画布
       lineStyle: 'straight', // 画线方式: straight 直线 / orthogonal 正交折线
+      edgeLabelMode: 'both', // 连线文字: both 操作+说明 / action 仅操作 / instruction 仅说明
       workflow: {},
       selectedNodeId: null,
       selectedEdgeKey: null, // 选中连线标识: from + '-' + action 下标; null 表示未选中
@@ -1260,7 +1276,22 @@ export default {
           if (!target) { return }
           var seg = self.borderSegment(node, target)
           if (!seg) { return }
-          var rawLabel = a.action || a.instruction || ''
+          var actionText = a.action || ''
+          var instructionText = a.instruction || ''
+          // 连线文字: 操作在上(绿色), 操作说明在下(常规色); 按模式决定显示哪几行
+          var lines = []
+          var showAction = self.edgeLabelMode !== 'instruction'
+          var showInstruction = self.edgeLabelMode !== 'action'
+          if (showAction && actionText) {
+            lines.push({ text: self.truncateByWidth(actionText, 160), color: '#67c23a' })
+          }
+          if (showInstruction && instructionText) {
+            lines.push({ text: self.truncateByWidth(instructionText, 160), color: '#606266' })
+          }
+          var labelW = 0
+          lines.forEach(function (ln) {
+            labelW = Math.max(labelW, self.textWidth(ln.text))
+          })
           rawEdges.push({
             from: node.nodeId,
             fromNode: node,
@@ -1269,8 +1300,8 @@ export default {
             actionId: a.actionId,
             index: i,
             isPositive: a.isPositive,
-            label: rawLabel ? self.truncateByWidth(rawLabel, 120) : '',
-            labelW: self.textWidth(rawLabel ? self.truncateByWidth(rawLabel, 120) : ''),
+            labelLines: lines,
+            labelW: labelW,
             x1: seg.x1, y1: seg.y1, x2: seg.x2, y2: seg.y2
           })
         })
@@ -1278,15 +1309,19 @@ export default {
       if (this.lineStyle === 'orthogonal') {
         list = this._routeOrthogonal(rawEdges)
       } else {
+        // 直线模式: 同一起点/终点的多条线完全重合时互相错开, 否则后画的线会盖住前一条导致无法选中
+        this._spreadStraightEndpoints(rawEdges)
         rawEdges.forEach(function (r) {
           list.push({
             from: r.from, to: r.to, actionId: r.actionId, index: r.index,
-            isPositive: r.isPositive, label: r.label, labelW: r.labelW,
+            isPositive: r.isPositive, labelLines: r.labelLines, labelW: r.labelW,
             isOrthogonal: false,
             x1: r.x1, y1: r.y1, x2: r.x2, y2: r.y2,
             lx: (r.x1 + r.x2) / 2, ly: (r.y1 + r.y2) / 2
           })
         })
+        // 连线端点错开后标签仍可能挤在一起, 按标签区域分组再沿垂直方向排队
+        this._spreadStraightLabels(list)
       }
       return list
     },
@@ -1611,7 +1646,7 @@ export default {
         }
         result.push({
           from: e.from, to: e.to, actionId: e.actionId, index: e.index,
-          isPositive: e.isPositive, label: e.label, labelW: e.labelW,
+          isPositive: e.isPositive, labelLines: e.labelLines, labelW: e.labelW,
           isOrthogonal: true, points: points, lx: lx, ly: ly
         })
       })
@@ -1707,6 +1742,131 @@ export default {
         x2: c2x - dx * (isFinite(t2) ? t2 : 0),
         y2: c2y - dy * (isFinite(t2) ? t2 : 0)
       }
+    },
+    /**
+     * 直线模式端点错开: 同一个端点被多条线共用时(同一节点多条出线指向同一目标、
+     * 多个节点连到同一目标、正反向互指等), 线条会完全重合, 透明命中区叠加后
+     * 只能选中最后画的那条。这里按端点分组, 把各线端点沿垂直于线方向错开几像素。
+     */
+    _spreadStraightEndpoints(edgesIn) {
+      var STEP = 6
+      var groups = {}
+      var keyOf = function (x, y) {
+        return Math.round(x * 10) / 10 + ',' + Math.round(y * 10) / 10
+      }
+      edgesIn.forEach(function (e) {
+        var k1 = keyOf(e.x1, e.y1)
+        var k2 = keyOf(e.x2, e.y2)
+        ;(groups[k1] = groups[k1] || []).push({ e: e, side: 'start' })
+        ;(groups[k2] = groups[k2] || []).push({ e: e, side: 'end' })
+      })
+      Object.keys(groups).forEach(function (k) {
+        var list = groups[k]
+        if (list.length < 2) { return }
+        // 固定排序, 保证每次渲染错开的方向/顺序一致
+        list.sort(function (a, b) {
+          if (a.e.to !== b.e.to) { return a.e.to - b.e.to }
+          if (a.e.index !== b.e.index) { return a.e.index - b.e.index }
+          return a.side === b.side ? 0 : (a.side === 'start' ? -1 : 1)
+        })
+        list.forEach(function (item, i) {
+          var off = (i - (list.length - 1) / 2) * STEP
+          if (!off) { return }
+          var e = item.e
+          var dx = e.x2 - e.x1
+          var dy = e.y2 - e.y1
+          var len = Math.sqrt(dx * dx + dy * dy) || 1
+          // 垂直于线方向的单位向量; 统一基准方向(与连线朝向无关), 正反向的线才会朝同一侧错开
+          var nx = -dy / len
+          var ny = dx / len
+          if (nx < -1e-9 || (Math.abs(nx) <= 1e-9 && ny < 0)) {
+            nx = -nx
+            ny = -ny
+          }
+          if (item.side === 'start') {
+            e.x1 += nx * off
+            e.y1 += ny * off
+          } else {
+            e.x2 += nx * off
+            e.y2 += ny * off
+          }
+        })
+      })
+    },
+    /**
+     * 直线模式标签错开: 端点错开后线条分开了, 但同一区域的「操作/说明」标签仍会互相压住
+     * (两条线平行只差几像素时标签矩形大面积重叠, 点击标签也只能选中最上面那条)。
+     * 这里把标签矩形互相重叠的连线聚成一组, 组内沿法线或线方向按标签实际占位依次排开。
+     */
+    _spreadStraightLabels(list) {
+      var GAP = 6
+      var labelH = function (e) { return e.labelLines.length > 1 ? 26 : 16 }
+      var labelW = function (e) { return e.labelW + 8 }
+      var overlaps = function (a, b) {
+        return Math.abs(a.lx - b.lx) < (labelW(a) + labelW(b)) / 2 + GAP &&
+          Math.abs(a.ly - b.ly) < (labelH(a) + labelH(b)) / 2 + GAP
+      }
+      var clusters = []
+      list.forEach(function (e) {
+        if (!e.labelLines.length) { return }
+        // 与簇内任意一条标签矩形重叠(留 GAP)即归入同一簇(不能只跟簇中心比, 否则多条时会漏)
+        for (var i = 0; i < clusters.length; i++) {
+          var c = clusters[i]
+          if (c.items.some(function (o) { return overlaps(e, o) })) {
+            c.items.push(e)
+            return
+          }
+        }
+        clusters.push({ items: [e] })
+      })
+      clusters.forEach(function (c) {
+        if (c.items.length < 2) { return }
+        // 组内平均方向, 统一基准方向(与连线朝向无关)
+        var dx = 0
+        var dy = 0
+        c.items.forEach(function (e) {
+          dx += e.x2 - e.x1
+          dy += e.y2 - e.y1
+        })
+        var len = Math.sqrt(dx * dx + dy * dy) || 1
+        var ux = dx / len
+        var uy = dy / len
+        if (ux < -1e-9 || (Math.abs(ux) <= 1e-9 && uy < 0)) {
+          ux = -ux
+          uy = -uy
+        }
+        var nx = -uy
+        var ny = ux
+        // 排序固定, 保证标签错开后顺序稳定
+        c.items.sort(function (a, b) {
+          if (a.to !== b.to) { return a.to - b.to }
+          return a.index - b.index
+        })
+        // 标签矩形在某个轴上的半投影长度: |ax| * w/2 + |ay| * h/2
+        var layout = function (ax, ay) {
+          var items = c.items.map(function (e) {
+            var extent = Math.abs(ax) * labelW(e) / 2 + Math.abs(ay) * labelH(e) / 2
+            return { e: e, extent: extent }
+          })
+          var total = 0
+          items.forEach(function (it) { total += it.extent * 2 + GAP })
+          return { items: items, total: total }
+        }
+        // 沿法线或沿线方向排布, 选总长度更短的那个(宽标签贴近竖线时沿线排更紧凑)
+        var alongNormal = layout(nx, ny)
+        var alongLine = layout(ux, uy)
+        var useNormal = alongNormal.total <= alongLine.total
+        var chosen = useNormal ? alongNormal : alongLine
+        var ax = useNormal ? nx : ux
+        var ay = useNormal ? ny : uy
+        var cursor = -chosen.total / 2
+        chosen.items.forEach(function (it) {
+          var off = cursor + it.extent
+          it.e.lx += ax * off
+          it.e.ly += ay * off
+          cursor += it.extent * 2 + GAP
+        })
+      })
     },
     /** 把 [[x,y],[x,y]] 数组转成 SVG polyline 的 points 属性字符串 */
     polylinePoints(points) {
@@ -2999,6 +3159,9 @@ export default {
 }
 .line-style-select {
   width: 100px;
+}
+.edge-label-select {
+  width: 110px;
 }
 /* 节点图标面板: 拖到画布新增节点 */
 .node-palette {
