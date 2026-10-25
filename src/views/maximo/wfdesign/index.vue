@@ -91,8 +91,8 @@
       <p style="margin:0 0 8px;color:#909399;font-size:12px;">粘贴 JSON（数组 或 {"workflows": [...]}，含 actions/maxroles 的迁移包也可直接导入）；按 processName+processRev 匹配更新或创建。</p>
       <div class="import-opts">
         <span class="import-opts-label">导入模式</span>
-        <el-select v-model="importDialog.impMode" size="mini" style="width: 300px;">
-          <el-option label="新增模式（已存在的不修改）" value="add" />
+        <el-select v-model="importDialog.impMode" size="mini" style="width: 360px;">
+          <el-option label="新增模式（操作/角色仅新增，流程按 JSON 新增或更新）" value="add" />
           <el-option label="迁移模式（存在则修改，缺省）" value="migration" />
         </el-select>
       </div>

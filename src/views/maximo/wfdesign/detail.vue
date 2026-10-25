@@ -34,11 +34,13 @@
                 <el-dropdown-item command="activate" :disabled="workflow.enabled !== true || workflow.active === true">激活过程</el-dropdown-item>
                 <el-dropdown-item command="deactivate" :disabled="workflow.active !== true">取消激活过程</el-dropdown-item>
                 <el-dropdown-item command="disable" :disabled="workflow.enabled !== true">禁用过程</el-dropdown-item>
+                <el-dropdown-item command="forceEdit" divided>强制编辑</el-dropdown-item>
               </el-dropdown-menu>
             </el-dropdown>
           </template>
           <template v-else>
             <el-button type="success" size="mini" icon="el-icon-check" @click="handleSave">保 存</el-button>
+            <el-button size="mini" icon="el-icon-download" @click="exportEditJson">导出JSON</el-button>
             <el-button size="mini" @click="cancelEdit">取 消</el-button>
           </template>
         </div>
@@ -976,6 +978,22 @@
       </div>
     </el-dialog>
 
+    <!-- 导出 JSON 预览对话框 -->
+    <el-dialog title="导出 JSON" :visible.sync="exportJsonDialog.visible" width="900px" top="6vh" append-to-body
+      @opened="initExportJsonEditor" @closed="disposeExportJsonEditor">
+      <p class="save-tip">
+        流程 {{ workflow.processName }} (v{{ workflow.processRev }})，共 {{ (workflow.wfnodes || []).length }} 个节点；
+        内容与保存请求一致，可直接在列表页「导入」中使用。
+      </p>
+      <div class="monaco-wrapper">
+        <div ref="exportJsonMonacoRef" class="export-json-monaco"></div>
+      </div>
+      <span slot="footer">
+        <el-button size="mini" icon="el-icon-document-copy" @click="copyExportJson">复制JSON</el-button>
+        <el-button size="mini" type="primary" icon="el-icon-download" @click="saveExportJsonFile">保存到本地</el-button>
+      </span>
+    </el-dialog>
+
     <!-- 通用 lookup 选择对话框(角色/操作等字段点右侧搜索图标打开) -->
     <sks-lookup-dialog
       ref="lookupDialog"
@@ -1236,7 +1254,12 @@ export default {
       // SksLookup 选择: 由字段定义(col.lookup)决定 lookup 名, 选择行的关键字段写入 row 的 targetKeys
       lookup: { name: '', title: '', relationObject: '', row: null, srcKeys: [], targetKeys: [] },
       subTableDefs: SUB_TABLE_DEFS,
-      saveDialog: { visible: false }
+      saveDialog: { visible: false },
+      exportJsonDialog: { visible: false, json: '', fileName: '' },
+      // Monaco Editor 懒加载共享实例
+      monacoLoaded: false,
+      _monaco: null,
+      exportJsonEditor: null
     }
   },
   computed: {
@@ -2016,6 +2039,15 @@ export default {
         this.$message.error('激活状态的流程修订不可修改，请先通过右上角「状态操作 - 取消激活过程」取消激活后再编辑')
         return
       }
+      this.enterEdit()
+      this.$message.success('已进入编辑模式：拖拽节点调整位置，双击节点或右键「编辑节点」打开节点对话框')
+    },
+    /** 强制编辑: 不校验启用/激活状态, 仅前端直接进入编辑态(保存能否生效仍由后端框架决定) */
+    forceEdit() {
+      this.enterEdit()
+      this.$message.warning('已强制进入编辑模式（未校验启用/激活状态），保存时后端仍可能拒绝')
+    },
+    enterEdit() {
       this.editSnapshot = JSON.parse(JSON.stringify(this.workflow))
       this.undoStack = []
       this.redoStack = []
@@ -2023,7 +2055,6 @@ export default {
       this._histAt = 0
       this.dirty = false
       this.editMode = true
-      this.$message.success('已进入编辑模式：拖拽节点调整位置，双击节点或右键「编辑节点」打开节点对话框')
     },
     cancelEdit() {
       if (!this.dirty) {
@@ -2873,6 +2904,106 @@ export default {
       }
       this.saveDialog.visible = true
     },
+    /**
+     * 导出当前编辑内容(先弹预览框): 结构与保存请求一致, 可直接在列表页「导入」中重新导入,
+     * 用于保存失败时先把本次编辑结果留到本地
+     */
+    exportEditJson() {
+      var payload = { workflows: [JSON.parse(JSON.stringify(this.workflow))] }
+      var fileName = (this.workflow.processName || 'workflow') + '_' + (this.workflow.processRev || '') + '.json'
+      this.exportJsonDialog.json = JSON.stringify(payload, null, 2)
+      this.exportJsonDialog.fileName = fileName.replace(/[\\/:*?"<>|]/g, '_')
+      this.exportJsonDialog.visible = true
+    },
+    // === Monaco Editor(懒加载) ===
+    initExportJsonEditor() {
+      if (!this.monacoLoaded) {
+        import(/* webpackChunkName: "monaco" */ 'monaco-editor').then(monaco => {
+          this.monacoLoaded = true
+          this._monaco = monaco
+          this.createExportJsonEditor()
+        }).catch(err => {
+          console.error('Monaco Editor 加载失败:', err)
+        })
+      } else {
+        this.createExportJsonEditor()
+      }
+    },
+    createExportJsonEditor() {
+      var monaco = this._monaco
+      if (this.$refs.exportJsonMonacoRef && !this.exportJsonEditor) {
+        this.exportJsonEditor = monaco.editor.create(this.$refs.exportJsonMonacoRef, {
+          value: this.exportJsonDialog.json,
+          language: 'json',
+          readOnly: true,
+          theme: 'vs',
+          automaticLayout: true,
+          minimap: { enabled: false },
+          scrollBeyondLastLine: false,
+          fontSize: 13,
+          wordWrap: 'on',
+          folding: true,
+          lineNumbers: 'on',
+          tabSize: 2,
+          renderLineHighlight: 'none'
+        })
+      } else if (this.exportJsonEditor) {
+        this.exportJsonEditor.setValue(this.exportJsonDialog.json)
+      }
+    },
+    disposeExportJsonEditor() {
+      if (this.exportJsonEditor) {
+        this.exportJsonEditor.dispose()
+        this.exportJsonEditor = null
+      }
+    },
+    copyExportJson() {
+      if (this.exportJsonDialog.json) {
+        this.copyToClipboard(this.exportJsonDialog.json, '导出JSON')
+      }
+    },
+    saveExportJsonFile() {
+      var fileName = this.exportJsonDialog.fileName || 'workflow.json'
+      var blob = new Blob([this.exportJsonDialog.json], { type: 'application/json;charset=utf-8' })
+      var href = URL.createObjectURL(blob)
+      var a = document.createElement('a')
+      a.href = href
+      a.download = fileName
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(href)
+      this.$message.success('已保存到本地: ' + fileName)
+    },
+    copyToClipboard(text, label) {
+      if (navigator.clipboard && window.isSecureContext) {
+        navigator.clipboard.writeText(text)
+          .then(() => {
+            this.$message.success(label + ' 已复制到剪贴板')
+          })
+          .catch(() => {
+            this.fallbackCopy(text, label)
+          })
+      } else {
+        this.fallbackCopy(text, label)
+      }
+    },
+    fallbackCopy(text, label) {
+      var textarea = document.createElement('textarea')
+      textarea.value = text
+      textarea.style.position = 'fixed'
+      textarea.style.top = '-1000px'
+      textarea.style.left = '-1000px'
+      document.body.appendChild(textarea)
+      textarea.select()
+      try {
+        document.execCommand('copy')
+        this.$message.success(label + ' 已复制到剪贴板')
+      } catch (e) {
+        this.$message.error('复制失败: ' + e.message)
+      }
+      document.body.removeChild(textarea)
+    },
     submitSave() {
       var payload = JSON.parse(JSON.stringify(this.workflow))
       this.saving = true
@@ -2907,8 +3038,12 @@ export default {
       this.exitEdit()
       this.fetchDetail()
     },
-    // === 状态操作(启用 / 激活 / 取消激活 / 禁用) ===
+    // === 状态操作(启用 / 激活 / 取消激活 / 禁用 / 强制编辑) ===
     handleStateCommand(command) {
+      if (command === 'forceEdit') {
+        this.forceEdit()
+        return
+      }
       var defs = {
         enable: {
           label: '启用过程',
@@ -3060,6 +3195,7 @@ export default {
     document.removeEventListener('mouseup', this.onDragEnd)
     document.removeEventListener('click', this.closeContextMenu)
     document.removeEventListener('keydown', this.onConnectKeydown)
+    this.disposeExportJsonEditor()
   }
 }
 </script>
@@ -3389,6 +3525,15 @@ export default {
   font-size: 13px;
   color: #606266;
   line-height: 1.6;
+}
+/* 导出 JSON 预览: Monaco 编辑器容器 */
+.monaco-wrapper {
+  position: relative;
+}
+.export-json-monaco {
+  height: 58vh;
+  border: 1px solid #dcdfe6;
+  border-radius: 4px;
 }
 /* === Zen 模式 === */
 .zen-canvas-wrap {
