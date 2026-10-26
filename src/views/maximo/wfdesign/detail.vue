@@ -57,20 +57,54 @@
         <el-descriptions-item label="自动启动">{{ boolText(workflow.autoInitiate) }}</el-descriptions-item>
       </el-descriptions>
 
-      <!-- Zen 模式: 隐藏 tabs/toolbar/palette, 画布独立全屏渲染 -->
+      <!-- Zen 模式: 隐藏头部/信息区/tabs/节点面板, 画布全屏, 画布工具排保留 -->
       <div v-if="zenMode" class="zen-canvas-wrap">
-        <div class="zen-toolbar">
-          <div class="zen-tools">
-            <el-button-group size="mini">
-              <el-button icon="el-icon-zoom-out" @click="zoomOut" title="缩小"></el-button>
-              <el-button @click="resetZoom">{{ Math.round(zoom * 100) }}%</el-button>
-              <el-button icon="el-icon-zoom-in" @click="zoomIn" title="放大"></el-button>
-              <el-button icon="el-icon-full-screen" @click="fitZoom" title="适应宽度"></el-button>
+        <!-- Zen 模式下保留整排画布工具(缩放/撤销重做/节点间距/画线方式/连线文字/图例/保存图片) -->
+        <div class="canvas-toolbar zen-toolbar">
+          <div class="canvas-tools">
+            <el-button-group>
+              <el-button size="mini" icon="el-icon-zoom-out" @click="zoomOut" title="缩小"></el-button>
+              <el-button size="mini" @click="resetZoom">{{ Math.round(zoom * 100) }}%</el-button>
+              <el-button size="mini" icon="el-icon-zoom-in" @click="zoomIn" title="放大"></el-button>
+              <el-button size="mini" icon="el-icon-full-screen" @click="fitZoom" title="适应宽度"></el-button>
             </el-button-group>
-            <el-button size="mini" icon="el-icon-download" @click="saveCanvasImage">保存图片</el-button>
+            <el-button-group v-if="editMode" class="history-group">
+              <el-button size="mini" icon="el-icon-refresh-left" :disabled="!canUndo" title="撤销 (Ctrl+Z)" @click="undo"></el-button>
+              <el-button size="mini" icon="el-icon-refresh-right" :disabled="!canRedo" title="重做 (Ctrl+Y)" @click="redo"></el-button>
+            </el-button-group>
+            <span class="canvas-spacing">
+              <span class="spacing-label">节点间距</span>
+              <el-slider v-model="spacing" :min="1" :max="2.5" :step="0.1" class="spacing-slider" />
+              <span class="spacing-value">{{ Math.round(spacing * 100) }}%</span>
+            </span>
+            <span class="line-style-wrap">
+              <span class="spacing-label">画线方式</span>
+              <el-select v-model="lineStyle" size="mini" class="line-style-select">
+                <el-option label="直线方式" value="straight" />
+                <el-option label="正交方式" value="orthogonal" />
+              </el-select>
+            </span>
+            <span class="line-style-wrap">
+              <span class="spacing-label">连线文字</span>
+              <el-select v-model="edgeLabelMode" size="mini" class="edge-label-select">
+                <el-option label="操作+说明" value="both" />
+                <el-option label="仅操作" value="action" />
+                <el-option label="仅说明" value="instruction" />
+              </el-select>
+            </span>
           </div>
-          <span class="zen-title">流程图 — {{ workflow.processName }} v{{ workflow.processRev }}</span>
-          <el-button size="mini" icon="el-icon-circle-check" @click="toggleZen" title="退出 Zen 模式 (Esc)">Zen 模式</el-button>
+          <span class="canvas-legend">
+            <i class="legend-item"><span class="line-pos"></span>正向连线</i>
+            <i class="legend-item"><span class="line-neg"></span>负向连线</i>
+            <i
+              class="el-icon-question canvas-tip-toggle"
+              title="操作说明"
+              @click="tipDialogVisible = true" />
+            <span v-if="connectMode" class="canvas-tip connecting">连线中：点击目标节点完成「{{ connectMode.isPositive ? '正向' : '负向' }}连线」，Esc 或点击空白处取消</span>
+            <span class="zen-title">流程图 — {{ workflow.processName }} v{{ workflow.processRev }}</span>
+            <el-button size="mini" icon="el-icon-download" @click="saveCanvasImage">保存图片</el-button>
+            <el-button size="mini" icon="el-icon-circle-check" @click="toggleZen" title="退出 Zen 模式 (Esc)">退出 Zen</el-button>
+          </span>
         </div>
         <div
           class="canvas-scroll zen-scroll"
@@ -3552,20 +3586,19 @@ export default {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 0;
   padding: 8px 16px;
   background: #fff;
   border-bottom: 1px solid #e4e7ed;
   box-shadow: 0 1px 3px rgba(0,0,0,0.04);
 }
-.zen-tools {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
 .zen-title {
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 500;
   color: #303133;
+  white-space: nowrap;
 }
 .zen-scroll {
   flex: 1;
