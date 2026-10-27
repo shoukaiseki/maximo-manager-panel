@@ -515,6 +515,9 @@
                   </el-table-column>
                   <el-table-column prop="memberNodeId" label="目标节点" width="75" />
                   <el-table-column prop="action" label="操作" min-width="120" show-overflow-tooltip />
+                  <el-table-column label="操作描述" min-width="120" show-overflow-tooltip>
+                    <template slot-scope="s">{{ refDescription('action', s.row.action) || '-' }}</template>
+                  </el-table-column>
                   <el-table-column prop="instruction" label="说明" min-width="140" show-overflow-tooltip />
                 </el-table>
               </el-col>
@@ -523,6 +526,9 @@
                 <el-table :data="activeRows(selectedNode.wfassignment)" border stripe size="mini" max-height="220">
                   <el-table-column prop="assignId" label="分配ID" width="70" />
                   <el-table-column prop="roleId" label="角色" min-width="100" show-overflow-tooltip />
+                  <el-table-column label="角色描述" min-width="120" show-overflow-tooltip>
+                    <template slot-scope="s">{{ refDescription('role', s.row.roleId) || '-' }}</template>
+                  </el-table-column>
                   <el-table-column prop="assignCode" label="人员" min-width="90" show-overflow-tooltip />
                   <el-table-column prop="description" label="描述" min-width="120" show-overflow-tooltip />
                 </el-table>
@@ -584,6 +590,9 @@
                 <el-table-column prop="memberNodeId" label="目标节点" width="85" />
                 <el-table-column prop="sequence" label="顺序" width="65" />
                 <el-table-column prop="action" label="操作(ACTION)" min-width="130" show-overflow-tooltip />
+                <el-table-column label="操作描述" min-width="150" show-overflow-tooltip>
+                  <template slot-scope="s">{{ refDescription('action', s.row.action) || '-' }}</template>
+                </el-table-column>
                 <el-table-column prop="condition" label="条件" min-width="130" show-overflow-tooltip />
                 <el-table-column prop="conditionClass" label="条件类" min-width="150" show-overflow-tooltip />
                 <el-table-column prop="instruction" label="操作说明" min-width="160" show-overflow-tooltip />
@@ -614,6 +623,9 @@
                 <el-table-column prop="ownerNodeId" label="所属节点" width="85" />
                 <el-table-column prop="assignId" label="分配ID" width="80" />
                 <el-table-column prop="roleId" label="角色" min-width="100" show-overflow-tooltip />
+                <el-table-column label="角色描述" min-width="140" show-overflow-tooltip>
+                  <template slot-scope="s">{{ refDescription('role', s.row.roleId) || '-' }}</template>
+                </el-table-column>
                 <el-table-column prop="assignCode" label="人员" min-width="90" show-overflow-tooltip />
                 <el-table-column prop="relationship" label="关系" min-width="110" show-overflow-tooltip />
                 <el-table-column prop="description" label="描述" min-width="140" show-overflow-tooltip />
@@ -623,6 +635,9 @@
                 <el-table-column prop="timelimit" label="时限" width="80" />
                 <el-table-column prop="assignStatus" label="状态" width="90" />
                 <el-table-column prop="escRole" label="升级角色" min-width="100" show-overflow-tooltip />
+                <el-table-column label="升级角色描述" min-width="140" show-overflow-tooltip>
+                  <template slot-scope="s">{{ refDescription('role', s.row.escRole) || '-' }}</template>
+                </el-table-column>
               </el-table>
             </el-tab-pane>
 
@@ -767,6 +782,13 @@
                         <el-form-item :label="d.label">
                           <el-input v-if="d.readonly" :value="s.row[d.prop]" size="mini" disabled />
                           <el-switch v-else-if="d.type === 'bool'" v-model="s.row[d.prop]" @change="markDirty" />
+                          <!-- 角色/操作: 输入框右侧显示只读描述(类似 Maximo multilinetextbox) -->
+                          <div v-else-if="d.descKind" class="ref-input-row">
+                            <el-input v-model="s.row[d.prop]" size="mini" class="ref-input" @input="markDirty" />
+                            <span class="ref-desc" :title="refDescription(d.descKind, s.row[d.prop])">
+                              {{ refDescription(d.descKind, s.row[d.prop]) || '-' }}
+                            </span>
+                          </div>
                           <el-input
                             v-else
                             v-model="s.row[d.prop]"
@@ -891,22 +913,32 @@
         <!-- 操作本身的属性(字段对照 Maximo 同名 dialog) -->
         <el-card shadow="never" class="prop-card">
           <div slot="header" class="prop-card-head">{{ actionDialogDef.label }}</div>
-          <el-form label-width="96px" size="mini" class="node-form">
+          <el-form label-width="120px" size="mini" class="node-form">
             <el-row :gutter="12">
               <el-col v-for="f in actionDialogDef.fields" :key="f.prop" :span="f.span || 12">
                 <el-form-item :label="f.label">
                   <template v-if="editMode && !f.readonly">
                     <el-switch v-if="f.type === 'bool'" v-model="dialogAction[f.prop]" @change="markDirty" />
                     <el-input v-else-if="f.type === 'textarea'" v-model="dialogAction[f.prop]" type="textarea" :rows="2" @input="markDirty" />
-                    <el-input v-else v-model="dialogAction[f.prop]" size="mini" @input="markDirty">
-                      <i
-                        v-if="f.lookup"
-                        slot="suffix"
-                        class="el-input__icon el-icon-search lookup-icon"
-                        :title="'选择' + f.label"
-                        @click="openLookup(dialogAction, f)" />
-                    </el-input>
+                    <!-- 操作/角色: 输入框右侧显示只读描述(类似 Maximo multilinetextbox) -->
+                    <div v-else class="ref-input-row">
+                      <el-input v-model="dialogAction[f.prop]" size="mini" class="ref-input" @input="markDirty">
+                        <i
+                          v-if="f.lookup"
+                          slot="suffix"
+                          class="el-input__icon el-icon-search lookup-icon"
+                          :title="'选择' + f.label"
+                          @click="openLookup(dialogAction, f)" />
+                      </el-input>
+                      <span v-if="f.descKind" class="ref-desc" :title="refDescription(f.descKind, dialogAction[f.prop])">
+                        {{ refDescription(f.descKind, dialogAction[f.prop]) || '-' }}
+                      </span>
+                    </div>
                   </template>
+                  <span v-else-if="f.descKind" class="ref-input-row">
+                    <span class="ref-value">{{ propText(f, dialogAction) }}</span>
+                    <span class="ref-desc">{{ refDescription(f.descKind, dialogAction[f.prop]) || '-' }}</span>
+                  </span>
                   <span v-else>{{ propText(f, dialogAction) }}</span>
                 </el-form-item>
               </el-col>
@@ -940,6 +972,13 @@
                         <el-form-item :label="d.label">
                           <el-input v-if="d.readonly" :value="s.row[d.prop]" size="mini" disabled />
                           <el-switch v-else-if="d.type === 'bool'" v-model="s.row[d.prop]" @change="markDirty" />
+                          <!-- 角色/操作: 输入框右侧显示只读描述(类似 Maximo multilinetextbox) -->
+                          <div v-else-if="d.descKind" class="ref-input-row">
+                            <el-input v-model="s.row[d.prop]" size="mini" class="ref-input" @input="markDirty" />
+                            <span class="ref-desc" :title="refDescription(d.descKind, s.row[d.prop])">
+                              {{ refDescription(d.descKind, s.row[d.prop]) || '-' }}
+                            </span>
+                          </div>
                           <el-input
                             v-else
                             v-model="s.row[d.prop]"
@@ -1091,6 +1130,8 @@ var SUB_TABLE_DEFS = {
       { prop: 'actionId', label: '操作ID', width: 80, readonly: true },
       { prop: 'sequence', label: '顺序', width: 70 },
       { prop: 'action', label: '操作(ACTION)', minWidth: 130 },
+      // 操作描述: 只读, 取自详情接口带出的 actions(DESCRIPTION)
+      { prop: '_actionDesc', label: '操作描述', minWidth: 160, readonly: true, descFrom: 'action', descKind: 'action' },
       { prop: 'instruction', label: '操作说明', minWidth: 150 },
       { prop: 'memberNodeId', label: '目标节点', width: 160, type: 'node' },
       { prop: 'isPositive', label: '正向', width: 70, type: 'bool' }
@@ -1104,17 +1145,19 @@ var SUB_TABLE_DEFS = {
     columns: [
       // 角色: Maximo lookup "role"(对象 MAXROLE)
       { prop: 'roleId', label: '角色', minWidth: 120, lookup: 'role', lookupObject: 'MAXROLE' },
+      // 角色描述: 只读, 取自详情接口带出的 maxroles(DESCRIPTION)
+      { prop: '_roleDesc', label: '角色描述', minWidth: 160, readonly: true, descFrom: 'roleId', descKind: 'role' },
       { prop: 'description', label: '任务描述', minWidth: 160 },
       { prop: 'emailNotification', label: '邮件通知', width: 85, type: 'bool' },
       { prop: 'timelimit', label: '时限', width: 85 }
     ],
     // assignments_table_details
     details: [
-      { prop: 'roleId', label: '角色' },
+      { prop: 'roleId', label: '角色', descKind: 'role' },
       { prop: 'relationship', label: '关系' },
       { prop: 'app', label: '应用' },
       { prop: 'description', label: '任务描述', type: 'textarea', span: 24 },
-      { prop: 'escRole', label: '升级角色' },
+      { prop: 'escRole', label: '升级角色', descKind: 'role' },
       { prop: 'templateId', label: '通讯模板' },
       { prop: 'condition', label: '条件(USERSQL)', type: 'textarea', span: 24 },
       { prop: 'timelimit', label: '时限' },
@@ -1135,12 +1178,14 @@ var SUB_TABLE_DEFS = {
       { prop: 'uniqueId', label: '通知ID', width: 85, readonly: true },
       { prop: 'templateId', label: '通讯模板', minWidth: 180 },
       // 接收人: Maximo lookup "role"(对象 MAXROLE)
-      { prop: 'sendTo', label: '接收人', minWidth: 140, lookup: 'role', lookupObject: 'MAXROLE' }
+      { prop: 'sendTo', label: '接收人', minWidth: 140, lookup: 'role', lookupObject: 'MAXROLE' },
+      // 接收人描述: 只读, 取自详情接口带出的 maxroles(DESCRIPTION)
+      { prop: '_sendToDesc', label: '接收人描述', minWidth: 150, readonly: true, descFrom: 'sendTo', descKind: 'role' }
     ],
     // notifications_table_details / waitnotify_table_details
     details: [
       { prop: 'templateId', label: '通讯模板' },
-      { prop: 'sendTo', label: '接收人' },
+      { prop: 'sendTo', label: '接收人', descKind: 'role' },
       { prop: 'subject', label: '主题' },
       { prop: 'message', label: '消息' }
     ]
@@ -1231,7 +1276,7 @@ var ACTION_DIALOGS = {
     label: '操作属性',
     fields: [
       // 操作: Maximo lookup "action"(对象 ACTION)
-      { prop: 'action', label: '操作(ACTION)', span: 12, lookup: 'action' },
+      { prop: 'action', label: '操作(ACTION)', span: 24, lookup: 'action', descKind: 'action' },
       { prop: 'isPositive', label: '正向', type: 'bool', span: 12, readonly: true },
       { prop: 'instruction', label: '说明', span: 24 },
       { prop: 'condition', label: '条件(USERSQL)', type: 'textarea', span: 24 },
@@ -1243,7 +1288,7 @@ var ACTION_DIALOGS = {
     label: '输入操作属性',
     fields: [
       { prop: 'instruction', label: '说明', span: 24 },
-      { prop: 'action', label: '操作(ACTION)', span: 12, lookup: 'action' },
+      { prop: 'action', label: '操作(ACTION)', span: 12, lookup: 'action', descKind: 'action' },
       { prop: 'isPositive', label: '正向', type: 'bool', span: 12, readonly: true },
       { prop: 'condition', label: '条件(USERSQL)', type: 'textarea', span: 24 },
       { prop: 'conditionClass', label: '自定义类', span: 24 }
@@ -1273,6 +1318,9 @@ export default {
       lineStyle: 'straight', // 画线方式: straight 直线 / orthogonal 正交折线
       edgeLabelMode: 'both', // 连线文字: both 操作+说明 / action 仅操作 / instruction 仅说明
       workflow: {},
+      // 详情接口一并带出的引用描述: ACTION/MAXROLE -> DESCRIPTION, 用于操作/角色输入框右侧只读提示
+      actionDescriptions: {},
+      roleDescriptions: {},
       selectedNodeId: null,
       selectedEdgeKey: null, // 选中连线标识: from + '-' + action 下标; null 表示未选中
       zoom: 1,
@@ -2798,7 +2846,29 @@ export default {
         return r._delete !== true
       })
     },
+    /** 引用描述映射: [{action|maxrole, description}] -> {NAME: DESCRIPTION} */
+    buildDescriptionMap(items, key) {
+      var map = {}
+      ;(items || []).forEach(function (item) {
+        if (item && item[key]) {
+          map[String(item[key]).toUpperCase()] = item.description || ''
+        }
+      })
+      return map
+    },
+    /** 取操作/角色描述(kind=action|role), 详情接口未带出的引用返回空串 */
+    refDescription(kind, value) {
+      if (value === null || value === undefined || value === '') {
+        return ''
+      }
+      var map = kind === 'action' ? this.actionDescriptions : this.roleDescriptions
+      return map[String(value).toUpperCase()] || ''
+    },
     cellText(row, col) {
+      // 描述列: 由 descFrom 指向的 ACTION/MAXROLE 字段实时取描述
+      if (col.descFrom) {
+        return this.refDescription(col.descKind, row[col.descFrom]) || '-'
+      }
       var v = row[col.prop]
       if (col.type === 'bool') {
         return this.boolText(v)
@@ -2824,6 +2894,7 @@ export default {
       var def = SUB_TABLE_DEFS[name]
       var fields = def ? (def.details || []) : []
       var items = []
+      var self = this
       fields.forEach(function (f) {
         var v = row[f.prop]
         if (f.type === 'bool') {
@@ -2834,6 +2905,10 @@ export default {
           return
         }
         items.push({ label: f.label, value: String(v) })
+        // 角色/操作字段: 追加一列只读描述(名称变更时随行数据实时计算)
+        if (f.descKind) {
+          items.push({ label: f.label + '描述', value: self.refDescription(f.descKind, v) || '-' })
+        }
       })
       return items
     },
@@ -3200,6 +3275,9 @@ export default {
         }
         var list = data.workflows || []
         this.workflow = list[0] || {}
+        // detail 接口同时返回本流程引用到的操作/角色, 建立 名称->描述 映射(表格/对话框只读展示用)
+        this.actionDescriptions = this.buildDescriptionMap(data.actions, 'action')
+        this.roleDescriptions = this.buildDescriptionMap(data.maxroles, 'maxrole')
         this.updateTagTitle()
         this.$nextTick(() => {
           this.fitZoom()
@@ -3484,6 +3562,36 @@ export default {
   &:hover {
     color: #409eff;
   }
+}
+/* 操作/角色: 输入框 + 右侧只读描述(类似 Maximo multilinetextbox) */
+.ref-input-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+}
+.ref-input {
+  flex: 0 0 45%;
+  min-width: 80px;
+}
+.ref-value {
+  flex: 0 0 auto;
+  margin-right: 6px;
+}
+.ref-desc {
+  flex: 1;
+  min-width: 0;
+  height: 28px;
+  line-height: 26px;
+  padding: 0 8px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  color: #909399;
+  background: #f5f7fa;
+  border: 1px solid #e4e7ed;
+  border-radius: 4px;
 }
 .prop-card {
   margin-bottom: 12px;
