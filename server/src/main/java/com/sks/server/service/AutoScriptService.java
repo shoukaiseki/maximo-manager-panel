@@ -501,11 +501,10 @@ public class AutoScriptService {
             params.add("%" + source.trim() + "%");
         }
 
-        // 用户自定义 where：完全替换表单条件
+        // 用户自定义 where(保存查询): 与表单过滤条件用 AND 组合, 保留已收集的参数
         String customWhere = (where != null && !where.trim().isEmpty()) ? where.trim() : null;
         if (customWhere != null) {
-            whereSql = new StringBuilder(" WHERE (").append(customWhere).append(")");
-            params.clear();
+            whereSql.append(" AND (").append(customWhere).append(")");
         }
 
         String whereStr = whereSql.toString();
