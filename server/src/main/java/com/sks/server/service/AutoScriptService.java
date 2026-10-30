@@ -60,7 +60,7 @@ public class AutoScriptService {
                 whereSql.append("EXISTS (SELECT 1 FROM SCRIPTLAUNCHPOINT sl2 WHERE sl2.AUTOSCRIPT = a.AUTOSCRIPT AND sl2.LAUNCHPOINTNAME LIKE ?)");
                 params.add("%" + launchpointname.trim().toUpperCase() + "%");
             }
-            // 变量绑定值过滤（AUTOSCRIPTVARS.VARBINDINGVALUE，区分大小写）
+            // 变量绑定值过滤（AUTOSCRIPTVARS.VARBINDINGVALUE，不区分大小写）
             appendVarBindingFilter(whereSql, params, varbindingvalue);
         } else {
             // 查询模式: 所有条件都要匹配
@@ -85,7 +85,7 @@ public class AutoScriptService {
                 whereSql.append(" AND EXISTS (SELECT 1 FROM SCRIPTLAUNCHPOINT sl4 WHERE sl4.AUTOSCRIPT = a.AUTOSCRIPT AND sl4.LAUNCHPOINTNAME LIKE ?)");
                 params.add("%" + launchpointname.trim().toUpperCase() + "%");
             }
-            // 变量绑定值过滤（AUTOSCRIPTVARS.VARBINDINGVALUE，区分大小写）
+            // 变量绑定值过滤（AUTOSCRIPTVARS.VARBINDINGVALUE，不区分大小写）
             appendVarBindingFilter(whereSql, params, varbindingvalue);
             // source 区分大小写时在 SQL 中用 LIKE 过滤（快），不区分大小写在 Java 层过滤
             if (!isDiagMode && source != null && !source.trim().isEmpty() && sourceCaseSensitive) {
@@ -289,10 +289,10 @@ public class AutoScriptService {
         if (varbindingvalue != null && !varbindingvalue.trim().isEmpty()) {
             String varVal = varbindingvalue.trim();
             if (varVal.startsWith("=")) {
-                conds.add("EXISTS (SELECT 1 FROM AUTOSCRIPTVARS av WHERE av.AUTOSCRIPT = a.AUTOSCRIPT AND av.VARBINDINGVALUE = '" + esc(varVal.substring(1).trim()) + "')");
+                conds.add("EXISTS (SELECT 1 FROM AUTOSCRIPTVARS av WHERE av.AUTOSCRIPT = a.AUTOSCRIPT AND UPPER(av.VARBINDINGVALUE) = '" + esc(varVal.substring(1).trim().toUpperCase(Locale.ROOT)) + "')");
             } else {
                 String pattern = (varVal.contains("%") || varVal.contains("_")) ? varVal : "%" + varVal + "%";
-                conds.add("EXISTS (SELECT 1 FROM AUTOSCRIPTVARS av WHERE av.AUTOSCRIPT = a.AUTOSCRIPT AND av.VARBINDINGVALUE LIKE '" + esc(pattern) + "')");
+                conds.add("EXISTS (SELECT 1 FROM AUTOSCRIPTVARS av WHERE av.AUTOSCRIPT = a.AUTOSCRIPT AND UPPER(av.VARBINDINGVALUE) LIKE '" + esc(pattern.toUpperCase(Locale.ROOT)) + "')");
             }
         }
         if (source != null && !source.trim().isEmpty() && sourceCaseSensitive) {
@@ -308,21 +308,22 @@ public class AutoScriptService {
     /**
      * 追加变量绑定值过滤（EXISTS 子查询 AUTOSCRIPTVARS）
      * 规则：= 开头精确匹配；含 % 或 _ 按通配符原样 LIKE；否则按 %值% 模糊匹配
-     * VARBINDINGVALUE 区分大小写（如 ibm_sendPortal），不做 UPPER 转换
+     * VARBINDINGVALUE 不区分大小写（两侧统一 UPPER）
      */
     private void appendVarBindingFilter(StringBuilder whereSql, List<Object> params, String varbindingvalue) {
         if (varbindingvalue == null || varbindingvalue.trim().isEmpty()) {
             return;
         }
         String v = varbindingvalue.trim();
-        String existsSql = "EXISTS (SELECT 1 FROM AUTOSCRIPTVARS av WHERE av.AUTOSCRIPT = a.AUTOSCRIPT AND av.VARBINDINGVALUE ";
+        String existsPrefix = "EXISTS (SELECT 1 FROM AUTOSCRIPTVARS av WHERE av.AUTOSCRIPT = a.AUTOSCRIPT AND ";
         whereSql.append(whereSql.length() == 0 ? " WHERE " : " AND ");
         if (v.startsWith("=")) {
-            whereSql.append(existsSql).append("= ?)");
-            params.add(v.substring(1).trim());
+            whereSql.append(existsPrefix).append("UPPER(av.VARBINDINGVALUE) = ?)");
+            params.add(v.substring(1).trim().toUpperCase(Locale.ROOT));
         } else {
-            whereSql.append(existsSql).append("LIKE ?)");
-            params.add((v.contains("%") || v.contains("_")) ? v : "%" + v + "%");
+            whereSql.append(existsPrefix).append("UPPER(av.VARBINDINGVALUE) LIKE ?)");
+            String like = (v.contains("%") || v.contains("_")) ? v : "%" + v + "%";
+            params.add(like.toUpperCase(Locale.ROOT));
         }
     }
 

@@ -160,6 +160,12 @@ export const constantRoutes = [
                 component: (resolve) => require(['/src/views/maximo/maxcache/index'], resolve),
                 name: 'MaxCache',
                 meta: { title: '缓存管理', icon: 'tool', noCache: false }
+            },
+            {
+                path: 'maxsequence',
+                component: (resolve) => require(['/src/views/maximo/maxsequence/index'], resolve),
+                name: 'MaxSequence',
+                meta: { title: '序列诊断', icon: 'tool', noCache: false }
             }
         ]
     },

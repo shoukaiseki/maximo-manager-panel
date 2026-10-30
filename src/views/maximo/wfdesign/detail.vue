@@ -785,6 +785,13 @@
                           <!-- 角色/操作: 输入框右侧显示只读描述(类似 Maximo multilinetextbox) -->
                           <div v-else-if="d.descKind" class="ref-input-row">
                             <el-input v-model="s.row[d.prop]" size="mini" class="ref-input" @input="markDirty" />
+                            <el-button
+                              v-if="s.row[d.prop]"
+                              type="text" size="mini" class="ref-eye"
+                              :title="'查看' + refKindLabel(d.descKind) + '详情'"
+                              @click="openRefDetail(d.descKind, s.row[d.prop])">
+                              <svg-icon icon-class="eye-open" />
+                            </el-button>
                             <span class="ref-desc" :title="refDescription(d.descKind, s.row[d.prop])">
                               {{ refDescription(d.descKind, s.row[d.prop]) || '-' }}
                             </span>
@@ -930,6 +937,13 @@
                           :title="'选择' + f.label"
                           @click="openLookup(dialogAction, f)" />
                       </el-input>
+                      <el-button
+                        v-if="f.descKind && dialogAction[f.prop]"
+                        type="text" size="mini" class="ref-eye"
+                        :title="'查看' + refKindLabel(f.descKind) + '详情'"
+                        @click="openRefDetail(f.descKind, dialogAction[f.prop])">
+                        <svg-icon icon-class="eye-open" />
+                      </el-button>
                       <span v-if="f.descKind" class="ref-desc" :title="refDescription(f.descKind, dialogAction[f.prop])">
                         {{ refDescription(f.descKind, dialogAction[f.prop]) || '-' }}
                       </span>
@@ -937,6 +951,13 @@
                   </template>
                   <span v-else-if="f.descKind" class="ref-input-row">
                     <span class="ref-value">{{ propText(f, dialogAction) }}</span>
+                    <el-button
+                      v-if="dialogAction[f.prop]"
+                      type="text" size="mini" class="ref-eye"
+                      :title="'查看' + refKindLabel(f.descKind) + '详情'"
+                      @click="openRefDetail(f.descKind, dialogAction[f.prop])">
+                      <svg-icon icon-class="eye-open" />
+                    </el-button>
                     <span class="ref-desc">{{ refDescription(f.descKind, dialogAction[f.prop]) || '-' }}</span>
                   </span>
                   <span v-else>{{ propText(f, dialogAction) }}</span>
@@ -975,6 +996,13 @@
                           <!-- 角色/操作: 输入框右侧显示只读描述(类似 Maximo multilinetextbox) -->
                           <div v-else-if="d.descKind" class="ref-input-row">
                             <el-input v-model="s.row[d.prop]" size="mini" class="ref-input" @input="markDirty" />
+                            <el-button
+                              v-if="s.row[d.prop]"
+                              type="text" size="mini" class="ref-eye"
+                              :title="'查看' + refKindLabel(d.descKind) + '详情'"
+                              @click="openRefDetail(d.descKind, s.row[d.prop])">
+                              <svg-icon icon-class="eye-open" />
+                            </el-button>
                             <span class="ref-desc" :title="refDescription(d.descKind, s.row[d.prop])">
                               {{ refDescription(d.descKind, s.row[d.prop]) || '-' }}
                             </span>
@@ -1038,6 +1066,53 @@
       </div>
     </el-dialog>
 
+    <!-- 操作/角色详情对话框(操作/角色字段旁的眼睛图标打开, 与 maxaction/maxrole 列表页详情一致) -->
+    <el-dialog
+      :title="refKindLabel(refDetail.kind) + '详情 - ' + (refDetail.name || '')"
+      :visible.sync="refDetail.visible"
+      width="860px"
+      top="5vh"
+      append-to-body
+      :close-on-click-modal="true">
+      <div v-loading="refDetail.loading">
+        <template v-if="refDetail.data">
+          <el-descriptions v-if="refDetail.kind === 'action'" :column="2" border size="small">
+            <el-descriptions-item label="操作">{{ refDetail.data.action }}</el-descriptions-item>
+            <el-descriptions-item label="类型">{{ refTypeLabel('action', refDetail.data.type) }}</el-descriptions-item>
+            <el-descriptions-item label="描述" :span="2">{{ refDetail.data.description || '-' }}</el-descriptions-item>
+            <el-descriptions-item label="适用范围">{{ refDetail.data.useWith || '-' }}</el-descriptions-item>
+            <el-descriptions-item label="值">{{ refDetail.data.value || '-' }}</el-descriptions-item>
+            <el-descriptions-item label="对象">{{ refDetail.data.objectName || '-' }}</el-descriptions-item>
+            <el-descriptions-item label="参数">{{ refDetail.data.parameter || '-' }}</el-descriptions-item>
+            <el-descriptions-item v-if="refDetail.data.type === 'CHANGESTATUS'" label="备注" :span="2">{{ refDetail.data.memo || '-' }}</el-descriptions-item>
+            <el-descriptions-item label="发送方系统" :span="2">{{ refDetail.data.senderSysId || '-' }}</el-descriptions-item>
+          </el-descriptions>
+          <el-descriptions v-else :column="2" border size="small">
+            <el-descriptions-item label="角色">{{ refDetail.data.maxrole }}</el-descriptions-item>
+            <el-descriptions-item label="类型">{{ refTypeLabel('role', refDetail.data.type) }}</el-descriptions-item>
+            <el-descriptions-item label="描述" :span="2">{{ refDetail.data.description || '-' }}</el-descriptions-item>
+            <el-descriptions-item label="值">{{ refDetail.data.value || '-' }}</el-descriptions-item>
+            <el-descriptions-item label="对象">{{ refDetail.data.objectName || '-' }}</el-descriptions-item>
+            <el-descriptions-item label="参数">{{ refDetail.data.parameter || '-' }}</el-descriptions-item>
+            <el-descriptions-item label="邮件数据集">{{ boolText(refDetail.data.emailDataSet) }}</el-descriptions-item>
+            <el-descriptions-item label="广播">{{ boolText(refDetail.data.broadcast) }}</el-descriptions-item>
+            <el-descriptions-item label="发送方系统">{{ refDetail.data.senderSysId || '-' }}</el-descriptions-item>
+          </el-descriptions>
+          <div v-if="refDetail.kind === 'action' && refDetail.data.actionGroup && refDetail.data.actionGroup.length">
+            <p class="sub-title">操作组成员（{{ refDetail.data.actionGroup.length }}）</p>
+            <el-table :data="refDetail.data.actionGroup" border stripe size="mini">
+              <el-table-column prop="sequence" label="顺序" width="80" />
+              <el-table-column prop="member" label="成员操作" min-width="220" show-overflow-tooltip />
+            </el-table>
+          </div>
+        </template>
+        <el-empty v-else-if="!refDetail.loading" description="未加载到详情" :image-size="60" />
+      </div>
+      <span slot="footer" class="dialog-footer">
+        <el-button @click="refDetail.visible = false">关 闭</el-button>
+      </span>
+    </el-dialog>
+
     <!-- 保存确认对话框 -->
     <el-dialog title="保存工作流" :visible.sync="saveDialog.visible" width="460px" append-to-body>
       <p class="save-tip">
@@ -1093,11 +1168,30 @@
 </template>
 
 <script>
-import { workflowDetail, workflowImport, workflowDeactivate, workflowDisable } from '@/api/wfdesign'
+import { workflowDetail, workflowImport, workflowDeactivate, workflowDisable, actionDetail, maxRoleDetail } from '@/api/wfdesign'
 import SKsLookupDialog from '@/views/components/skslookup/SKsLookupDialog.vue'
 import { getLookupKeyColumns } from '@/views/components/skslookup/sksLookup'
 import WfNodeShape from './NodeShape.vue'
 
+// 操作/角色字段类型中文标签(详情对话框展示用, 与 maxaction/maxrole 列表页一致)
+var ACTION_TYPE_LABELS = {
+  CHANGESTATUS: '更改状态',
+  SETVALUE: '设置值',
+  APPACTION: '应用操作',
+  GROUP: '操作组',
+  CUSTOM: '自定义类',
+  EXECUTABLE: '命令行程序',
+  ACCEPTINFERENCE: '接受推理',
+  GETINFERENCE: '获取推理'
+}
+var MAXROLE_TYPE_LABELS = {
+  PERSONGROUP: '人员组',
+  PERSON: '人员',
+  DATASET: '数据集',
+  USERDATA: '用户数据集',
+  EMAILADDRESS: '邮件地址',
+  CUSTOM: '自定义类'
+}
 // 节点类型中文标签
 var TYPE_LABELS = {
   WFSTART: '开始',
@@ -1314,6 +1408,8 @@ export default {
       redoStack: [], // 重做栈: 撤销时被恢复回的快照
       activeTab: 'canvas',
       tipDialogVisible: false, // 操作说明对话框
+      // 操作/角色详情对话框(操作/角色字段旁眼睛图标打开)
+      refDetail: { visible: false, loading: false, kind: 'action', name: '', data: null },
       zenMode: false, // Zen 模式: 隐藏工具栏/面板等, 只保留画布
       lineStyle: 'straight', // 画线方式: straight 直线 / orthogonal 正交折线
       edgeLabelMode: 'both', // 连线文字: both 操作+说明 / action 仅操作 / instruction 仅说明
@@ -2864,6 +2960,48 @@ export default {
       var map = kind === 'action' ? this.actionDescriptions : this.roleDescriptions
       return map[String(value).toUpperCase()] || ''
     },
+    /** 引用类型中文名: action=操作 / role=角色 */
+    refKindLabel(kind) {
+      return kind === 'action' ? '操作' : '角色'
+    },
+    /** 操作/角色类型中文标签(带原始类型值, 与列表页 typeLabel 一致) */
+    refTypeLabel(kind, type) {
+      if (!type) {
+        return '-'
+      }
+      var map = kind === 'action' ? ACTION_TYPE_LABELS : MAXROLE_TYPE_LABELS
+      return map[type] ? map[type] + ' (' + type + ')' : String(type)
+    },
+    /** 打开操作/角色详情对话框(按名称查 detail 接口) */
+    openRefDetail(kind, name) {
+      if (name === null || name === undefined || name === '') {
+        return
+      }
+      var self = this
+      var key = String(name)
+      this.refDetail.kind = kind
+      this.refDetail.name = key
+      this.refDetail.data = null
+      this.refDetail.loading = true
+      this.refDetail.visible = true
+      var req = kind === 'action' ? actionDetail({ action: key }) : maxRoleDetail({ maxrole: key })
+      req.then(function (res) {
+        var data = res && res.data ? res.data : res
+        if (data && data.status === 'error') {
+          self.$message.error(self.refKindLabel(kind) + '详情获取失败: ' + (data.message || '未知错误'))
+          return
+        }
+        var list = kind === 'action' ? (data.actions || []) : (data.maxroles || [])
+        self.refDetail.data = list[0] || null
+        if (!self.refDetail.data) {
+          self.$message.warning('未找到' + self.refKindLabel(kind) + ' ' + key)
+        }
+      }).catch(function (err) {
+        self.$message.error('获取详情失败: ' + (err && err.message ? err.message : String(err)))
+      }).finally(function () {
+        self.refDetail.loading = false
+      })
+    },
     cellText(row, col) {
       // 描述列: 由 descFrom 指向的 ACTION/MAXROLE 字段实时取描述
       if (col.descFrom) {
@@ -2951,7 +3089,7 @@ export default {
           roleId: '', relationship: '', assignCode: '', app: '', description: '',
           timelimit: '', priority: 0, groupNum: 0, assignStatus: 'DEFAULT', escRole: '',
           templateId: '', condition: '', conditionClass: '',
-          emailNotification: false, calendarBased: false, keepOrigAssgn: false, _new: true
+          emailNotification: true, calendarBased: false, keepOrigAssgn: false, _new: true
         }
       } else if (name === 'wfnotifications') {
         row = { templateId: '', _new: true }
@@ -3592,6 +3730,16 @@ export default {
   background: #f5f7fa;
   border: 1px solid #e4e7ed;
   border-radius: 4px;
+}
+/* 操作/角色详情: 输入框与描述之间的眼睛图标 */
+.ref-eye {
+  flex: 0 0 auto;
+  padding: 0 2px;
+  color: #909399;
+
+  &:hover {
+    color: #409eff;
+  }
 }
 .prop-card {
   margin-bottom: 12px;

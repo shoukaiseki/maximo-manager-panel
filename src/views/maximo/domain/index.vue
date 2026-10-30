@@ -72,6 +72,13 @@
     <!-- 导入 JSON 弹窗 -->
     <el-dialog title="导入域定义" :visible.sync="importDialog.visible" width="800px" top="3vh" :close-on-click-modal="false" @opened="onImportDialogOpened">
       <p style="margin:0 0 8px;color:#909399;font-size:12px;">粘贴 JSON（数组 或 {"domains": [...]}），支持导出结果直接导入；按 domainid 匹配更新或创建。</p>
+      <div class="import-opts">
+        <span class="import-opts-label">导入模式</span>
+        <el-select v-model="importDialog.mode" size="mini" style="width: 240px;">
+          <el-option label="普通模式" value="normal" />
+          <el-option label="同步模式(支持域值的_delete删除)" value="sync" />
+        </el-select>
+      </div>
       <div v-loading="importDialog.loading" element-loading-text="导入中..." class="monaco-wrapper">
         <div ref="importMonacoRef" class="monaco-container import-monaco"></div>
       </div>
@@ -130,7 +137,7 @@ export default {
       exportMonacoLoaded: false,
       exportEditor: null,
       // 导入
-      importDialog: { visible: false, text: '', error: '', loading: false, summary: null, result: [] },
+      importDialog: { visible: false, text: '', error: '', loading: false, summary: null, result: [], mode: 'normal' },
       importEditor: null,
       // 详情
       dialogVisible: false,
@@ -302,7 +309,7 @@ export default {
     },
     // === 导入 ===
     openImportDialog() {
-      this.importDialog = { visible: true, text: '', error: '', loading: false, summary: null, result: [] }
+      this.importDialog = { visible: true, text: '', error: '', loading: false, summary: null, result: [], mode: 'normal' }
     },
     onImportDialogOpened() {
       this.$nextTick(() => {
@@ -380,7 +387,7 @@ export default {
       d.error = ''
       d.summary = null
       d.result = []
-      importDomains(importData).then(res => {
+      importDomains(importData, d.mode === 'sync' ? { syncFlag: true } : null).then(res => {
         const data = res.data || res
         if (data.status === 'error') {
           this.$message.error(data.message || '导入失败')
@@ -572,6 +579,16 @@ export default {
 .json-toolbar {
   margin-bottom: 8px;
   text-align: right;
+}
+.import-opts {
+  display: flex;
+  align-items: center;
+  margin-bottom: 8px;
+}
+.import-opts-label {
+  margin-right: 8px;
+  color: #606266;
+  font-size: 12px;
 }
 .import-summary {
   margin-top: 12px;

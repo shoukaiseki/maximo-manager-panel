@@ -262,6 +262,7 @@ export default {
             { prop: 'action', label: '操作', minWidth: 200 },
             { prop: 'typeText', label: '类型', width: 120 },
             { prop: 'objectName', label: '对象', width: 150 },
+            { prop: 'value', label: '值', minWidth: 160, showOverflowTooltip: true },
             { prop: 'description', label: '描述', minWidth: 240 }
           ]),
         queryParamsColumnListEnable: false,

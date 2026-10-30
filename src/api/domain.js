@@ -31,14 +31,15 @@ export function getDomainSubtables(domainid, domaintype) {
 
 /**
  * 导入域定义(走 SKS.AUTOSCRIPT.OBJECTS, _type=domains&_action=import)
- * @param {Object|Array} data 域数组 / {"domains":[...]} / 单个域定义对象, 可携带 syncFlag:true 全量同步
+ * @param {Object|Array} data 域数组 / {"domains":[...]} / 单个域定义对象
+ * @param {Object} [params] 额外 URL 参数, 如 { syncFlag: true } 表示同步模式
  * 响应: {status,message,summary:{total,success,failed},result:[{domainid,status,message}]}
  */
-export function importDomains(data) {
+export function importDomains(data, params) {
   return request({
     url: '/api/script/SKS.AUTOSCRIPT.OBJECTS',
     method: 'post',
-    params: { _langcode: 'ZH', _type: 'domains', _action: 'import' },
+    params: Object.assign({ _langcode: 'ZH', _type: 'domains', _action: 'import' }, params),
     data: data
   })
 }
