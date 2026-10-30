@@ -194,12 +194,23 @@ public class MaxSequenceService {
             }
 
             long restartValue = max.value + 1;
-            String sql = "ALTER SEQUENCE " + seq.schema + "." + seqName + " RESTART WITH " + restartValue;
+            String alterSql = "ALTER SEQUENCE " + seq.schema + "." + seqName + " RESTART WITH " + restartValue;
             try (Connection conn = dataSource.getConnection();
                  java.sql.Statement st = conn.createStatement()) {
-                st.executeUpdate(sql);
+                st.executeUpdate(alterSql);
+                // DB2 执行 RESTART 后不会立即刷新 SYSCAT.SEQUENCES.NEXTCACHEFIRSTVALUE，
+                // 需取一次 NEXT VALUE 触发刷新，否则再次诊断会把序列当前值读成旧值
+                try (ResultSet rs = st.executeQuery("VALUES NEXT VALUE FOR " + seq.schema + "." + seqName)) {
+                    if (rs.next()) {
+                        rs.getObject(1);
+                    }
+                }
+                if (!conn.getAutoCommit()) {
+                    conn.commit();
+                }
                 result.put("SUCCESS", true);
-                result.put("MESSAGE", "序列已重启为 " + restartValue);
+                result.put("MESSAGE", "序列已重启，下一个可用值为 "
+                        + (restartValue + (seq.increment == null ? 1 : seq.increment)) + "（已预取 " + restartValue + " 刷新序列状态）");
             } catch (SQLException e) {
                 result.put("SUCCESS", false);
                 result.put("MESSAGE", truncate("重启序列失败: " + e.getMessage()));
