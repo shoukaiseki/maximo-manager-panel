@@ -71,3 +71,73 @@ export function getMaxAppXmlAuditDetail(eaudittransid) {
     params: { eaudittransid }
   })
 }
+
+/**
+ * 导出应用信息（以 MAXAPPS 为主对象，含 MAXPRESENTATION/MAFAPPDATA 元信息，默认不含 XML 与 zip 字节码）
+ * 调用 Maximo 脚本 SKS.AUTOSCRIPT.SCREENS 新方式导出（内部使用 SKS_MIGRATE_* 脚本）
+ * @param {string} app 应用名称
+ * @param {Object} [opts]
+ * @param {boolean} [opts.allLangcode] 导出所有语言信息（URL 参数 _allLangcode=true）
+ * @param {string} [opts.include] 大字段参数：presentation / zip
+ */
+export function exportAppInfo(app, opts) {
+  opts = opts || {}
+  return request({
+    url: '/api/script/SKS.AUTOSCRIPT.SCREENS',
+    method: 'get',
+    params: {
+      _action: 'exportAppInfo',
+      app: app,
+      _langcode: 'ZH',
+      _allLangcode: opts.allLangcode ? 'true' : undefined,
+      _include: opts.include
+    }
+  })
+}
+
+/**
+ * 导入应用信息（请求体为导出的应用信息 JSON）
+ * @param {Object} payload 应用信息 JSON（app 为目标应用）
+ * @param {Object} [opts]
+ * @param {boolean} [opts.dmDeploySet] 启用迁移模式（URL 参数 dmDeploySet=true）
+ */
+export function importAppInfo(payload, opts) {
+  opts = opts || {}
+  return request({
+    url: '/api/script/SKS.AUTOSCRIPT.SCREENS',
+    method: 'post',
+    params: {
+      _action: 'importAppInfo',
+      _langcode: 'ZH',
+      dmDeploySet: opts.dmDeploySet ? 'true' : undefined
+    },
+    data: payload
+  })
+}
+
+/**
+ * 下载 MAFAPPDATA.APP 的 zip 字节码（二进制流）
+ * @param {string} app 应用名称
+ */
+export function downloadAppZip(app) {
+  return request({
+    url: '/api/script/SKS.AUTOSCRIPT.SCREENS',
+    method: 'get',
+    params: { _action: 'exportAppZip', app: app },
+    responseType: 'blob',
+    timeout: 300000
+  })
+}
+
+/**
+ * 获取指定语言的 XML（Maximo 脚本 SKS.AUTOSCRIPT.SCREENS 按 _langcode 合并 MAXLABELS 译文）
+ * @param {string} app 应用名称
+ * @param {string} [langcode] 语言代码，默认 ZH
+ */
+export function getAppXmlByLang(app, langcode) {
+  return request({
+    url: '/api/script/SKS.AUTOSCRIPT.SCREENS/' + encodeURIComponent(app),
+    method: 'get',
+    params: { _langcode: (langcode || 'ZH'), ignoreMetadata: 'true' }
+  })
+}

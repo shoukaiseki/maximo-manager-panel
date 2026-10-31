@@ -270,6 +270,12 @@ export const constantRoutes = [
                 meta: { title: '对象结构', icon: 'link', noCache: false }
             },
             {
+                path: 'maxapps',
+                component: (resolve) => require(['/src/views/maximo/maxapps/index'], resolve),
+                name: 'MaxApps',
+                meta: { title: '应用查询', icon: 'document', noCache: false }
+            },
+            {
                 path: 'maxappxml',
                 component: (resolve) => require(['/src/views/maximo/maxappxml/index'], resolve),
                 name: 'MaxAppXml',

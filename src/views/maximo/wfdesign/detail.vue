@@ -1381,9 +1381,9 @@ var ACTION_DIALOGS = {
   wfinputaction: {
     label: '输入操作属性',
     fields: [
-      { prop: 'instruction', label: '说明', span: 24 },
-      { prop: 'action', label: '操作(ACTION)', span: 12, lookup: 'action', descKind: 'action' },
-      { prop: 'isPositive', label: '正向', type: 'bool', span: 12, readonly: true },
+      { prop: 'instruction', label: '说明', span: 16 },
+      { prop: 'isPositive', label: '正向', type: 'bool', span: 8, readonly: true },
+      { prop: 'action', label: '操作(ACTION)', span: 24, lookup: 'action', descKind: 'action' },
       { prop: 'condition', label: '条件(USERSQL)', type: 'textarea', span: 24 },
       { prop: 'conditionClass', label: '自定义类', span: 24 }
     ],
