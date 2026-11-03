@@ -17,3 +17,12 @@ export function exportMessages(params,data) {
     data:data 
   })
 }
+
+export function migrateMessages(params,data) {
+  return request({
+    url: '/api/script/SKS_MIGRATEAPI_MAXMESSAGES',
+    method: 'post',
+    params: params,
+    data:data 
+  })
+}

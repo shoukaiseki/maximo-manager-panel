@@ -20,6 +20,30 @@
         <el-form-item v-if="formData.authType === 'apikey'" label="API Key">
           <el-input v-model="formData.apiKey" placeholder="API Key" />
         </el-form-item>
+        <div class="lang-tip">
+          <i class="el-icon-question" /> 当前浏览器第一语言：{{ browserFirstLanguage }}。留空时使用浏览器语言；浏览器语言不在支持项时使用后台默认语言
+        </div>
+        <el-form-item label="默认语言">
+          <el-select
+            v-model="formData.defaultLang"
+            clearable
+            filterable
+            :loading="loadingLanguages"
+            placeholder="留空使用浏览器第一语言"
+            style="width: 320px;"
+          >
+            <el-option
+              v-for="lang in languageOptions"
+              :key="lang.code"
+              :label="languageOptionLabel(lang)"
+              :value="lang.code"
+            >
+              <span>{{ lang.name }}（{{ lang.code }}）</span>
+              <span v-if="lang.base" class="base-mark"> · 基准</span>
+              <span v-if="lang.code === mmpDefaultLang" class="panel-default-mark"> · 面板默认</span>
+            </el-option>
+          </el-select>
+        </el-form-item>
         <el-form-item label="管理模式">
           <el-switch v-model="formData.isManageMode" active-text="开启" inactive-text="关闭" />
         </el-form-item>
@@ -52,6 +76,8 @@
 </template>
 
 <script>
+import { getLanguages } from '@/api/system'
+
 export default {
   name: 'EnvSettings',
   props: {
@@ -65,13 +91,25 @@ export default {
       dialogVisible: false,
       envListVisible: false,
       envList: [],
+      languageOptions: [],
+      mmpDefaultLang: '',
+      loadingLanguages: false,
       formData: {
         envName: '',
         authType: 'apikey',
         maxauth: '',
         apiKey: '',
+        defaultLang: null,
         isManageMode: true
       }
+    }
+  },
+  computed: {
+    browserFirstLanguage() {
+      const browserLangs = (navigator.languages && navigator.languages.length)
+        ? navigator.languages
+        : [navigator.language]
+      return browserLangs[0] || '未知'
     }
   },
   watch: {
@@ -81,18 +119,48 @@ export default {
         this.dialogVisible = val
         if (val) {
           this.loadSettings()
+          if (!this.languageOptions.length) {
+            this.fetchLanguages()
+          }
         }
       }
     }
   },
   created() {
-    this.loadSettings();
+    this.loadSettings()
+    this.fetchLanguages()
   },
   activated() {
-    this.loadSettings();
+    this.loadSettings()
   },
 
   methods: {
+    languageOptionLabel(lang) {
+      let label = lang.name + '（' + lang.code + '）'
+      if (lang.base) {
+        label += ' · 基准'
+      }
+      if (lang.code === this.mmpDefaultLang) {
+        label += ' · 面板默认'
+      }
+      return label
+    },
+    fetchLanguages() {
+      if (this.loadingLanguages) {
+        return
+      }
+      this.loadingLanguages = true
+      getLanguages().then(res => {
+        if (res.code === 200 && res.data) {
+          this.languageOptions = res.data.languages || []
+          this.mmpDefaultLang = res.data.mmpDefaultLang || ''
+        }
+      }).catch(err => {
+        console.warn('查询支持的语言失败', err)
+      }).finally(() => {
+        this.loadingLanguages = false
+      })
+    },
     loadSettings() {
       const saved = localStorage.getItem('maximo-env-settings')
       if (saved) {
@@ -104,6 +172,7 @@ export default {
             authType: settings.authType || 'maxauth',
             maxauth: settings.maxauth || '',
             apiKey: settings.apiKey || '',
+            defaultLang: this.normalizeDefaultLang(settings.defaultLang),
             isManageMode: settings.isManageMode !== undefined ? settings.isManageMode : true
           }
         } catch (e) {
@@ -121,6 +190,7 @@ export default {
         authType: 'maxauth',
         maxauth: '',
         apiKey: '',
+        defaultLang: null,
         isManageMode: true
       }
     },
@@ -172,6 +242,7 @@ export default {
       this.formData.authType = env.authType
       this.formData.maxauth = env.maxauth
       this.formData.apiKey = env.apiKey
+      this.formData.defaultLang = env.defaultLang || null
       this.envListVisible = false
       this.saveSettings()
       this.$message.success('已切换到环境：' + env.name)
@@ -199,6 +270,7 @@ export default {
         return
       }
 
+      this.formData.defaultLang = this.normalizeDefaultLang(this.formData.defaultLang)
       this.saveSettings()
       this.sksConfig.isManageMode = this.formData.isManageMode
       this.$message.success('配置保存成功')
@@ -208,11 +280,32 @@ export default {
         maxauth: this.formData.maxauth,
         apiKey: this.formData.apiKey,
         useApiKey: this.formData.authType === 'apikey',
+        defaultLang: this.formData.defaultLang,
         isManageMode: this.formData.isManageMode
       })
       this.handleClose()
     },
+    normalizeDefaultLang(value) {
+      if (value === null || value === undefined) {
+        return null
+      }
+      const text = String(value).trim()
+      if (!text) {
+        return null
+      }
+      return text.split(/[-_]/)[0].toUpperCase()
+    },
     saveSettings() {
+      const envIndex = this.envList.findIndex(env => env.name === this.formData.envName)
+      if (envIndex >= 0) {
+        this.envList.splice(envIndex, 1, {
+          ...this.envList[envIndex],
+          authType: this.formData.authType,
+          maxauth: this.formData.maxauth,
+          apiKey: this.formData.apiKey,
+          defaultLang: this.normalizeDefaultLang(this.formData.defaultLang)
+        })
+      }
       const settings = {
         currentEnv: this.formData.envName,
         envs: this.envList,
@@ -220,6 +313,7 @@ export default {
         maxauth: this.formData.maxauth,
         apiKey: this.formData.apiKey,
         useApiKey: this.formData.authType === 'apikey',
+        defaultLang: this.normalizeDefaultLang(this.formData.defaultLang),
         isManageMode: this.formData.isManageMode
       }
       localStorage.setItem('maximo-env-settings', JSON.stringify(settings))
@@ -227,7 +321,7 @@ export default {
     handleClose() {
       this.dialogVisible = false
       this.$emit('update:visible', false)
-      console.log("EnvSettings handleClose")
+      console.log('EnvSettings handleClose')
     }
   }
 }
@@ -240,5 +334,18 @@ export default {
     color: #909399;
     margin-left: 8px;
   }
+}
+.base-mark {
+  color: #67c23a;
+}
+.lang-tip {
+  font-size: 12px;
+  color: #909399;
+  line-height: 1.6;
+  margin: 0 0 6px 100px;
+}
+.panel-default-mark {
+  color: #f56c6c;
+  font-weight: 600;
 }
 </style>

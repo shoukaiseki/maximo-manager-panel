@@ -101,6 +101,37 @@ export const constantRoutes = [
         ]
     },
     {
+        path: '/v1',
+        name: "v1",
+        component: Layout,
+        hidden: false,
+        redirect: "noRedirect",
+        alwaysShow: true,
+        meta: {
+            "title": "V1",
+            "icon": "el-icon-s-order",
+            "noCache": false
+        },
+        children: [
+            {
+                path: 'maxsys',
+                name: 'V1MaxSys',
+                component: ParentView,
+                redirect: 'noRedirect',
+                alwaysShow: true,
+                meta: { title: 'maximo系统工具', icon: 'tool', noCache: false },
+                children: [
+                    {
+                        path: 'messages',
+                        component: (resolve) => require(['/src/views/maximo/MessagesQuery'], resolve),
+                        name: 'MaxMessageV1',
+                        meta: { title: '消息查询', icon: 'message', noCache: false }
+                    }
+                ]
+            }
+        ]
+    },
+    {
         path: '/maxsys',
         name: "maxsys",
         component: Layout,
@@ -115,7 +146,7 @@ export const constantRoutes = [
         children: [
             {
                 path: 'messages',
-                component: (resolve) => require(['/src/views/maximo/MessagesQuery'], resolve),
+                component: (resolve) => require(['/src/views/maximo_v2/maxmessage/index'], resolve),
                 name: 'MessagesQuery',
                 meta: { title: '消息查询', icon: 'message', noCache: false }
             },
@@ -439,6 +470,27 @@ export const constantRoutes = [
                 component: (resolve) => require(['/src/views/common/pubfile/index'], resolve),
                 name: 'PublicFile',
                 meta: { title: '公开文件管理', icon: 'image', noCache: false }
+            }
+        ]
+    },
+    {
+        path: '/multilingual',
+        name: 'MultilingualExcel',
+        component: Layout,
+        hidden: false,
+        redirect: 'noRedirect',
+        alwaysShow: true,
+        meta: {
+            title: '多语言Excel维护',
+            icon: 'language',
+            noCache: false
+        },
+        children: [
+            {
+                path: 'messageimport',
+                component: (resolve) => require(['/src/views/maximo/messageimport/index'], resolve),
+                name: 'MessageImport',
+                meta: { title: '多语言消息excel导入', icon: 'excel', noCache: false }
             }
         ]
     },

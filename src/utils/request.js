@@ -8,7 +8,7 @@ axios.defaults.headers['Content-Type'] = 'application/json;charset=utf-8'
 // 创建axios实例
 const service = axios.create({
   // 超时
-  timeout: 50000
+  timeout: 5000000
 })
 
 // request拦截器

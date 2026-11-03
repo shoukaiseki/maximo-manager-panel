@@ -1,4 +1,10 @@
 solon.app.name: maximo-management-panel
+solon:
+  #maximo中复制一个用户的apiKey,只有这个key才能访问这个后端接口
+  apiKey: "xxxxxxxx"
+  #默认ZH
+  mmpDefaultLang: "ZH"
+
 server:
   port: 8081
 
