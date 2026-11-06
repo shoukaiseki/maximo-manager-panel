@@ -299,6 +299,7 @@
 <script>
 import { migrateMessages } from '../../../api/messages'
 import { getDefaultLangcode, loadLanguageConfig } from '../../../utils/mmp/mmp-config'
+import { handleApiError, createApiError } from '../../../utils/mmp/api-error'
 import { generateUUID } from '../../../utils/sks'
 
 export default {
@@ -530,6 +531,10 @@ export default {
       if (data && data.status === 'success' && data.data !== undefined) {
         return data.data
       }
+      if (data && data.status === 'error') {
+        handleApiError(data, data.message || '接口返回错误')
+        throw createApiError(String(data.message || '接口返回错误'))
+      }
       return data || {}
     },
     async doImport() {
@@ -608,7 +613,9 @@ export default {
         this.importDialog.result = JSON.stringify({ ...merged, error: message }, null, 2)
         this.importDialog.resultSuccess = false
         this.importDialog.summary = '已导入 ' + completed + '/' + messages.length + ' 条，后续失败：' + message
-        this.$message.error('导入失败: ' + message)
+        if (!err || !err.isApiError) {
+          this.$message.error('导入失败: ' + message)
+        }
       } finally {
         if (runId === this.importRunId) {
           this.importDialog.loading = false
@@ -724,7 +731,7 @@ export default {
       }, body).then(res => {
         const data = res.data || res
         if (data.status === 'error') {
-          this.$message.error(data.message || '查询失败')
+          handleApiError(data, data.message || '查询失败')
           this.loading = false
           return
         }
@@ -735,7 +742,8 @@ export default {
         this.loading = false
       }).catch(err => {
         console.error('查询失败', err)
-        this.$message.error('查询消息失败：' + (err.message || String(err)))
+        const respData = err.response && err.response.data
+        handleApiError(respData && typeof respData === 'object' ? respData : null, '查询消息失败：' + (err.message || String(err)))
         this.loading = false
       })
     },
@@ -776,20 +784,21 @@ export default {
         const fullData = fullRes.data || fullRes
 
         if (simpleData && simpleData.status === 'error') {
-          this.$message.error('获取精简消息失败: ' + (simpleData.message || '未知错误'))
+          handleApiError(simpleData, '获取精简消息失败: ' + (simpleData.message || '未知错误'))
         } else if (simpleData && simpleData.data) {
           this.apiSimpleMessages = [simpleData.data]
         }
 
         if (fullData && fullData.status === 'error') {
-          this.$message.error('获取完整消息失败: ' + (fullData.message || '未知错误'))
+          handleApiError(fullData, '获取完整消息失败: ' + (fullData.message || '未知错误'))
         } else if (fullData && fullData.data) {
           this.apiFullMessages = [fullData.data]
           this.currentRow = this.normalizeMessage({ ...row, ...fullData.data })
         }
       } catch (err) {
         console.warn('获取消息详情失败:', err)
-        this.$message.error('获取消息详情失败: ' + (err.message || String(err)))
+        const respData = err.response && err.response.data
+        handleApiError(respData && typeof respData === 'object' ? respData : null, '获取消息详情失败: ' + (err.message || String(err)))
       } finally {
         this.detailLoading = false
         this.$nextTick(() => {
@@ -947,10 +956,10 @@ export default {
         const fullData = fullRes.data || fullRes
 
         if (simpleData && simpleData.status === 'error') {
-          this.$message.error('获取精简消息失败: ' + (simpleData.message || '未知错误'))
+          handleApiError(simpleData, '获取精简消息失败: ' + (simpleData.message || '未知错误'))
         }
         if (fullData && fullData.status === 'error') {
-          this.$message.error('获取完整消息失败: ' + (fullData.message || '未知错误'))
+          handleApiError(fullData, '获取完整消息失败: ' + (fullData.message || '未知错误'))
         }
 
         const simpleMessages = simpleData && simpleData.data && simpleData.data.messages ? simpleData.data.messages : []
@@ -994,7 +1003,7 @@ export default {
           }
         }
         var displayMsg = serverMsg || err.message || String(err)
-        this.$message.error('导出失败: ' + displayMsg)
+        handleApiError(err.response && err.response.data, '导出失败: ' + displayMsg)
       } finally {
         this.batchLoading = false
       }

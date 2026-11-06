@@ -174,7 +174,7 @@ export default {
     },
     goDetail(objectName) {
       this.$router.push({
-        path: `/maxobject-detail/index/${objectName}`
+        path: `/v1/maxobject/detail/index/${objectName}`
       })
     },
     showTodoSql(objectName) {

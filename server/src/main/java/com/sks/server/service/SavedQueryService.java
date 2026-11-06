@@ -21,7 +21,7 @@ public class SavedQueryService {
      */
     public List<Map<String, Object>> listQueries(String app) {
         List<Map<String, Object>> list = new ArrayList<>();
-        String sql = "SELECT id, app, queryname, whereclause, description, created_at, updated_at " +
+        String sql = "SELECT id, app, queryname, whereclause, description, isdefault, created_at, updated_at " +
                 "FROM saved_query WHERE app = ? ORDER BY queryname";
         try (Connection conn = mysqlDataSource.getConnection();
              PreparedStatement ps = conn.prepareStatement(sql)) {
@@ -34,6 +34,7 @@ public class SavedQueryService {
                     row.put("queryname", rs.getString("queryname"));
                     row.put("whereclause", rs.getString("whereclause"));
                     row.put("description", rs.getString("description"));
+                    row.put("isdefault", rs.getInt("isdefault"));
                     row.put("createdAt", rs.getTimestamp("created_at") != null ? rs.getTimestamp("created_at").toString() : null);
                     row.put("updatedAt", rs.getTimestamp("updated_at") != null ? rs.getTimestamp("updated_at").toString() : null);
                     list.add(row);
@@ -49,7 +50,7 @@ public class SavedQueryService {
      * 获取单个保存查询
      */
     public Map<String, Object> getQuery(Long id) {
-        String sql = "SELECT id, app, queryname, whereclause, description FROM saved_query WHERE id = ?";
+        String sql = "SELECT id, app, queryname, whereclause, description, isdefault FROM saved_query WHERE id = ?";
         try (Connection conn = mysqlDataSource.getConnection();
              PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setLong(1, id);
@@ -61,6 +62,7 @@ public class SavedQueryService {
                     row.put("queryname", rs.getString("queryname"));
                     row.put("whereclause", rs.getString("whereclause"));
                     row.put("description", rs.getString("description"));
+                    row.put("isdefault", rs.getInt("isdefault"));
                     return row;
                 }
             }
@@ -151,5 +153,60 @@ public class SavedQueryService {
         } catch (Exception e) {
             throw new RuntimeException("删除保存的查询失败: " + e.getMessage(), e);
         }
+    }
+
+    /**
+     * 设置某应用的默认查询（id 为 null/0 表示清除默认；每 app 至多一条默认）
+     */
+    public Map<String, Object> setDefaultQuery(String app, Long id) {
+        if (app == null || app.trim().isEmpty()) {
+            throw new RuntimeException("应用名称不能为空");
+        }
+        String appTrim = app.trim();
+        Long targetId = (id == null || id <= 0) ? null : id;
+        if (targetId != null && getQuery(targetId) == null) {
+            throw new RuntimeException("保存的查询不存在: id=" + targetId);
+        }
+        try (Connection conn = mysqlDataSource.getConnection()) {
+            try (PreparedStatement ps = conn.prepareStatement("UPDATE saved_query SET isdefault = 0 WHERE app = ?")) {
+                ps.setString(1, appTrim);
+                ps.executeUpdate();
+            }
+            if (targetId != null) {
+                try (PreparedStatement ps = conn.prepareStatement("UPDATE saved_query SET isdefault = 1 WHERE id = ?")) {
+                    ps.setLong(1, targetId);
+                    ps.executeUpdate();
+                }
+            }
+        } catch (Exception e) {
+            throw new RuntimeException("设置默认查询失败: " + e.getMessage(), e);
+        }
+        return targetId == null ? null : getQuery(targetId);
+    }
+
+    /**
+     * 获取某应用的默认查询（无则返回 null）
+     */
+    public Map<String, Object> getDefaultQuery(String app) {
+        String sql = "SELECT id, app, queryname, whereclause, description, isdefault FROM saved_query WHERE app = ? AND isdefault = 1 LIMIT 1";
+        try (Connection conn = mysqlDataSource.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setString(1, app);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) {
+                    Map<String, Object> row = new LinkedHashMap<>();
+                    row.put("id", rs.getLong("id"));
+                    row.put("app", rs.getString("app"));
+                    row.put("queryname", rs.getString("queryname"));
+                    row.put("whereclause", rs.getString("whereclause"));
+                    row.put("description", rs.getString("description"));
+                    row.put("isdefault", rs.getInt("isdefault"));
+                    return row;
+                }
+            }
+        } catch (Exception e) {
+            throw new RuntimeException("查询默认查询失败: " + e.getMessage(), e);
+        }
+        return null;
     }
 }

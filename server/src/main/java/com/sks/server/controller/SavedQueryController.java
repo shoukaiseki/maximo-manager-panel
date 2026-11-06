@@ -54,4 +54,22 @@ public class SavedQueryController {
     public RestResult<Boolean> delete(Long id) {
         return RestResult.ok(savedQueryService.deleteQuery(id));
     }
+
+    /**
+     * 设置某应用的默认查询（id 不传或为 0 表示清除默认；每 app 至多一条默认）
+     * POST /solonapi/savedquery/setdefault?app=DOMAIN&id=1
+     */
+    @Mapping(value = "/savedquery/setdefault", method = MethodType.POST)
+    public RestResult<Map<String, Object>> setDefault(String app, Long id) {
+        return RestResult.ok(savedQueryService.setDefaultQuery(app, id));
+    }
+
+    /**
+     * 获取某应用的默认查询（无则 data 为 null）
+     * GET /solonapi/savedquery/default?app=DOMAIN
+     */
+    @Mapping(value = "/savedquery/default", method = MethodType.GET)
+    public RestResult<Map<String, Object>> getDefault(String app) {
+        return RestResult.ok(savedQueryService.getDefaultQuery(app));
+    }
 }

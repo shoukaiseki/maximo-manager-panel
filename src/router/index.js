@@ -128,6 +128,35 @@ export const constantRoutes = [
                         meta: { title: '消息查询', icon: 'message', noCache: false }
                     }
                 ]
+            },
+            {
+                path: 'maxobject',
+                name: 'V1MaxObject',
+                component: ParentView,
+                redirect: 'noRedirect',
+                alwaysShow: true,
+                meta: { title: 'Max配置', icon: 'table', noCache: false },
+                children: [
+                    {
+                        path: 'index',
+                        component: (resolve) => require(['/src/views/maximo/maxobject/MaxObjectList'], resolve),
+                        name: 'V1MaxObjectList',
+                        meta: { title: '对象列表', icon: 'list', noCache: false }
+                    },
+                    {
+                        path: 'detail/index/:objectname',
+                        hidden: true,
+                        component: (resolve) => require(['/src/views/maximo/maxobject/MaxObjectDetail'], resolve),
+                        name: 'V1MaxObjectDetail',
+                        meta: { title: '对象详情', activeMenu: '/v1/maxobject/index', noCache: false }
+                    },
+                    {
+                        path: 'attr',
+                        component: (resolve) => require(['/src/views/maximo/maxattr/index'], resolve),
+                        name: 'V1MaxAttrList',
+                        meta: { title: '字段查询', icon: 'tickets', noCache: false }
+                    }
+                ]
             }
         ]
     },
@@ -201,6 +230,48 @@ export const constantRoutes = [
         ]
     },
     {
+        path: '/baseconfig',
+        name: "baseconfig",
+        component: Layout,
+        hidden: false,
+        redirect: "noRedirect",
+        alwaysShow: true,
+        meta: {
+            "title": "基础配置",
+            "icon": "component",
+            "noCache": false
+        },
+        children: [
+            {
+                path: 'autokey',
+                component: (resolve) => require(['/src/views/maximo_v2/autokey/index'], resolve),
+                name: 'AutokeyQuery',
+                meta: { title: 'AUTOKEY自动编号', icon: 'number', noCache: false }
+            }
+        ]
+    },
+    {
+        path: '/security',
+        name: "security",
+        component: Layout,
+        hidden: false,
+        redirect: "noRedirect",
+        alwaysShow: true,
+        meta: {
+            "title": "安全性",
+            "icon": "password",
+            "noCache": false
+        },
+        children: [
+            {
+                path: 'maxgroup',
+                component: (resolve) => require(['/src/views/maximo_v2/maxgroup/index'], resolve),
+                name: 'SecurGroupQuery',
+                meta: { title: '安全组查询', icon: 'lock', noCache: false }
+            }
+        ]
+    },
+    {
         path: '/maslog',
         name: "maslog",
         component: Layout,
@@ -254,13 +325,13 @@ export const constantRoutes = [
         children: [
             {
                 path: 'index',
-                component: (resolve) => require(['/src/views/maximo/maxobject/MaxObjectList'], resolve),
+                component: (resolve) => require(['/src/views/maximo_v2/maxobject/MaxObjectList'], resolve),
                 name: 'MaxObjectList',
                 meta: { title: '对象列表', icon: 'list', noCache: false }
             },
             {
                 path: 'attr',
-                component: (resolve) => require(['/src/views/maximo/maxattr/index'], resolve),
+                component: (resolve) => require(['/src/views/maximo_v2/maxattr/index'], resolve),
                 name: 'MaxAttrList',
                 meta: { title: '字段查询', icon: 'tickets', noCache: false }
             },
@@ -345,7 +416,7 @@ export const constantRoutes = [
         children: [
             {
                 path: 'index/:objectname',
-                component: (resolve) => require(['/src/views/maximo/maxobject/MaxObjectDetail'], resolve),
+                component: (resolve) => require(['/src/views/maximo_v2/maxobject/MaxObjectDetail'], resolve),
                 name: 'MaxObjectDetail',
                 meta: { title: '对象详情', activeMenu: '/maxobject', noCache: false }
             }

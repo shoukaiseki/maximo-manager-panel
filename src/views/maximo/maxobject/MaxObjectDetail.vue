@@ -371,7 +371,7 @@ export default {
       return String(val)
     },
     goBack() {
-      this.$router.push({ path: '/maxobject/index' })
+      this.$router.push({ path: '/v1/maxobject/index' })
     }
   },
   watch: {

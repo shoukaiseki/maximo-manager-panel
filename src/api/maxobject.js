@@ -97,6 +97,38 @@ export function importMaxObjects(data) {
 }
 
 /**
+ * 导入对象配置（新模式，走 SKS_MIGRATEAPI_CONFIGUR 脚本）
+ * @param {Object} data 纯数据包 {"maxObjects":[...]}
+ * @param {Object} params 额外 query 参数 { dmDeploySet: 'true'|'false', ignoreAttributes, ignoreRelationships }
+ * 响应: {status:'success', message, data:{total,added,updated,skipped,failed,results}} 或 {status:'error', message, errorMessageTrace}
+ */
+export function importMaxObjectsConfigur(data, params) {
+  return request({
+    url: 'api/script/SKS_MIGRATEAPI_CONFIGUR',
+    method: 'post',
+    params: Object.assign({ _action: 'import', _langcode: 'zh' }, params || {}),
+    data: data,
+    timeout: 1200000
+  })
+}
+
+/**
+ * 新模式导出对象配置（SKS_MIGRATEAPI_CONFIGUR _action=export）
+ * @param {Array<string>} objectNames 对象名列表
+ * @param {Object} params { ignoreDefVal: true|false, _allLangcode: 'true'|'false', _langcode }
+ * 响应: {status:'success', data:{maxObjects:[...]}, message} 或 {status:'error', message, errorMessageTrace}
+ */
+export function exportMaxObjectsConfigur(objectNames, params) {
+  return request({
+    url: 'api/script/SKS_MIGRATEAPI_CONFIGUR',
+    method: 'post',
+    params: Object.assign({ _action: 'export', _langcode: 'zh' }, params || {}),
+    data: { objectNames: objectNames },
+    timeout: 600000
+  })
+}
+
+/**
  * 导出数据库配置对象信息
  * @param {string} objectName 对象名
  * @param {boolean} ignoreDefVal 是否忽略默认值（精简模式）

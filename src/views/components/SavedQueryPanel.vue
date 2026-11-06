@@ -52,8 +52,10 @@
         <el-table-column prop="description" label="描述" width="180" />
         <el-table-column prop="whereclause" label="WHERE子句" min-width="300" show-overflow-tooltip />
         <el-table-column prop="updatedAt" label="更新时间" width="180" />
-        <el-table-column label="操作" width="160" fixed="right">
+        <el-table-column label="操作" width="230" fixed="right">
           <template slot-scope="{row}">
+            <el-button v-if="defaultQueryId === row.id" type="text" size="mini" class="default-on" @click="toggleDefaultQuery(row)">★ 默认</el-button>
+            <el-button v-else type="text" size="mini" @click="toggleDefaultQuery(row)">设为默认</el-button>
             <el-button type="text" size="mini" @click="editManageQuery(row)">编辑</el-button>
             <el-button type="text" size="mini" @click="applyManageQuery(row)">应用</el-button>
             <el-button type="text" size="mini" class="danger-text" @click="deleteManageQuery(row)">删除</el-button>
@@ -68,7 +70,7 @@
 </template>
 
 <script>
-import { getSavedQueryList, getSavedQueryDetail, saveSavedQuery, deleteSavedQuery } from '@/api/savedquery'
+import { getSavedQueryList, getSavedQueryDetail, saveSavedQuery, deleteSavedQuery, setDefaultSavedQuery } from '@/api/savedquery'
 import menuArrowImg from '@/assets/mas/images/nav_btn_menuArrow_Search.gif'
 
 /**
@@ -80,6 +82,11 @@ import menuArrowImg from '@/assets/mas/images/nav_btn_menuArrow_Search.gif'
  *   clear()     - 清除自定义 where
  * 事件:
  *   whereChange(where) - 自定义 where 变化时触发（清除时为 ''）
+ *   ready() - 进入页面后保存查询列表加载完成（含默认查询应用完成）时触发;
+ *             父页面可监听该事件再触发主表首次查询, 避免主表先于默认查询条件加载
+ * 默认查询:
+ *   「查看/管理查询」中可把某条保存查询「设为默认」(存 saved_query.isdefault, 每 app 至多一条, 由 solonapi 提供);
+ *   页面加载时自动应用默认查询并触发 whereChange; 删除默认查询时后端行删除即标记消失
  */
 export default {
   name: 'SavedQueryPanel',
@@ -100,6 +107,7 @@ export default {
       selectedSavedQuery: null,
       savedQueryList: [],
       customWhere: '',
+      defaultQueryId: null,
       whereDialog: {
         visible: false,
         where: ''
@@ -117,6 +125,7 @@ export default {
       }
     }
   },
+  computed: {},
   methods: {
     // === 对外方法 ===
     getWhere() {
@@ -135,13 +144,41 @@ export default {
     },
     // === 内部 ===
     loadList() {
-      getSavedQueryList(this.appname).then(res => {
+      return getSavedQueryList(this.appname).then(res => {
         if (res.code === 200) {
           this.savedQueryList = res.data || []
+          const def = this.savedQueryList.find(q => Number(q.isdefault) === 1)
+          this.defaultQueryId = def ? def.id : null
         }
       }).catch(err => {
         console.warn('加载保存的查询失败:', err)
       })
+    },
+    // 默认查询: 存后端 saved_query.isdefault, 页面加载时自动应用
+    toggleDefaultQuery(row) {
+      const isCancel = this.defaultQueryId === row.id
+      setDefaultSavedQuery(this.appname, isCancel ? 0 : row.id).then(res => {
+        if (res.code === 200) {
+          this.defaultQueryId = isCancel ? null : row.id
+          this.manageDialog.list = this.manageDialog.list.map(q => ({ ...q, isdefault: q.id === this.defaultQueryId ? 1 : 0 }))
+          this.savedQueryList = this.savedQueryList.map(q => ({ ...q, isdefault: q.id === this.defaultQueryId ? 1 : 0 }))
+          if (isCancel) {
+            this.$message.info('已取消默认查询「' + (row.description || row.queryname) + '」')
+          } else {
+            this.$message.success('已设为默认查询「' + (row.description || row.queryname) + '」，下次进入页面自动应用')
+          }
+        } else {
+          this.$message.error('设置默认查询失败: ' + (res.message || '未知错误'))
+        }
+      }).catch(err => {
+        this.$message.error('设置默认查询失败: ' + (err.message || String(err)))
+      })
+    },
+    applyDefaultQuery() {
+      if (!this.defaultQueryId) {
+        return
+      }
+      this.applySavedQuery(this.defaultQueryId)
     },
     handleMenuCommand(command) {
       if (command === 'where') {
@@ -175,9 +212,10 @@ export default {
         this.$emit('whereChange', '')
         return
       }
-      getSavedQueryDetail(id).then(res => {
+      return getSavedQueryDetail(id).then(res => {
         if (res.code === 200 && res.data) {
           this.setWhere(res.data.whereclause || '')
+          this.selectedSavedQuery = id
           this.$emit('whereChange', this.customWhere)
         } else {
           this.$message.error('获取保存的查询失败: ' + (res.message || '未知错误'))
@@ -259,6 +297,9 @@ export default {
             this.$message.success('删除成功')
             this.loadManageList()
             this.loadList()
+            if (this.defaultQueryId === row.id) {
+              this.defaultQueryId = null
+            }
             if (this.selectedSavedQuery === row.id) {
               this.selectedSavedQuery = null
               this.setWhere('')
@@ -275,6 +316,10 @@ export default {
   },
   mounted() {
     this.loadList()
+      .then(() => (this.defaultQueryId ? this.applySavedQuery(this.defaultQueryId) : null))
+      .finally(() => {
+        this.$emit('ready')
+      })
   }
 }
 </script>
@@ -311,5 +356,9 @@ export default {
 }
 .danger-text {
   color: #f56c6c;
+}
+.default-on {
+  color: #e6a23c;
+  font-weight: bold;
 }
 </style>

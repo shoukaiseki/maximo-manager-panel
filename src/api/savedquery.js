@@ -39,3 +39,21 @@ export function deleteSavedQuery(id) {
     params: { id }
   })
 }
+
+// 设置某应用的默认查询（id 传 0 或不传表示清除默认）
+export function setDefaultSavedQuery(app, id) {
+  return solonRequest({
+    url: '/savedquery/setdefault',
+    method: 'post',
+    params: { app, id: id || 0 }
+  })
+}
+
+// 获取某应用的默认查询（无则 data 为 null）
+export function getDefaultSavedQuery(app) {
+  return solonRequest({
+    url: '/savedquery/default',
+    method: 'get',
+    params: { app }
+  })
+}

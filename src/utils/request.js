@@ -3,6 +3,21 @@ import { Notification, MessageBox, Message } from 'element-ui'
 import store from '/src/store'
 import { getToken } from '/src/utils/auth'
 import errorCode from '/src/utils/errorCode'
+import { showApiErrorDialog } from './mmp/api-error'
+
+// 从响应体中提取脚本错误(含 errorMessageTrace/debugMsg 时才认为需要对话框展示)
+function extractScriptError(data) {
+  let payload = data
+  if (typeof payload === 'string') {
+    const text = payload.trim()
+    if (!text.startsWith('{')) return null
+    try { payload = JSON.parse(text) } catch (e) { return null }
+  }
+  if (payload && payload.status === 'error' && (payload.errorMessageTrace || payload.debugMsg)) {
+    return payload
+  }
+  return null
+}
 
 axios.defaults.headers['Content-Type'] = 'application/json;charset=utf-8'
 // 创建axios实例
@@ -90,9 +105,20 @@ service.interceptors.request.use(config => {
 
 // 响应拦截器
 service.interceptors.response.use(res => {
+  // 脚本接口返回 status:'error' 且含 errorMessageTrace/debugMsg 时, 统一弹出错误对话框
+  const scriptError = extractScriptError(res.data)
+  if (scriptError) {
+    showApiErrorDialog(scriptError)
+  }
   return res
 }, error => {
   console.log('err' + error)
+  // HTTP 错误响应体中含 errorMessageTrace/debugMsg 时, 同样用对话框提示, 不再弹通用 toast
+  const scriptError = error.response ? extractScriptError(error.response.data) : null
+  if (scriptError) {
+    showApiErrorDialog(scriptError)
+    return Promise.reject(error)
+  }
   // 统一格式化错误信息并提示（参考 jyy001 request.js）
   let { message } = error;
   if (message == "Network Error") {

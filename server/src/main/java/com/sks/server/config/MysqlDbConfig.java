@@ -148,6 +148,7 @@ public class MysqlDbConfig {
                     queryname VARCHAR(200) NOT NULL COMMENT '查询名称',
                     whereclause TEXT COMMENT 'WHERE条件',
                     description VARCHAR(500) DEFAULT '' COMMENT '描述',
+                    isdefault TINYINT(1) NOT NULL DEFAULT 0 COMMENT '是否默认查询(每app至多一条)',
                     created_at DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
                     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
                     UNIQUE KEY uk_app_queryname (app, queryname)
@@ -237,6 +238,14 @@ public class MysqlDbConfig {
                     if (!rs.next()) {
                         System.out.println("[MySQL] Adding var_value_type column to api_env_variable...");
                         stmt.execute("ALTER TABLE api_env_variable ADD COLUMN var_value_type VARCHAR(20) DEFAULT 'default' COMMENT '值类型: default=直接值, system=系统预设' AFTER var_value");
+                    }
+                }
+
+                // 检查并添加 saved_query.isdefault 列（兼容升级前已存在表）
+                try (var rs = stmt.executeQuery("SHOW COLUMNS FROM saved_query LIKE 'isdefault'")) {
+                    if (!rs.next()) {
+                        System.out.println("[MySQL] Adding isdefault column to saved_query...");
+                        stmt.execute("ALTER TABLE saved_query ADD COLUMN isdefault TINYINT(1) NOT NULL DEFAULT 0 COMMENT '是否默认查询(每app至多一条)' AFTER description");
                     }
                 }
 
