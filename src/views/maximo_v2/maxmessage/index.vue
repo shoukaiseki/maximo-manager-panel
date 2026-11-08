@@ -4,7 +4,7 @@
       <div class="page-header-row">
         <div>
           <h2>消息查询</h2>
-          <p class="page-summary">支持 msgid / msggroup + msgkey 查询，消息内容同时匹配 ZH / EN / JA 译文。</p>
+          <p class="page-summary">支持 msgid / msggroup + msgkey 查询，消息内容同时匹配各语言译文。</p>
         </div>
         <div class="header-actions">
           <el-button type="primary" icon="el-icon-upload2" size="mini" @click="openImportDialog">导入</el-button>
@@ -21,7 +21,7 @@
           <el-input v-model="formData.msgkey" placeholder="crontaskmanager25" @keyup.enter.native="handleQuery" />
         </el-form-item>
         <el-form-item label="消息内容">
-          <el-input v-model="formData.value" placeholder="模糊搜索 ZH/EN/JA 译文" @keyup.enter.native="handleQuery" />
+          <el-input v-model="formData.value" placeholder="模糊搜索各语言译文" @keyup.enter.native="handleQuery" />
         </el-form-item>
         <el-form-item>
           <el-button type="cyan" icon="el-icon-search" size="mini" @click="handleQuery">搜索</el-button>
@@ -45,19 +45,15 @@
           <el-table-column prop="msgid" label="msgid" />
           <el-table-column prop="msggroup" label="msggroup" />
           <el-table-column prop="msgkey" label="msgkey" />
-          <el-table-column prop="value_zh" label="value(ZH)" min-width="180" show-overflow-tooltip>
+          <el-table-column
+            v-for="col in valueLangColumns"
+            :key="col.code"
+            :label="col.label"
+            min-width="180"
+            show-overflow-tooltip
+          >
             <template slot-scope="scope">
-              <span :class="{'ml-empty': !scope.row.value_zh}">{{ scope.row.value_zh || '-' }}</span>
-            </template>
-          </el-table-column>
-          <el-table-column prop="value_en" label="value(EN)" min-width="180" show-overflow-tooltip>
-            <template slot-scope="scope">
-              <span :class="{'ml-empty': !scope.row.value_en}">{{ scope.row.value_en || '-' }}</span>
-            </template>
-          </el-table-column>
-          <el-table-column prop="value_ja" label="value(JA)" min-width="180" show-overflow-tooltip>
-            <template slot-scope="scope">
-              <span :class="{'ml-empty': !scope.row.value_ja}">{{ scope.row.value_ja || '-' }}</span>
+              <span :class="{'ml-empty': !getLangValue(scope.row, col.code)}">{{ getLangValue(scope.row, col.code) || '-' }}</span>
             </template>
           </el-table-column>
           <el-table-column prop="displaymethod" label="displaymethod" />
@@ -89,14 +85,8 @@
         <el-descriptions-item label="选项" :span="2">
           <el-input :value="formatOptions(currentRow.options)" readonly size="small" />
         </el-descriptions-item>
-        <el-descriptions-item label="消息内容(ZH)" :span="3">
-          <el-input :value="currentRow.value_zh || '-'" readonly type="textarea" :rows="2" />
-        </el-descriptions-item>
-        <el-descriptions-item label="消息内容(EN)" :span="3">
-          <el-input :value="currentRow.value_en || '-'" readonly type="textarea" :rows="2" />
-        </el-descriptions-item>
-        <el-descriptions-item label="消息内容(JA)" :span="3">
-          <el-input :value="currentRow.value_ja || '-'" readonly type="textarea" :rows="2" />
+        <el-descriptions-item v-for="col in detailLangColumns" :key="col.code" :label="'消息内容(' + col.code + ')'" :span="3">
+          <el-input :value="getLangValue(currentRow, col.code) || '-'" readonly type="textarea" :rows="2" />
         </el-descriptions-item>
         <el-descriptions-item label="标题">
           <el-input :value="currentRow.title || '-'" readonly type="textarea" :rows="2" />
@@ -230,6 +220,9 @@
         <el-form-item label="启用迁移模式">
           <el-checkbox v-model="importDialog.dmDeploySet">dmDeploySet（MboSet 调用 setDMDeploySet(true)）</el-checkbox>
         </el-form-item>
+        <el-form-item label="多语言导入">
+          <el-checkbox v-model="importDialog.allLangCode">按 sks:langdata 设置多语言</el-checkbox>
+        </el-form-item>
         <el-form-item label="分批导入">
           <el-checkbox v-model="importDialog.batchImport">启用分批导入</el-checkbox>
           <span style="margin-left:16px;color:#909399;font-size:12px;">每批提交条数</span>
@@ -318,6 +311,7 @@ export default {
         visible: false,
         loading: false,
         dmDeploySet: false,
+        allLangCode: false,
         batchImport: true,
         batchSize: 2000,
         fileList: [],
@@ -355,7 +349,7 @@ export default {
       _monaco: null,
       batchDialogVisible: false,
       exportOptions: {
-        allLangCode: true,
+        allLangCode: false,
         withUuid: false
       },
       batchSimpleJson: '',
@@ -376,6 +370,13 @@ export default {
         operation: (row && row._operation) || '',
         message: (row && row._message) || ''
       }))
+    },
+    // 动态语言列: 后端多语言统一放在 sks:langdata.VALUE({语言:值}), 前端扫描语言生成列
+    valueLangColumns() {
+      return this.buildLangColumns(this.messages)
+    },
+    detailLangColumns() {
+      return this.buildLangColumns(this.currentRow ? [this.currentRow] : [])
     }
   },
   watch: {
@@ -415,6 +416,7 @@ export default {
       this.importDialog.visible = true
       this.importDialog.loading = false
       this.importDialog.dmDeploySet = false
+      this.importDialog.allLangCode =false
       this.importDialog.fileList = []
       this.importDialog.text = ''
       this.importDialog.result = ''
@@ -556,7 +558,11 @@ export default {
       const batchSize = this.importDialog.batchImport
         ? Math.max(1, Number(this.importDialog.batchSize) || 500)
         : Math.max(1, messages.length)
-      const params = { _action: 'import', _langcode: getDefaultLangcode() }
+      const params = {
+        _action: 'import',
+        _langcode: getDefaultLangcode(),
+        _allLangcode: this.importDialog.allLangCode ? 'true' : 'false'
+      }
       if (this.importDialog.dmDeploySet) {
         params.dmDeploySet = 'true'
       }
@@ -681,6 +687,32 @@ export default {
       }
       return String(options)
     },
+    getLangValue(row, code) {
+      const langValues = row && row['sks:langdata'] && row['sks:langdata'].VALUE
+      if (!langValues) return ''
+      return langValues[code] || ''
+    },
+    buildLangColumns(rows) {
+      const seen = {}
+      const codes = []
+      ;(rows || []).forEach(row => {
+        const langValues = row && row['sks:langdata'] && row['sks:langdata'].VALUE
+        if (!langValues) return
+        Object.keys(langValues).forEach(code => {
+          if (seen[code]) return
+          seen[code] = true
+          codes.push(code)
+        })
+      })
+      const preferred = String(getDefaultLangcode() || '').toUpperCase()
+      return codes
+        .sort((a, b) => {
+          if (a === preferred) return -1
+          if (b === preferred) return 1
+          return a.localeCompare(b)
+        })
+        .map(code => ({ code, label: 'value(' + code + ')' }))
+    },
     normalizeMessage(item) {
       const mask = parseInt(String(item['sks:options'] === undefined || item['sks:options'] === null ? 0 : item['sks:options']), 10) || 0
       return {
@@ -689,9 +721,6 @@ export default {
         msggroup: item.msgGroup || item.msggroup || '-',
         msgkey: item.msgKey || item.msgkey || '-',
         value: item.value || '',
-        value_zh: item.value_zh || null,
-        value_en: item.value_en || item.value || null,
-        value_ja: item.value_ja || null,
         displaymethod: item.displayMethod || item.displaymethod || '-',
         displaymethod_description: item.displayMethod || item.displaymethod || '-',
         ok: !!(mask & 2),
@@ -726,6 +755,7 @@ export default {
         _action: 'query',
         _langcode: getDefaultLangcode(),
         _includeExtra: 'true',
+        _allLangcode: 'true',
         pageNum: this.tablePatam.pageNum,
         pageSize: this.tablePatam.pageSize
       }, body).then(res => {
@@ -1019,7 +1049,7 @@ export default {
           msgGroup: this.currentRow.msggroup || null,
           msgKey: this.currentRow.msgkey || null,
           value: this.currentRow.value || null,
-          value_zh: this.currentRow.value_zh || null,
+          'sks:langdata': this.currentRow['sks:langdata'] || null,
           displayMethod: this.currentRow.displaymethod || null
         }, null, 2)
       }
@@ -1031,9 +1061,7 @@ export default {
           msgGroup: this.currentRow.msggroup || null,
           msgKey: this.currentRow.msgkey || null,
           value: this.currentRow.value || null,
-          value_zh: this.currentRow.value_zh || null,
-          value_en: this.currentRow.value_en || null,
-          value_ja: this.currentRow.value_ja || null,
+          'sks:langdata': this.currentRow['sks:langdata'] || null,
           displayMethod: this.currentRow.displaymethod || null,
           options: this.currentRow.options || null,
           title: this.currentRow.title || null,
@@ -1069,10 +1097,8 @@ export default {
     buildImportJson(source) {
       if (!source) return ''
       const item = { ...source }
-      // 跨环境导入不需要主键, 平铺的 EN/JA 也不参与导入(多语言走 sks:langdata)
+      // 跨环境导入不需要主键, 多语言走 sks:langdata
       delete item.MAXMESSAGESID
-      delete item.value_en
-      delete item.value_ja
       delete item._status
       delete item['sks:ref']
       return JSON.stringify({ messages: [item] }, null, 2)
@@ -1188,7 +1214,7 @@ export default {
         msgGroup: row.msggroup || null,
         msgKey: row.msgkey || null,
         value: row.value || null,
-        value_zh: row.value_zh || null,
+        'sks:langdata': row['sks:langdata'] || null,
         displayMethod: row.displaymethod || null
       }, null, 2)
       this.copyToClipboard(json, '消息精简JSON')
@@ -1204,9 +1230,7 @@ export default {
         msgGroup: row.msggroup || null,
         msgKey: row.msgkey || null,
         value: row.value || null,
-        value_zh: row.value_zh || null,
-        value_en: row.value_en || null,
-        value_ja: row.value_ja || null,
+        'sks:langdata': row['sks:langdata'] || null,
         displayMethod: row.displaymethod || null,
         options: row.options || null,
         title: row.title || null,
