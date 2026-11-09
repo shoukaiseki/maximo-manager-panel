@@ -268,6 +268,12 @@ export const constantRoutes = [
                 component: (resolve) => require(['/src/views/maximo_v2/maxgroup/index'], resolve),
                 name: 'SecurGroupQuery',
                 meta: { title: '安全组查询', icon: 'lock', noCache: false }
+            },
+            {
+                path: 'maxgroupPermissionExport',
+                component: (resolve) => require(['/src/views/maximo_v2/maxgroup/permission-export'], resolve),
+                name: 'SecurGroupPermissionExport',
+                meta: { title: '安全组应用权限导出', icon: 'lock', noCache: false }
             }
         ]
     },

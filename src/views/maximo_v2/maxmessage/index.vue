@@ -33,6 +33,14 @@
         <div style="margin-bottom: 12px; text-align: right;">
           <el-button type="primary" icon="el-icon-download" size="mini" @click="openExportDialog">导 出</el-button>
         </div>
+        <div class="table-toolbar">
+          <el-tooltip :content="showAllColumns ? '隐藏多余列' : '显示所有列'" placement="top">
+            <el-button size="mini" circle :type="showAllColumns ? 'success' : 'info'" icon="el-icon-menu" @click="showAllColumns = !showAllColumns" />
+          </el-tooltip>
+          <el-tooltip :content="showPropName ? '隐藏属性名' : '显示属性名'" placement="top">
+            <el-button size="mini" circle :type="showPropName ? 'success' : 'info'" icon="el-icon-s-flag" @click="showPropName = !showPropName" />
+          </el-tooltip>
+        </div>
         <el-table
           :loading="loading"
           :data="messages"
@@ -42,21 +50,46 @@
           :highlight-current-row="true"
           @row-click="handleRowClick"
         >
-          <el-table-column prop="msgid" label="msgid" />
-          <el-table-column prop="msggroup" label="msggroup" />
-          <el-table-column prop="msgkey" label="msgkey" />
+          <el-table-column
+            v-for="col in visibleColumns"
+            :key="col.prop + '-' + showPropName"
+            :prop="col.prop"
+            :label="col.label"
+            :width="col.width"
+            :min-width="col.minWidth"
+            show-overflow-tooltip
+            :formatter="cellFormatter"
+          >
+            <template slot="header">
+              <span>{{ col.label }}</span>
+              <template v-if="showPropName">
+                <el-tag size="mini" class="prop-name-tag" @click.native="copyToClipboard(col.prop, '属性名 ' + col.prop)">{{ col.prop }}</el-tag>
+                <el-tooltip content="显示更多配置" placement="top">
+                  <el-button size="mini" circle icon="el-icon-search" class="prop-search-btn" @click.stop="showColInfo(col)" />
+                </el-tooltip>
+              </template>
+            </template>
+          </el-table-column>
           <el-table-column
             v-for="col in valueLangColumns"
-            :key="col.code"
+            :key="col.prop + '-' + showPropName"
             :label="col.label"
             min-width="180"
             show-overflow-tooltip
           >
+            <template slot="header">
+              <span>{{ col.label }}</span>
+              <template v-if="showPropName">
+                <el-tag size="mini" class="prop-name-tag" @click.native="copyToClipboard(col.prop, '属性名 ' + col.prop)">{{ col.prop }}</el-tag>
+                <el-tooltip content="显示更多配置" placement="top">
+                  <el-button size="mini" circle icon="el-icon-search" class="prop-search-btn" @click.stop="showColInfo(col)" />
+                </el-tooltip>
+              </template>
+            </template>
             <template slot-scope="scope">
               <span :class="{'ml-empty': !getLangValue(scope.row, col.code)}">{{ getLangValue(scope.row, col.code) || '-' }}</span>
             </template>
           </el-table-column>
-          <el-table-column prop="displaymethod" label="displaymethod" />
         </el-table>
         <pagination
           v-show="tablePatam.total > 0"
@@ -286,6 +319,17 @@
         <el-button @click="importResultDialog.visible = false">关 闭</el-button>
       </span>
     </el-dialog>
+
+    <!-- 列配置信息弹窗（放大镜） -->
+    <el-dialog title="列配置信息" :visible.sync="colInfoDialog.visible" width="700px" top="10vh" :close-on-click-modal="true" append-to-body>
+      <el-table :data="colInfoRows" border stripe size="small">
+        <el-table-column prop="key" label="配置项" width="180" />
+        <el-table-column prop="value" label="值" min-width="300" show-overflow-tooltip />
+      </el-table>
+      <span slot="footer" class="dialog-footer">
+        <el-button @click="colInfoDialog.visible = false">关 闭</el-button>
+      </span>
+    </el-dialog>
   </section>
 </template>
 
@@ -305,6 +349,19 @@ export default {
         pageSize: 10
       },
       loading: false,
+      showAllColumns: false,
+      showPropName: false,
+      // advanced: true 的列仅在「显示所有列」时展示
+      tableColumns: [
+        { prop: 'msgid', label: 'msgid', width: 130, advanced: true },
+        { prop: 'msggroup', label: 'msggroup', minWidth: 140 },
+        { prop: 'msgkey', label: 'msgkey', minWidth: 180 },
+        { prop: 'displaymethod', label: 'displaymethod', minWidth: 140 }
+      ],
+      colInfoDialog: {
+        visible: false,
+        col: null
+      },
       batchLoading: false,
       detailLoading: false,
       importDialog: {
@@ -360,6 +417,25 @@ export default {
     }
   },
   computed: {
+    visibleColumns() {
+      return this.showAllColumns ? this.tableColumns : this.tableColumns.filter(c => !c.advanced)
+    },
+    // 放大镜弹窗内容: 列配置 + 当前页首个非空示例值
+    colInfoRows() {
+      const col = this.colInfoDialog.col
+      if (!col) {
+        return []
+      }
+      return [
+        { key: '属性名 (prop)', value: col.prop },
+        { key: '显示名 (label)', value: col.label },
+        { key: '列宽 (width)', value: col.width || '-' },
+        { key: '最小列宽 (minWidth)', value: col.minWidth || '-' },
+        { key: '渲染类型', value: col.code ? '多语言文本' : '文本' },
+        { key: '高级列', value: col.advanced ? '是（仅「显示所有列」时展示）' : '否' },
+        { key: '示例值（当前页）', value: this.getColSample(col) }
+      ]
+    },
     importRows() {
       const payload = this.importDialog.resultData
       if (!payload) return []
@@ -416,7 +492,7 @@ export default {
       this.importDialog.visible = true
       this.importDialog.loading = false
       this.importDialog.dmDeploySet = false
-      this.importDialog.allLangCode =false
+      this.importDialog.allLangCode = false
       this.importDialog.fileList = []
       this.importDialog.text = ''
       this.importDialog.result = ''
@@ -711,7 +787,7 @@ export default {
           if (b === preferred) return 1
           return a.localeCompare(b)
         })
-        .map(code => ({ code, label: 'value(' + code + ')' }))
+        .map(code => ({ code, prop: 'sks:langdata.VALUE.' + code, label: 'value(' + code + ')' }))
     },
     normalizeMessage(item) {
       const mask = parseInt(String(item['sks:options'] === undefined || item['sks:options'] === null ? 0 : item['sks:options']), 10) || 0
@@ -1283,6 +1359,26 @@ export default {
         this.$message.error('复制失败: ' + e.message)
       }
       document.body.removeChild(textarea)
+    },
+    showColInfo(col) {
+      this.colInfoDialog.col = col
+      this.colInfoDialog.visible = true
+    },
+    cellFormatter(row, column, cellValue) {
+      if (cellValue === null || typeof cellValue === 'undefined' || cellValue === '') {
+        return '-'
+      }
+      return String(cellValue)
+    },
+    getColSample(col) {
+      for (let i = 0; i < this.messages.length; i++) {
+        const row = this.messages[i]
+        const v = col.code ? this.getLangValue(row, col.code) : (row ? row[col.prop] : '')
+        if (v !== null && typeof v !== 'undefined' && v !== '') {
+          return String(v)
+        }
+      }
+      return '-'
     }
   }
 }
@@ -1326,6 +1422,17 @@ export default {
   margin-top: 16px;
   padding: 20px;
   color: #909399;
+}
+.table-toolbar {
+  text-align: right;
+  margin-bottom: 8px;
+}
+.prop-name-tag {
+  margin-left: 6px;
+  cursor: pointer;
+}
+.prop-search-btn {
+  margin-left: 4px;
 }
 .result-table {
   margin-top: 16px;
