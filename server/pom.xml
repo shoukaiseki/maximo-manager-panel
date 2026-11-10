@@ -59,13 +59,45 @@
             <version>2.0.45</version>
         </dependency>
 
-        <!-- jxls-reader Excel 读取（本地 jar：server/lib/jxls-reader-2.1.1-SNAPSHOT.jar） -->
+        <!-- jxls-reader Excel 读取（本地 jar：server/lib/jxls-reader-2.1.1-SNAPSHOT.jar）
+             注意：system 作用域不会带入传递依赖，需在此显式声明（版本取自该 jar 内的 pom.xml） -->
         <dependency>
             <groupId>org.jxls</groupId>
             <artifactId>jxls-reader</artifactId>
             <version>2.1.1-SNAPSHOT</version>
             <scope>system</scope>
             <systemPath>${project.basedir}/lib/jxls-reader-2.1.1-SNAPSHOT.jar</systemPath>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.poi</groupId>
+            <artifactId>poi</artifactId>
+            <version>5.0.0</version>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.poi</groupId>
+            <artifactId>poi-ooxml</artifactId>
+            <version>5.0.0</version>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.commons</groupId>
+            <artifactId>commons-digester3</artifactId>
+            <version>3.2</version>
+            <classifier>with-deps</classifier>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.commons</groupId>
+            <artifactId>commons-jexl</artifactId>
+            <version>2.1.1</version>
+        </dependency>
+        <dependency>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-api</artifactId>
+            <version>1.7.12</version>
+        </dependency>
+        <dependency>
+            <groupId>org.slf4j</groupId>
+            <artifactId>jcl-over-slf4j</artifactId>
+            <version>1.7.12</version>
         </dependency>
 
         <!-- MySQL JDBC 驱动 -->

@@ -27,6 +27,8 @@ server/target/
 *.class
 *.jar
 *.war
+# 本地仓库缺失的第三方 jar，需要随代码提交
+!server/lib/*.jar
 
 .env.development
 .env.hd
