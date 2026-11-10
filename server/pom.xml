@@ -59,11 +59,13 @@
             <version>2.0.45</version>
         </dependency>
 
-        <!-- jxls-reader Excel 读取 -->
+        <!-- jxls-reader Excel 读取（本地 jar：server/lib/jxls-reader-2.1.1-SNAPSHOT.jar） -->
         <dependency>
             <groupId>org.jxls</groupId>
             <artifactId>jxls-reader</artifactId>
             <version>2.1.1-SNAPSHOT</version>
+            <scope>system</scope>
+            <systemPath>${project.basedir}/lib/jxls-reader-2.1.1-SNAPSHOT.jar</systemPath>
         </dependency>
 
         <!-- MySQL JDBC 驱动 -->
