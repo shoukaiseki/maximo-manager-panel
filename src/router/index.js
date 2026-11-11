@@ -568,7 +568,28 @@ export const constantRoutes = [
                 component: (resolve) => require(['/src/views/maximo/messageimport/index'], resolve),
                 name: 'MessageImport',
                 meta: { title: '多语言消息excel导入', icon: 'excel', noCache: false }
-            }
+            },
+            {
+                path: 'attributeimport',
+                component: (resolve) => require(['/src/views/maximo/messageimport/index'], resolve),
+                name: 'AttributeImport',
+                props: { attribute: true },
+                meta: { title: '表结构多语言 Excel 导入', icon: 'excel', noCache: false }
+            },
+            ...[
+                { target: 'domain', name: 'DomainTranslationImport', sheet: 'ALN 域', table: 'ALNDOMAIN', field: 'DESCRIPTION' },
+                { target: 'synonym', name: 'SynonymDomainTranslationImport', sheet: '同义词域', table: 'SYNONYMDOMAIN', field: 'DESCRIPTION' },
+                { target: 'app', name: 'AppNameTranslationImport', sheet: '应用名', table: 'MAXAPPS', field: 'DESCRIPTION' },
+                { target: 'module', name: 'ModuleTranslationImport', sheet: '模块', table: 'MAXMODULES', field: 'DESCRIPTION' },
+                { target: 'menu', name: 'AppMenuTranslationImport', sheet: '应用菜单', table: 'MAXMENU', field: 'HEADERDESCRIPTION' },
+                { target: 'sigoption', name: 'SigOptionTranslationImport', sheet: '签名选项', table: 'SIGOPTION', field: 'DESCRIPTION' }
+            ].map(translation => ({
+                path: translation.target + 'import',
+                component: (resolve) => require(['/src/views/maximo/messageimport/index'], resolve),
+                name: translation.name,
+                props: { translation },
+                meta: { title: translation.sheet + '多语言 Excel 导入', icon: 'excel', noCache: false }
+            }))
         ]
     },
 ]

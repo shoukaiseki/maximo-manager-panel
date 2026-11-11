@@ -14,10 +14,10 @@ import java.io.InputStream;
 import java.util.Map;
 
 /**
- * 多语言消息 Excel 导入 API。
+ * 多语言 Excel 导入 API。
  * <p>
  * 上传后文件仅缓存在服务端内存中，返回 sessionId 与 Excel 前 10 行；
- * 确认更新时按 sessionId 重新读取完整文件并更新 MAXMESSAGES / L_MAXMESSAGES。
+ * 确认更新时按 sessionId 和导入目标重新读取对应的工作表。
  */
 @Controller
 public class MessageImportController {
@@ -40,12 +40,14 @@ public class MessageImportController {
 
     /**
      * 上传预览：读取 Excel 前 10 行并生成文件缓存会话
-     * POST /solonapi/messageimport/preview  (multipart: file, trim)
+     * POST /solonapi/messageimport/preview (multipart: file, trim, attribute, target)
      */
     @Mapping(value = "/messageimport/preview", method = MethodType.POST)
     public RestResult<Map<String, Object>> preview(
             UploadedFile file,
-            @Param(defaultValue = "false") boolean trim) {
+            @Param(defaultValue = "false") boolean trim,
+            @Param(defaultValue = "false") boolean attribute,
+            String target) {
         if (file == null || file.getContent() == null) {
             return RestResult.error("请上传 Excel 文件");
         }
@@ -57,7 +59,7 @@ public class MessageImportController {
 
         try {
             byte[] bytes = readAll(file.getContent());
-            return RestResult.ok(messageImportService.preview(bytes, fileName, trim));
+            return RestResult.ok(messageImportService.preview(bytes, fileName, trim, attribute, target));
         } catch (IllegalArgumentException e) {
             return RestResult.error(e.getMessage());
         } catch (Exception e) {
@@ -67,15 +69,17 @@ public class MessageImportController {
 
     /**
      * 确认更新：按 sessionId 读取缓存文件，仅更新勾选的语言
-     * POST /solonapi/messageimport/execute?sessionId=&trim=&langcodes=EN,JA
+     * POST /solonapi/messageimport/execute?sessionId=&trim=&langcodes=EN,JA&attribute=&target=
      */
     @Mapping(value = "/messageimport/execute", method = MethodType.POST)
     public RestResult<Map<String, Object>> execute(
             String sessionId,
             @Param(defaultValue = "false") boolean trim,
-            String langcodes) {
+            String langcodes,
+            @Param(defaultValue = "false") boolean attribute,
+            String target) {
         try {
-            return RestResult.ok(messageImportService.execute(sessionId, trim, langcodes));
+            return RestResult.ok(messageImportService.execute(sessionId, trim, langcodes, attribute, target));
         } catch (IllegalArgumentException e) {
             return RestResult.error(e.getMessage());
         } catch (Exception e) {
