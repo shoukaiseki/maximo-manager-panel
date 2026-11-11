@@ -148,8 +148,15 @@
             v-for="col in identifierColumns"
             :key="col.prop"
             :prop="col.prop"
-            :label="col.label"
+            :label="translation.target === 'sigoption' && col.prop === 'SIGOPTIONID' ? 'Excel SIGOPTIONID' : col.label"
             min-width="140"
+            show-overflow-tooltip
+          />
+          <el-table-column
+            v-if="translation.target === 'sigoption'"
+            prop="sks:uniqueID"
+            label="目标库 SIGOPTIONID"
+            min-width="155"
             show-overflow-tooltip
           />
         </template>
@@ -289,6 +296,9 @@ export default {
     },
     uploadTip() {
       if (this.translation) {
+        if (this.translation.target === 'sigoption') {
+          return '按首行表头识别签名选项工作表，通过 APP、OPTIONNAME 匹配目标库。Excel 中的 SIGOPTIONID 仅供参考。文件缓存 30 分钟。'
+        }
         return '按首行表头识别' + this.translation.sheet + '数据。可以上传单个工作表或包含多种翻译的文件。文件缓存 30 分钟。'
       }
       return this.attribute
