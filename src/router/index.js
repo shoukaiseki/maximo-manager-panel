@@ -360,6 +360,12 @@ export const constantRoutes = [
                 meta: { title: '域查询', icon: 'link', noCache: false }
             },
             {
+                path: 'domainV2',
+                component: (resolve) => require(['/src/views/maximo_v2/maxdomain/index'], resolve),
+                name: 'DomainV2Query',
+                meta: { title: '域查询(新模式)', icon: 'link', noCache: false }
+            },
+            {
                 path: 'maxprop',
                 component: (resolve) => require(['/src/views/maximo/maxprop/index'], resolve),
                 name: 'MaxPropQuery',
