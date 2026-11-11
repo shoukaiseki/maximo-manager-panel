@@ -3,9 +3,17 @@
     <el-card>
       <div class="page-header-row">
         <div>
-          <h2>多语言消息 Excel 导入</h2>
-          <p class="page-summary">
-            读取 Excel 第一个工作表（消息页），按 MSGGROUP + MSGKEY 匹配 MAXMESSAGES；
+          <h2>{{ pageTitle }}</h2>
+          <p v-if="translation" class="page-summary">
+            按首行表头识别{{ translation.sheet }}数据，仅更新所选语言的非空翻译。基准语言写入 {{ translation.table }}，
+            其他语言写入 L_{{ translation.table }}。
+          </p>
+          <p v-else-if="attribute" class="page-summary">
+            按 OBJECTNAME 和 ATTRIBUTENAME 匹配字段。基准语言写入 MAXATTRIBUTECFG，其它语言写入 L_MAXATTRCFG。
+            已配置的字段同步更新运行表。仅更新所选语言的非空 TITLE、REMARKS。
+          </p>
+          <p v-else class="page-summary">
+            按首行表头识别消息数据，使用 MSGGROUP + MSGKEY 匹配 MAXMESSAGES；
             基准语言更新 MAXMESSAGES.VALUE，其它语言更新 L_MAXMESSAGES.VALUE（翻译记录不存在时自动新增）。上传文件仅缓存在服务端内存中。
           </p>
         </div>
@@ -15,12 +23,13 @@
       </div>
 
       <div class="language-bar">
-        <span class="language-label">更新语言（勾选后才更新对应语言的 value）</span>
+        <span class="language-label">勾选要更新的语言</span>
         <el-checkbox-group v-model="selectedLanguages" class="language-checkboxes">
           <el-checkbox
             v-for="lang in languages"
             :key="lang.code"
             :label="lang.code"
+            :disabled="(attribute || translation) && !!sessionId && !hasLanguage(lang.code)"
           >
             {{ lang.name }}（{{ lang.code }}）<span v-if="lang.base" class="base-mark">· 基准</span>
           </el-checkbox>
@@ -40,7 +49,7 @@
             @click="handleExecute"
           >确定更新</el-button>
           <span v-if="sessionId" class="file-info">
-            {{ fileName }} · 共 {{ totalRows }} 行 · 当前预览前 {{ previewRows.length }} 行
+            {{ fileName }}<template v-if="sheetName"> · {{ sheetName }}</template> · 共 {{ totalRows }} 行 · 当前预览前 {{ previewRows.length }} 行
           </span>
         </div>
         <div v-if="toolbarReason" class="toolbar-right">
@@ -54,7 +63,15 @@
         :closable="false"
         show-icon
         style="margin-bottom: 12px"
-        :title="'Excel 缺少以下已启用语言列：' + missingLanguages.join('、') + '，执行时将不会更新这些语言'"
+        :title="'Excel 缺少以下已启用语言列：' + missingLanguages.join('、') + (attribute ? '，这些字段将跳过' : '，执行时将不会更新这些语言')"
+      />
+      <el-alert
+        v-if="(attribute || translation) && sessionId && invalidLanguages.length"
+        type="warning"
+        :closable="false"
+        show-icon
+        style="margin-bottom: 12px"
+        :title="'已忽略未启用语言的列：' + invalidLanguages.join('、')"
       />
 
       <el-table
@@ -95,7 +112,7 @@
       </div>
 
       <el-table
-        :data="resultRows"
+        :data="visibleResultRows"
         border
         size="small"
         row-key="sks:uuid"
@@ -126,14 +143,26 @@
           </template>
         </el-table-column>
         <el-table-column prop="sks:excelRow" label="Excel行" width="80" />
-        <el-table-column prop="MSGGROUP" label="消息组" min-width="140" show-overflow-tooltip />
-        <el-table-column prop="MSGKEY" label="消息键" min-width="170" show-overflow-tooltip />
-        <el-table-column label="MAXMESSAGESID" width="130">
-          <template slot-scope="scope">
-            {{ scope.row['sks:uniqueID'] || scope.row.EXCEL_MAXMESSAGESID || '-' }}
-          </template>
-        </el-table-column>
-        <el-table-column prop="MSGID" label="MSGID" width="130" show-overflow-tooltip />
+        <template v-if="translation">
+          <el-table-column
+            v-for="col in identifierColumns"
+            :key="col.prop"
+            :prop="col.prop"
+            :label="col.label"
+            min-width="140"
+            show-overflow-tooltip
+          />
+        </template>
+        <template v-else>
+          <el-table-column :prop="attribute ? 'OBJECTNAME' : 'MSGGROUP'" :label="attribute ? '对象' : '消息组'" min-width="140" show-overflow-tooltip />
+          <el-table-column :prop="attribute ? 'ATTRIBUTENAME' : 'MSGKEY'" :label="attribute ? '属性' : '消息键'" min-width="170" show-overflow-tooltip />
+          <el-table-column :label="attribute ? 'MAXATTRIBUTEID' : 'MAXMESSAGESID'" width="145">
+            <template slot-scope="scope">
+              {{ scope.row['sks:uniqueID'] || scope.row[attribute ? 'EXCEL_MAXATTRIBUTEID' : 'EXCEL_MAXMESSAGESID'] || '-' }}
+            </template>
+          </el-table-column>
+          <el-table-column v-if="!attribute" prop="MSGID" label="MSGID" width="130" show-overflow-tooltip />
+        </template>
         <el-table-column label="状态" width="90">
           <template slot-scope="scope">
             <el-tag :type="rowTagType(scope.row)" size="mini">{{ scope.row['sks:statusLabel'] || scope.row._status }}</el-tag>
@@ -141,10 +170,17 @@
         </el-table-column>
         <el-table-column prop="_message" label="说明" min-width="300" show-overflow-tooltip />
       </el-table>
+      <el-pagination
+        v-if="translation && resultRows.length > 100"
+        :current-page.sync="resultPage"
+        :page-size="100"
+        :total="resultRows.length"
+        layout="total, prev, pager, next"
+      />
     </el-card>
 
     <el-dialog
-      title="上传多语言消息 Excel"
+      :title="'上传' + pageTitle"
       :visible.sync="uploadDialog.visible"
       width="600px"
       :close-on-click-modal="false"
@@ -154,7 +190,7 @@
         type="info"
         :closable="false"
         show-icon
-        title="仅读取第一个工作表（消息页）。表头需包含 MSGGROUP、MSGKEY、MAXMESSAGESID 及各语言 _VALUE 列；文件仅缓存在服务端内存中，30 分钟后失效。"
+        :title="uploadTip"
       />
       <el-upload
         ref="uploader"
@@ -200,6 +236,13 @@ import { previewMessageExcel, executeMessageImport } from '@/api/messageimport'
 
 export default {
   name: 'MessageImport',
+  props: {
+    attribute: Boolean,
+    translation: {
+      type: Object,
+      default: null
+    }
+  },
   data() {
     return {
       loadingLanguages: false,
@@ -218,6 +261,7 @@ export default {
 
       sessionId: '',
       fileName: '',
+      sheetName: '',
       totalRows: 0,
       previewColumns: [],
       previewRows: [],
@@ -229,6 +273,7 @@ export default {
       executing: false,
       result: null,
       resultRows: [],
+      resultPage: 1,
       summary: {
         success: 0,
         abnormal: 0,
@@ -238,6 +283,26 @@ export default {
     }
   },
   computed: {
+    pageTitle() {
+      if (this.translation) return this.translation.sheet + '多语言 Excel 导入'
+      return this.attribute ? '表结构多语言 Excel 导入' : '多语言消息 Excel 导入'
+    },
+    uploadTip() {
+      if (this.translation) {
+        return '按首行表头识别' + this.translation.sheet + '数据。可以上传单个工作表或包含多种翻译的文件。文件缓存 30 分钟。'
+      }
+      return this.attribute
+        ? '按首行表头识别工作表。必填表头为 OBJECTNAME、ATTRIBUTENAME，语言列例如 ZH_TITLE、ZH_REMARKS。文件缓存 30 分钟。'
+        : '按首行表头识别工作表。必填表头为 MSGGROUP、MSGKEY，语言列例如 ZH_VALUE。文件缓存 30 分钟。'
+    },
+    identifierColumns() {
+      return this.previewColumns.filter(col => !col.langcode)
+    },
+    visibleResultRows() {
+      if (!this.translation) return this.resultRows
+      const start = (this.resultPage - 1) * 100
+      return this.resultRows.slice(start, start + 100)
+    },
     canExecute() {
       return !!this.sessionId && this.canUpdate && this.selectedLanguages.length > 0 && !this.executing
     },
@@ -274,7 +339,8 @@ export default {
     syncLanguageSelection(languages) {
       this.languages = languages || []
       const codes = this.languages.map(lang => lang.code)
-      this.selectedLanguages = this.selectedLanguages.filter(code => codes.indexOf(code) >= 0)
+      this.selectedLanguages = this.selectedLanguages.filter(code =>
+        codes.indexOf(code) >= 0 && ((!this.attribute && !this.translation) || this.hasLanguage(code)))
     },
     openUploadDialog() {
       this.uploadDialog.visible = true
@@ -306,6 +372,8 @@ export default {
       const fd = new FormData()
       fd.append('file', this.uploadDialog.file)
       fd.append('trim', this.trimAll ? 'true' : 'false')
+      if (this.attribute) fd.append('attribute', 'true')
+      if (this.translation) fd.append('target', this.translation.target)
       this.uploadDialog.uploading = true
       this.uploadDialog.errorMsg = ''
       previewMessageExcel(fd).then(res => {
@@ -316,6 +384,7 @@ export default {
         const data = res.data
         this.sessionId = data.sessionId || ''
         this.fileName = data.fileName || ''
+        this.sheetName = data.sheetName || ''
         this.totalRows = data.totalRows || 0
         this.previewColumns = data.columns || []
         this.previewRows = data.rows || []
@@ -350,8 +419,15 @@ export default {
         return
       }
       const langText = this.selectedLanguages.join('、')
+      let target = 'MAXMESSAGES / L_MAXMESSAGES 的 VALUE 字段'
+      if (this.translation) {
+        const { table, field } = this.translation
+        target = table + ' / L_' + table + ' 的 ' + field + ' 字段'
+      } else if (this.attribute) {
+        target = 'MAXATTRIBUTECFG / L_MAXATTRCFG 和已配置字段运行表的 TITLE、REMARKS'
+      }
       this.$confirm(
-        '将按 Excel 内容直接更新 DB2 中 MAXMESSAGES / L_MAXMESSAGES 的 VALUE 字段，更新语言：' +
+        '将按 Excel 内容直接更新 DB2 中 ' + target + '，更新语言：' +
         langText + '，共 ' + this.totalRows + ' 行。确认执行？',
         '确认更新',
         {
@@ -366,7 +442,9 @@ export default {
       executeMessageImport({
         sessionId: this.sessionId,
         trim: this.trimAll ? 'true' : 'false',
-        langcodes: this.selectedLanguages.join(',')
+        langcodes: this.selectedLanguages.join(','),
+        attribute: this.attribute ? 'true' : undefined,
+        target: this.translation ? this.translation.target : undefined
       }).then(res => {
         if (res.code !== 200 || !res.data) {
           this.$message.error(res.message || '执行更新失败')
@@ -374,7 +452,10 @@ export default {
         }
         const data = res.data
         this.result = data
-        this.resultRows = (data.data && data.data.maxmessages) || []
+        const resultKey = this.translation ? this.translation.table.toLowerCase()
+          : this.attribute ? 'maxattributecfg' : 'maxmessages'
+        this.resultRows = (data.data && data.data[resultKey]) || []
+        this.resultPage = 1
         this.summary = {
           success: data['sks:successSumTotal'] || 0,
           abnormal: data['sks:abnormalSumTotal'] || 0,
@@ -405,6 +486,10 @@ export default {
       if (detail._status === 'skipped') return 'info'
       if (detail['sks:failType'] === 'NOT_FOUND') return 'warning'
       return 'danger'
+    },
+    hasLanguage(code) {
+      if (!this.attribute) return !this.missingLanguages.includes(code)
+      return !this.missingLanguages.includes(code + '_TITLE') || !this.missingLanguages.includes(code + '_REMARKS')
     }
   }
 }

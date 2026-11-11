@@ -107,6 +107,38 @@
     }
   }
 
+  .openSidebar .sidebar-container {
+    .el-menu-item,
+    .el-submenu__title {
+      display: flex;
+      align-items: center;
+      height: auto;
+      min-height: 56px;
+      padding-top: 6px;
+      padding-bottom: 6px;
+      line-height: 1.4;
+
+      > span {
+        min-width: 0;
+        white-space: normal;
+        overflow-wrap: anywhere;
+      }
+
+      > .svg-icon,
+      > i {
+        flex-shrink: 0;
+      }
+    }
+
+    .el-submenu .el-menu-item {
+      min-height: 50px;
+    }
+
+    .el-submenu__title {
+      padding-right: 40px;
+    }
+  }
+
   .hideSidebar {
     .sidebar-container {
       width: 54px !important;
