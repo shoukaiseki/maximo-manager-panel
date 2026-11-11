@@ -7,6 +7,7 @@
           <p class="page-summary">支持域ID / 描述 / 最大类型模糊查询，点击行查看域定义详情，可导出 / 导入域定义。</p>
         </div>
         <div class="header-actions">
+          <saved-query-panel ref="savedQuery" appname="MAXDOMAIN" :default-where="buildWhere()" @whereChange="handleWhereChange" @ready="handleSavedQueryReady" />
           <el-button type="primary" icon="el-icon-upload2" size="mini" @click="openImportDialog">导入</el-button>
           <el-button type="primary" icon="el-icon-download" size="mini" @click="openExportDialog">导出</el-button>
         </div>
@@ -39,6 +40,14 @@
       </el-form>
 
       <div class="result-panel">
+        <div class="table-toolbar">
+          <el-tooltip :content="showAllColumns ? '隐藏多余列' : '显示所有列'" placement="top">
+            <el-button size="mini" circle :type="showAllColumns ? 'success' : 'info'" icon="el-icon-menu" @click="showAllColumns = !showAllColumns" />
+          </el-tooltip>
+          <el-tooltip :content="showPropName ? '隐藏属性名' : '显示属性名'" placement="top">
+            <el-button size="mini" circle :type="showPropName ? 'success' : 'info'" icon="el-icon-s-flag" @click="showPropName = !showPropName" />
+          </el-tooltip>
+        </div>
         <el-table
           v-loading="loading"
           :data="domains"
@@ -49,28 +58,30 @@
           @row-click="handleRowClick"
         >
           <el-table-column type="selection" width="46" />
-          <el-table-column prop="domainid" label="域ID" min-width="200" show-overflow-tooltip />
-          <el-table-column prop="domaintype" label="域类型" width="120">
-            <template slot-scope="scope">
-              <el-tag :type="domainTypeTagType(scope.row.domaintype)" size="mini">{{ scope.row.domaintype || '-' }}</el-tag>
+          <el-table-column
+            v-for="col in visibleColumns"
+            :key="col.prop + '-' + showPropName"
+            :prop="col.prop"
+            :label="col.label"
+            :width="col.width"
+            :min-width="col.minWidth"
+            :show-overflow-tooltip="!col.type"
+            :formatter="col.type ? undefined : cellFormatter"
+          >
+            <template slot="header">
+              <span>{{ col.label }}</span>
+              <template v-if="showPropName">
+                <el-tag size="mini" class="prop-name-tag" @click.native.stop="copyText(col.prop, '已复制属性名 ' + col.prop)">{{ col.prop }}</el-tag>
+                <el-tooltip content="显示更多配置" placement="top">
+                  <el-button size="mini" circle icon="el-icon-search" class="prop-search-btn" @click.stop="showColInfo(col)" />
+                </el-tooltip>
+              </template>
             </template>
-          </el-table-column>
-          <el-table-column prop="description" label="描述" min-width="220" show-overflow-tooltip>
             <template slot-scope="scope">
-              <span :class="{'ml-empty': isEmptyCell(scope.row.description)}">{{ scope.row.description || '-' }}</span>
-            </template>
-          </el-table-column>
-          <el-table-column prop="maxtype" label="最大类型" width="110" show-overflow-tooltip />
-          <el-table-column prop="length" label="长度" width="80" />
-          <el-table-column prop="scale" label="小数位" width="80" />
-          <el-table-column prop="internal" label="内部" width="80">
-            <template slot-scope="scope">
-              <el-tag :type="isTruthy(scope.row.internal) ? 'success' : 'info'" size="mini">{{ boolText(scope.row.internal) }}</el-tag>
-            </template>
-          </el-table-column>
-          <el-table-column prop="nevercache" label="不缓存" width="90">
-            <template slot-scope="scope">
-              <el-tag :type="isTruthy(scope.row.nevercache) ? 'warning' : 'info'" size="mini">{{ boolText(scope.row.nevercache) }}</el-tag>
+              <el-tag v-if="col.type === 'domaintype'" :type="domainTypeTagType(scope.row[col.prop])" size="mini">{{ scope.row[col.prop] || '-' }}</el-tag>
+              <el-tag v-else-if="col.type === 'bool-success'" :type="isTruthy(scope.row[col.prop]) ? 'success' : 'info'" size="mini">{{ boolText(scope.row[col.prop]) }}</el-tag>
+              <el-tag v-else-if="col.type === 'bool-warning'" :type="isTruthy(scope.row[col.prop]) ? 'warning' : 'info'" size="mini">{{ boolText(scope.row[col.prop]) }}</el-tag>
+              <span v-else :class="{'ml-empty': isEmptyCell(scope.row[col.prop])}">{{ cellFormatter(scope.row, null, scope.row[col.prop]) }}</span>
             </template>
           </el-table-column>
         </el-table>
@@ -137,6 +148,17 @@
                     <span :class="{'ml-empty': isEmptyCell(scope.row[col.prop])}">{{ cellText(col, scope.row) }}</span>
                   </template>
                 </el-table-column>
+                <el-table-column v-if="tab.hasLangdata" label="多语言描述" min-width="260">
+                  <template slot-scope="scope">
+                    <div v-if="langdataRows(scope.row).length" class="trans-cell">
+                      <div v-for="item in langdataRows(scope.row)" :key="item.lang" class="trans-cell-row">
+                        <span class="trans-cell-lang">{{ item.lang }}</span>
+                        <span class="trans-cell-desc">{{ item.desc }}</span>
+                      </div>
+                    </div>
+                    <span v-else class="ml-empty">-</span>
+                  </template>
+                </el-table-column>
               </el-table>
               <el-empty v-else description="暂无子表数据" />
             </el-tab-pane>
@@ -159,6 +181,13 @@
               </div>
               <monaco-json-editor v-if="detailFullJson" :value="detailFullJson" read-only height="400px" />
               <el-empty v-else description="点击「刷新」获取域完整 JSON" />
+            </el-tab-pane>
+            <el-tab-pane :label="'本地化(' + detailTranslations.length + ')'" name="localized" lazy>
+              <el-table v-if="detailTranslations.length" :data="detailTranslations" border stripe size="mini" max-height="400" style="width: 100%;">
+                <el-table-column prop="LANGCODE" label="语言" width="120" />
+                <el-table-column prop="DESCRIPTION" label="本地化描述" show-overflow-tooltip />
+              </el-table>
+              <el-empty v-else description="无本地化数据" />
             </el-tab-pane>
           </el-tabs>
         </template>
@@ -270,6 +299,17 @@
         <el-button type="primary" :loading="importDialog.loading" @click="doImport">导 入</el-button>
       </span>
     </el-dialog>
+
+    <!-- 列配置信息弹窗（显示属性名后的放大镜） -->
+    <el-dialog title="列配置信息" :visible.sync="colInfoDialog.visible" width="700px" top="10vh" :close-on-click-modal="true" append-to-body>
+      <el-table :data="colInfoRows" border stripe size="small">
+        <el-table-column prop="key" label="配置项" width="180" />
+        <el-table-column prop="value" label="值" min-width="300" show-overflow-tooltip />
+      </el-table>
+      <span slot="footer" class="dialog-footer">
+        <el-button @click="colInfoDialog.visible = false">关 闭</el-button>
+      </span>
+    </el-dialog>
   </section>
 </template>
 
@@ -278,16 +318,37 @@ import { queryDomain, migrateDomain } from '../../../api/domain_v2'
 import { getDefaultLangcode, loadLanguageConfig } from '../../../utils/mmp/mmp-config'
 import { handleApiError } from '../../../utils/mmp/api-error'
 import MonacoJsonEditor from '../../../components/MonacoJsonEditor.vue'
+import SavedQueryPanel from '@/views/components/SavedQueryPanel.vue'
 import { generateUUID } from '../../../utils/sks'
 
 export default {
   name: 'DomainV2Query',
-  components: { MonacoJsonEditor },
+  components: { MonacoJsonEditor, SavedQueryPanel },
   data() {
     return {
       domains: [],
       loading: false,
       hasSearched: false,
+      // 保存查询面板初始化完成标志：进页面不先查主表，待 ready 后再查
+      sqReady: false,
+      showAllColumns: false,
+      showPropName: false,
+      // advanced: true 的列仅在「显示所有列」时展示
+      tableColumns: [
+        { prop: 'domainid', label: '域ID', minWidth: 200 },
+        { prop: 'domaintype', label: '域类型', width: 120, type: 'domaintype' },
+        { prop: 'description', label: '描述', minWidth: 220 },
+        { prop: 'maxtype', label: '最大类型', width: 110 },
+        { prop: 'length', label: '长度', width: 80 },
+        { prop: 'scale', label: '小数位', width: 80, advanced: true },
+        { prop: 'internal', label: '内部', width: 80, type: 'bool-success', advanced: true },
+        { prop: 'nevercache', label: '不缓存', width: 90, type: 'bool-warning', advanced: true }
+      ],
+      // 「显示属性名」后列头放大镜的列配置信息弹窗
+      colInfoDialog: {
+        visible: false,
+        col: null
+      },
       selectedRows: [],
       tableParam: {
         total: 0,
@@ -388,6 +449,7 @@ export default {
       activeChildTab: '',
       detailSimpleJson: '',
       detailFullJson: '',
+      detailTranslations: [],
       detailSimpleLoading: false,
       detailFullLoading: false,
       detailJsonOptions: {
@@ -425,6 +487,36 @@ export default {
     }
   },
   computed: {
+    visibleColumns() {
+      return this.showAllColumns ? this.tableColumns : this.tableColumns.filter(col => !col.advanced)
+    },
+    // 放大镜弹窗内容: 列配置 + 当前页首个非空示例值
+    colInfoRows() {
+      const col = this.colInfoDialog.col
+      if (!col) return []
+      const typeMap = {
+        domaintype: '域类型标签 (el-tag)',
+        'bool-success': '布尔标签 (el-tag success)',
+        'bool-warning': '布尔标签 (el-tag warning)'
+      }
+      let sample = '-'
+      for (let i = 0; i < this.domains.length; i++) {
+        const value = this.domains[i][col.prop]
+        if (value !== null && typeof value !== 'undefined' && value !== '') {
+          sample = String(value)
+          break
+        }
+      }
+      return [
+        { key: '属性名 (prop)', value: col.prop },
+        { key: '显示名 (label)', value: col.label },
+        { key: '列宽 (width)', value: col.width || '-' },
+        { key: '最小列宽 (minWidth)', value: col.minWidth || '-' },
+        { key: '渲染类型', value: typeMap[col.type] || '文本' },
+        { key: '高级列', value: col.advanced ? '是（仅「显示所有列」时展示）' : '否' },
+        { key: '示例值（当前页）', value: sample }
+      ]
+    },
     detailTitle() {
       const row = this.currentRow
       return '域详情' + (row && row.domainid ? ' - ' + row.domainid : '')
@@ -439,7 +531,8 @@ export default {
             key: cfg.key,
             label: cfg.label,
             rows,
-            columns: cfg.columns
+            columns: cfg.columns,
+            hasLangdata: rows.some(item => item && item['sks:langdata'])
           })
         }
       })
@@ -557,7 +650,48 @@ export default {
       if (this.formData.maxtype) {
         conds.push(this.likeCond('MAXTYPE', this.formData.maxtype))
       }
-      return conds.length ? conds.join(' AND ') : '1=1'
+      return conds.length ? conds.join(' AND ') : ''
+    },
+    getCustomWhere() {
+      return this.$refs.savedQuery ? this.$refs.savedQuery.getWhere() : ''
+    },
+    handleWhereChange() {
+      // 初始化阶段默认查询应用触发的 whereChange 由 handleSavedQueryReady 统一查询，避免重复
+      if (!this.sqReady) return
+      this.tableParam.pageNum = 1
+      this.getList()
+    },
+    handleSavedQueryReady() {
+      this.sqReady = true
+      this.tableParam.pageNum = 1
+      this.getList()
+    },
+    // 表单条件与保存查询/自定义 where AND 组合
+    mergedWhere() {
+      const customWhere = this.getCustomWhere()
+      const formWhere = this.buildWhere()
+      if (customWhere && formWhere) {
+        return '(' + formWhere + ') AND (' + customWhere + ')'
+      }
+      return customWhere || formWhere || ''
+    },
+    showColInfo(col) {
+      this.colInfoDialog.col = col
+      this.colInfoDialog.visible = true
+    },
+    cellFormatter(row, column, cellValue) {
+      if (cellValue === null || typeof cellValue === 'undefined' || cellValue === '') return '-'
+      return String(cellValue)
+    },
+    copyText(text, okMsg) {
+      const helper = (window.clipboardData && window.clipboardData.setData)
+        ? Promise.resolve().then(() => window.clipboardData.setData('Text', text))
+        : navigator.clipboard.writeText(text)
+      helper.then(() => {
+        this.$message({ message: okMsg || '已复制', type: 'success' })
+      }).catch(() => {
+        this.$message({ message: '复制失败', type: 'warning' })
+      })
     },
     handleSelectionChange(rows) {
       this.selectedRows = rows
@@ -572,22 +706,14 @@ export default {
       await this.safeLoadLanguageConfig()
       const params = {
         _action: 'query',
-        _langcode: getDefaultLangcode()
+        _langcode: getDefaultLangcode(),
+        pageNum: this.tableParam.pageNum,
+        pageSize: this.tableParam.pageSize
       }
-      if (this.formData.domainid) {
-        params.domainid = this.formData.domainid.trim()
+      const where = this.mergedWhere()
+      if (where) {
+        params.where = where
       }
-      if (this.formData.description) {
-        params.description = this.formData.description.trim()
-      }
-      if (this.formData.domaintype) {
-        params.domaintype = this.formData.domaintype
-      }
-      if (this.formData.maxtype) {
-        params.maxtype = this.formData.maxtype.trim()
-      }
-      params.pageNum = this.tableParam.pageNum
-      params.pageSize = this.tableParam.pageSize
       try {
         const res = await queryDomain(params)
         const data = res.data || res
@@ -620,6 +746,9 @@ export default {
       this.tableParam.total = 0
       this.tableParam.pageNum = 1
       this.hasSearched = false
+      if (this.$refs.savedQuery) {
+        this.$refs.savedQuery.setWhere('')
+      }
     },
     async handleRowClick(row, column) {
       if (column && column.type === 'selection') return
@@ -628,6 +757,7 @@ export default {
       this.activeChildTab = ''
       this.detailSimpleJson = ''
       this.detailFullJson = ''
+      this.detailTranslations = []
       this.dialogVisible = true
       this.detailLoading = true
       await this.safeLoadLanguageConfig()
@@ -684,6 +814,14 @@ export default {
           this.detailSimpleJson = json
         } else {
           this.detailFullJson = json
+          // 本地化 tab 取主域多语言描述，不受当前 JSON 选项影响
+          const langdata = list.length && list[0]['sks:langdata']
+          if (langdata && langdata.DESCRIPTION) {
+            this.detailTranslations = Object.keys(langdata.DESCRIPTION).map(lang => ({
+              LANGCODE: lang,
+              DESCRIPTION: langdata.DESCRIPTION[lang]
+            }))
+          }
         }
         return list
       } catch (err) {
@@ -704,6 +842,13 @@ export default {
       if (!json) return
       this.copyToClipboard(json, kind === 'simple' ? '域精简JSON' : '域完整JSON')
     },
+    // 行内 sks:langdata.DESCRIPTION -> [{lang, desc}]
+    langdataRows(row) {
+      const langdata = row && row['sks:langdata']
+      const desc = langdata && langdata.DESCRIPTION ? langdata.DESCRIPTION : null
+      if (!desc) return []
+      return Object.keys(desc).map(lang => ({ lang, desc: desc[lang] }))
+    },
     openExportDialog() {
       this.exportJson = ''
       this.exportDialogVisible = true
@@ -722,9 +867,10 @@ export default {
           _allLangcode: this.exportOptions._allLangcode ? 'true' : 'false',
           ignoreDefVal: this.exportOptions.ignoreDefVal ? 'true' : 'false'
         }
+        const where = this.mergedWhere()
         const body = this.selectedRows.length
           ? { domainids: this.selectedRows.map(row => row.domainid).filter(Boolean) }
-          : { where: this.buildWhere() }
+          : (where ? { where } : {})
         const res = await migrateDomain(params, body)
         const data = res.data || res
         if (data && data.status === 'error') {
@@ -971,6 +1117,17 @@ export default {
 .result-panel {
   margin-top: 20px;
 }
+.table-toolbar {
+  text-align: right;
+  margin-bottom: 8px;
+}
+.prop-name-tag {
+  margin-left: 6px;
+  cursor: pointer;
+}
+.prop-search-btn {
+  margin-left: 4px;
+}
 .result-table {
   margin-top: 16px;
 }
@@ -993,6 +1150,27 @@ export default {
   flex-wrap: wrap;
   gap: 12px;
   text-align: left;
+}
+.trans-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.trans-cell-row {
+  display: flex;
+  align-items: center;
+  line-height: 20px;
+}
+.trans-cell-lang {
+  flex: 0 0 60px;
+  color: #909399;
+  font-size: 12px;
+  padding-right: 8px;
+}
+.trans-cell-desc {
+  flex: 1;
+  color: #303133;
+  word-break: break-all;
 }
 .export-options {
   display: flex;

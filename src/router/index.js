@@ -155,6 +155,12 @@ export const constantRoutes = [
                         component: (resolve) => require(['/src/views/maximo/maxattr/index'], resolve),
                         name: 'V1MaxAttrList',
                         meta: { title: '字段查询', icon: 'tickets', noCache: false }
+                    },
+                    {
+                        path: 'domain',
+                        component: (resolve) => require(['/src/views/maximo/domain/index'], resolve),
+                        name: 'V1DomainQuery',
+                        meta: { title: '域查询', icon: 'link', noCache: false }
                     }
                 ]
             }
@@ -354,16 +360,10 @@ export const constantRoutes = [
                 meta: { title: '关系查询', icon: 'link', noCache: false }
             },
             {
-                path: 'domain',
-                component: (resolve) => require(['/src/views/maximo/domain/index'], resolve),
-                name: 'DomainQuery',
-                meta: { title: '域查询', icon: 'link', noCache: false }
-            },
-            {
                 path: 'domainV2',
                 component: (resolve) => require(['/src/views/maximo_v2/maxdomain/index'], resolve),
                 name: 'DomainV2Query',
-                meta: { title: '域查询(新模式)', icon: 'link', noCache: false }
+                meta: { title: '域查询', icon: 'link', noCache: false }
             },
             {
                 path: 'maxprop',
