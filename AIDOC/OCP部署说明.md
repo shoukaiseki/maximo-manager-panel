@@ -333,7 +333,7 @@ rem 2) 上传前端产物 dist -> 容器内 /usr/share/nginx/html
 oc rsync .\dist\ %OCP_PODNAME%:/usr/share/nginx/html/ -n %OCP_NAMESPACE% -c panel
 
 rem 3) 上传后端产物 app -> 容器内 /app
-oc rsync .\server\target\lib %OCP_PODNAME%:/app/lib -n %OCP_NAMESPACE% -c panel
+oc rsync .\server\target\lib\ %OCP_PODNAME%:/app/lib/ -n %OCP_NAMESPACE% -c panel
 oc cp .\server\target\classes\app.yml %OCP_PODNAME%:/app/config/app-dev.yml -n %OCP_NAMESPACE% -c panel
 oc cp .\server\target\solon-server-1.0.0.jar %OCP_PODNAME%:/app/solon-server-1.0.0.jar -n %OCP_NAMESPACE% -c panel
 

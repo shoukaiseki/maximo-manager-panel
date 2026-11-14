@@ -140,7 +140,7 @@
     </el-dialog>
 
     <!-- 导入详细返回信息弹窗 -->
-    <el-dialog title="导入详细返回信息" :visible.sync="importResultDialog.visible" width="82%" top="5vh" :close-on-click-modal="false" @opened="onImportResultOpened">
+    <el-dialog title="导入详细返回信息" :visible.sync="importResultDialog.visible" width="82%" top="5vh" custom-class="import-result-dialog" :close-on-click-modal="false" @opened="onImportResultOpened">
       <template v-if="importGroups.length">
         <div class="import-result-toolbar">
           <el-button type="text" size="mini" icon="el-icon-circle-plus-outline" @click="expandAllImport">展开所有</el-button>
@@ -1068,6 +1068,8 @@ export default {
         const table = this.$refs.importListTable
         if (!table) return
         this.importGroups.forEach(row => table.toggleRowExpansion(row, !!expand))
+        // 树形行展开后重算表体高度, 否则 max-height 下表体不会出现纵向滚动条
+        this.$nextTick(() => table.doLayout())
       })
     },
     // 展开所有(列表树形表格 + 树结构标签页)
@@ -1189,6 +1191,11 @@ export default {
 }
 .import-dialog .el-dialog__body {
   max-height: 74vh;
+  overflow-y: auto;
+}
+/* 导入结果弹窗: 内容超出屏幕时弹窗体可滚动, 避免列表底部/滚动条落在可视区外 */
+.import-result-dialog .el-dialog__body {
+  max-height: 72vh;
   overflow-y: auto;
 }
 .import-result-bar {
