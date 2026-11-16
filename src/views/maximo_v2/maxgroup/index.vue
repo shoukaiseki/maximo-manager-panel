@@ -1475,6 +1475,14 @@ export default {
       if (this.importDialog.dmDeploySet) {
         params.dmDeploySet = 'true'
       }
+      // _ignoreList / _deleteNotExists 走 URL 参数, 逗号分隔(脚本 bodyOrParam 兼容)
+      if (ignoreList.length) {
+        params._ignoreList = ignoreList.join(',')
+      }
+      const deleteNotExistsList = this.importDialog.deleteNotExistsList || []
+      if (deleteNotExistsList.length) {
+        params._deleteNotExists = deleteNotExistsList.join(',')
+      }
       const merged = {
         total: 0,
         added: 0,
@@ -1493,13 +1501,6 @@ export default {
           const batch = groups.slice(offset, offset + batchSize)
           this.importDialog.summary = '正在导入 ' + (offset + batch.length) + '/' + groups.length + ' 组...'
           const body = { maxgroupList: batch }
-          if (ignoreList.length) {
-            body._ignoreList = ignoreList.slice()
-          }
-          const deleteNotExistsList = this.importDialog.deleteNotExistsList || []
-          if (deleteNotExistsList.length) {
-            body._deleteNotExists = deleteNotExistsList.slice()
-          }
           // 条件只在首批导入, 避免重复 upsert
           if (offset === 0 && conditions.length) {
             body.conditionList = conditions

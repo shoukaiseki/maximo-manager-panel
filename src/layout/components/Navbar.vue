@@ -8,6 +8,9 @@
       <template v-if="device!=='mobile'">
         <div class="layout-actions">
           <div class="env-baseurl" :title="currentBaseUrl">{{ currentBaseUrl }}</div>
+          <el-tooltip :content="'默认语言: ' + currentLangLabel" effect="dark" placement="bottom">
+            <div class="env-lang">{{ currentLangLabel }}</div>
+          </el-tooltip>
           <el-tooltip content="后端配置" effect="dark" placement="bottom">
             <el-button type="text" class="settings-btn right-menu-item hover-effect" @click.native="showSettings = true">
               <svg-icon icon-class="system" class="header-link-icon" />
@@ -74,6 +77,7 @@ import RuoYiGit from '/src/components/RuoYi/Git'
 import RuoYiDoc from '/src/components/RuoYi/Doc'
 import SvgIcon from '/src/components/SvgIcon'
 import EnvSettings from '/src/components/EnvSettings/EnvSettings'
+import { getDefaultLangcode, getLanguageOptions, loadLanguageConfig } from '@/utils/mmp/mmp-config'
 // import { getInfo } from "/src/api/login";
 // import TaskWebSocket from '/src/components/TaskWebSocket/TaskWebSocket'
 
@@ -93,7 +97,9 @@ export default {
   data(){
     return{
       username:'用户身份',
-      showSettings: false
+      showSettings: false,
+      // 当前语言环境(后端配置对话框中的默认语言)
+      langCode: ''
     }
   },
   computed: {
@@ -124,9 +130,21 @@ export default {
         }
       }
       return process.env.VUE_APP_DEFAULT_TARGET || '未配置'
+    },
+    currentLangLabel() {
+      const code = String(this.langCode || getDefaultLangcode() || '').toUpperCase()
+      const opt = getLanguageOptions().filter(item => item.code === code)[0]
+      if (opt && opt.name && opt.name !== code) {
+        return opt.name + '（' + code + '）'
+      }
+      return code || '未设置'
     }
   },
   created(){
+    this.refreshLangCode()
+    loadLanguageConfig().then(() => {
+      this.refreshLangCode()
+    }).catch(() => {})
     // getInfo().then(res=>{
     //   console.log(res.user.remark)
     //     if(res.user.remark&&res.user.remark!=''){
@@ -140,7 +158,11 @@ export default {
     openRepo() {
       window.open('https://gitee.com/shoukaiseki/maximo-manager-panel', '_blank')
     },
+    refreshLangCode() {
+      this.langCode = getDefaultLangcode()
+    },
     handleSettingsSaved() {
+      this.refreshLangCode()
       // this.$message.info('配置已更新，页面将刷新')
       // setTimeout(() => {
       //   location.reload()
@@ -237,6 +259,16 @@ export default {
       max-width: 200px;
       overflow: hidden;
       text-overflow: ellipsis;
+      white-space: nowrap;
+      cursor: default;
+    }
+
+    .env-lang {
+      font-size: 12px;
+      color: #606266;
+      padding: 2px 8px;
+      border-radius: 10px;
+      background: #f4f4f5;
       white-space: nowrap;
       cursor: default;
     }

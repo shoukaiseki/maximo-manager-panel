@@ -1,6 +1,8 @@
 <template>
   <section class="query-page">
     <el-card>
+      <el-tabs v-model="activeTab" @tab-click="handleTabClick">
+      <el-tab-pane label="表锁" name="table">
       <div class="page-header-row">
         <div>
           <h2>DB2 锁表查询</h2>
@@ -41,9 +43,103 @@
           <template slot="default">
           </template>
         </SksTable>
-        <el-empty v-if="!loading && total === 0 && hasSearched" description="暂无查询结果" />
-        <el-empty v-if="!loading && total === 0 && !hasSearched" description="请输入关键词后点击搜索" />
+        <div v-if="!loading && total === 0" class="table-empty-mask">
+          {{ hasSearched ? '暂无查询结果' : '请输入关键词后点击搜索' }}
+        </div>
       </div>
+      </el-tab-pane>
+      <el-tab-pane label="目录锁 / 锁等待" name="catalog">
+        <el-alert
+          type="info"
+          :closable="false"
+          show-icon
+          style="margin-bottom: 12px;"
+          title="包含 SYSIBM / SYSIBMADM 的目录行锁、内部锁（CatCacheLock）以及正在等锁的会话。视图 DDL 未提交、语句失效重编译导致的 911，只能在此页看到，按 MAXIMO schema 过滤是查不到的。" />
+
+        <el-form :inline="true" label-width="80px" @submit.native.prevent>
+          <el-form-item label="关键字">
+            <el-input
+              v-model="catalogForm.keyword"
+              placeholder="表名/应用名，=精确"
+              clearable
+              style="width: 220px;"
+              @keyup.enter.native="handleCatalogQuery" />
+          </el-form-item>
+          <el-form-item label="角色">
+            <el-select v-model="catalogForm.role" style="width: 120px;">
+              <el-option label="全部" value="ALL" />
+              <el-option label="持锁" value="HOLD" />
+              <el-option label="等锁" value="WAIT" />
+            </el-select>
+          </el-form-item>
+          <el-form-item>
+            <el-button
+              type="cyan"
+              icon="el-icon-search"
+              size="mini"
+              :loading="catalogLoading"
+              @click="handleCatalogQuery">搜索</el-button>
+            <el-button icon="el-icon-refresh" size="mini" @click="resetCatalog">重置</el-button>
+            <el-button
+              type="danger"
+              icon="el-icon-close"
+              size="mini"
+              :disabled="catalogSelection.length === 0"
+              @click="showCatalogForceSql">生成force进程SQL</el-button>
+            <span v-if="catalogSelection.length > 0" style="margin-left: 8px; color: #606266; font-size: 13px;">
+              已选 {{ catalogSelection.length }} 行
+            </span>
+          </el-form-item>
+        </el-form>
+
+        <el-table
+          :data="catalogTable.list"
+          v-loading="catalogLoading"
+          border
+          size="mini"
+          style="width: 100%;"
+          @selection-change="handleCatalogSelectionChange">
+          <el-table-column type="selection" width="45" align="center" />
+          <el-table-column prop="AGENT_ID" label="进程" width="90" />
+          <el-table-column prop="LOCK_ROLE" label="角色" width="80" align="center">
+            <template slot-scope="scope">
+              <el-tag :type="scope.row.LOCK_ROLE === 'WAIT' ? 'danger' : 'warning'" size="mini">
+                {{ scope.row.LOCK_ROLE }}
+              </el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column prop="TABSCHEMA" label="模式" width="110" />
+          <el-table-column prop="TABNAME" label="对象" min-width="200" show-overflow-tooltip />
+          <el-table-column prop="LOCK_OBJECT_TYPE" label="锁对象类型" width="130" />
+          <el-table-column prop="LOCK_MODE" label="锁模式" width="90" />
+          <el-table-column prop="LOCK_STATUS" label="锁状态" width="100" />
+          <el-table-column prop="BLOCKED_BY" label="被谁阻塞" width="100">
+            <template slot-scope="scope">{{ scope.row.BLOCKED_BY || '-' }}</template>
+          </el-table-column>
+          <el-table-column prop="APPL_NAME" label="应用名" min-width="150" show-overflow-tooltip />
+          <el-table-column prop="CLIENT_IP" label="客户端IP" width="130" />
+          <el-table-column prop="APPL_STATUS" label="应用状态" width="110" />
+          <el-table-column prop="UOW_START_TIME" label="事务开始时间" width="170">
+            <template slot-scope="scope">{{ formatDate(scope.row.UOW_START_TIME) }}</template>
+          </el-table-column>
+          <template slot="empty">
+            <span>当前没有目录锁或锁等待</span>
+          </template>
+        </el-table>
+
+        <div style="margin-top: 12px; text-align: right;">
+          <el-pagination
+            background
+            layout="total, sizes, prev, pager, next, jumper"
+            :total="catalogTable.total"
+            :page-size="catalogTable.pageSize"
+            :current-page="catalogTable.pageNum"
+            :page-sizes="[20, 50, 100]"
+            @current-change="handleCatalogPageChange"
+            @size-change="handleCatalogSizeChange" />
+        </div>
+      </el-tab-pane>
+      </el-tabs>
     </el-card>
 
     <!-- 锁详情弹窗 -->
@@ -116,8 +212,8 @@
 </template>
 
 <script>
-import { getDb2LockList, diagnoseDb2Lock } from '@/api/db2lock'
-import { sksPageMixin } from "sks-plugin-el-erp/lib/sks-page";
+import { getDb2LockList, getDb2CatalogLockList, diagnoseDb2Lock } from '@/api/db2lock'
+import { sksPageMixin } from 'sks-plugin-el-erp/lib/sks-page'
 
 // LOCK_MODE 锁说明 markdown 内容
 const LOCK_MODE_HELP_MD = [
@@ -227,7 +323,22 @@ export default {
       helpDialogVisible: false,
       helpActiveTab: 'lockmode',
       helpMarkdownHtml: '',
-      maximoHelpMarkdownHtml: ''
+      maximoHelpMarkdownHtml: '',
+      // 目录锁 / 锁等待
+      activeTab: 'table',
+      catalogLoaded: false,
+      catalogLoading: false,
+      catalogSelection: [],
+      catalogForm: {
+        keyword: '',
+        role: 'ALL'
+      },
+      catalogTable: {
+        list: [],
+        total: 0,
+        pageNum: 1,
+        pageSize: 20
+      }
     }
   },
   watch: {
@@ -330,6 +441,73 @@ export default {
       this.mainTable.queryParams.pageNum = page
       this.mainTable.queryParams.pageSize = limit
       this.fetchList()
+    },
+    // ==================== 目录锁 / 锁等待 ====================
+    handleTabClick(tab) {
+      // 首次切到该 Tab 时自动查一次
+      if (tab.name === 'catalog' && !this.catalogLoaded) {
+        this.catalogLoaded = true
+        this.fetchCatalogList()
+      }
+    },
+    handleCatalogQuery() {
+      this.catalogTable.pageNum = 1
+      this.fetchCatalogList()
+    },
+    fetchCatalogList() {
+      this.catalogLoading = true
+      getDb2CatalogLockList({
+        keyword: this.catalogForm.keyword,
+        role: this.catalogForm.role,
+        pageNum: this.catalogTable.pageNum,
+        pageSize: this.catalogTable.pageSize
+      })
+        .then(res => {
+          if (res.code === 200 && res.data) {
+            this.catalogTable.list = res.data.rows || []
+            this.catalogTable.total = res.data.total || 0
+          } else {
+            this.catalogTable.list = []
+            this.catalogTable.total = 0
+            this.$message.error(res.message || '查询失败')
+          }
+        })
+        .catch(err => {
+          this.$message.error('请求失败: ' + (err.message || String(err)))
+        })
+        .finally(() => {
+          this.catalogLoading = false
+        })
+    },
+    handleCatalogSelectionChange(selection) {
+      this.catalogSelection = selection || []
+    },
+    handleCatalogPageChange(page) {
+      this.catalogTable.pageNum = page
+      this.fetchCatalogList()
+    },
+    handleCatalogSizeChange(size) {
+      this.catalogTable.pageSize = size
+      this.catalogTable.pageNum = 1
+      this.fetchCatalogList()
+    },
+    resetCatalog() {
+      this.catalogForm = {
+        keyword: '',
+        role: 'ALL'
+      }
+      this.catalogTable.list = []
+      this.catalogTable.total = 0
+      this.catalogTable.pageNum = 1
+      this.catalogSelection = []
+      this.catalogLoaded = false
+    },
+    showCatalogForceSql() {
+      if (this.catalogSelection.length === 0) {
+        this.$message.warning('请先勾选需要生成SQL的行')
+        return
+      }
+      this.showSqlDialog(this.catalogSelection)
     },
     resetForm() {
       this.formData = {
@@ -666,6 +844,25 @@ export default {
 }
 .result-panel {
   margin-top: 20px;
+  position: relative;
+}
+/* 空数据提示覆盖在表格内容区，保留表头和横向滚动条的位置 */
+.table-empty-mask {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 40px;
+  bottom: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #909399;
+  font-size: 14px;
+  pointer-events: none;
+}
+/* 隐藏 el-table 自带的“暂无数据”，避免与上面的提示重叠 */
+.result-panel .el-table__empty-text {
+  visibility: hidden;
 }
 .monaco-container {
   height: 400px;
@@ -754,5 +951,14 @@ export default {
   border: none;
   border-top: 1px solid #e4e7ed;
   margin: 14px 0;
+}
+/* ruoyi.scss 里全局给 .el-tabs__content 设置了 overflow-x: scroll，
+   会凭空多出一条横向滚动条（叠加表格自身那条），这里覆盖为 hidden */
+.query-page .el-tabs__content {
+  overflow-x: hidden;
+}
+.query-page .el-tabs__content .el-tab-pane {
+  width: 100%;
+  overflow-x: hidden;
 }
 </style>

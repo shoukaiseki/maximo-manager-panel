@@ -557,6 +557,45 @@ export const constantRoutes = [
         ]
     },
     {
+        path: '/mlmaint',
+        name: 'MlMaintain',
+        component: Layout,
+        hidden: false,
+        redirect: 'noRedirect',
+        alwaysShow: true,
+        meta: {
+            title: '多语言维护',
+            icon: 'international',
+            noCache: false
+        },
+        children: [
+            {
+                path: 'appxml',
+                component: (resolve) => require(['/src/views/maximo/maxapps/labels'], resolve),
+                name: 'MaxAppLabels',
+                meta: { title: '应用XML多语言', icon: 'document', noCache: false }
+            },
+            {
+                path: 'modules',
+                component: (resolve) => require(['/src/views/maximo_v2/mlmaint/modules'], resolve),
+                name: 'MaxModulesMlMaintain',
+                meta: { title: 'MAXMODULES 多语言', icon: 'document', noCache: false }
+            },
+            {
+                path: 'menu',
+                component: (resolve) => require(['/src/views/maximo_v2/mlmaint/menu'], resolve),
+                name: 'MaxMenuMlMaintain',
+                meta: { title: 'MAXMENU 多语言', icon: 'document', noCache: false }
+            },
+            {
+                path: 'sigoption',
+                component: (resolve) => require(['/src/views/maximo_v2/mlmaint/sigoption'], resolve),
+                name: 'SigOptionMlMaintain',
+                meta: { title: 'SIGOPTION 多语言', icon: 'document', noCache: false }
+            }
+        ]
+    },
+    {
         path: '/multilingual',
         name: 'MultilingualExcel',
         component: Layout,

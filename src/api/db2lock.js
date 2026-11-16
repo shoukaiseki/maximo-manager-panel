@@ -12,6 +12,17 @@ export function getDb2LockList(params) {
 }
 
 /**
+ * 查询 DB2 目录锁 / 锁等待（SYSIBM 目录行锁、内部锁 CatCacheLock、LOCKWAITS）
+ */
+export function getDb2CatalogLockList(params) {
+  return solonRequest({
+    url: '/db2lock/catalogLocks',
+    method: 'get',
+    params
+  })
+}
+
+/**
  * DB2 锁诊断：对指定进程执行固定诊断SQL集，返回汇总分析报告
  * @param {Object} params - { agentId, tabName }
  */

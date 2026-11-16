@@ -122,6 +122,116 @@ public class Db2LockService {
         return row;
     }
 
+    /**
+     * 目录锁 / 锁等待查询。
+     *
+     * <p>数据库的普通表锁在 {@link #queryList} 里能查，但视图 DDL 未提交、语句失效重编译
+     * 这类问题只会在 SYSIBM/SYSIBMADM 的目录行锁、内部锁（CatCacheLock）或 LOCKWAITS 中体现，
+     * 按 MAXIMO schema 过滤是查不到的。本方法把「持有」和「等待」两部分合并返回。
+     */
+    public Map<String, Object> queryCatalogLocks(String keyword, String role, int pageNum, int pageSize) {
+        String unionSql =
+                "SELECT lh.AGENT_ID AS AGENT_ID, uow.UOW_START_TIME AS UOW_START_TIME, " +
+                        "CHAR(lh.APPL_NAME, 128) AS APPL_NAME, CHAR(lh.AUTHID, 128) AS AUTHID, " +
+                        "CHAR(lh.TABSCHEMA, 128) AS TABSCHEMA, CHAR(lh.TABNAME, 128) AS TABNAME, " +
+                        "CHAR(lh.LOCK_OBJECT_TYPE, 40) AS LOCK_OBJECT_TYPE, " +
+                        "CHAR(lh.LOCK_MODE, 20) AS LOCK_MODE, CHAR(lh.LOCK_STATUS, 20) AS LOCK_STATUS, " +
+                        "CAST(NULL AS BIGINT) AS BLOCKED_BY, CHAR('HOLD', 10) AS LOCK_ROLE, " +
+                        "CHAR(app.APPL_STATUS, 40) AS APPL_STATUS, CHAR(app.CLIENT_NNAME, 128) AS CLIENT_IP " +
+                        "FROM SYSIBMADM.LOCKS_HELD lh " +
+                        "LEFT JOIN TABLE(MON_GET_UNIT_OF_WORK(NULL, -2)) uow ON lh.AGENT_ID = uow.APPLICATION_HANDLE " +
+                        "LEFT JOIN SYSIBMADM.APPLICATIONS app ON lh.AGENT_ID = app.AGENT_ID " +
+                        "WHERE RTRIM(lh.TABSCHEMA) IN ('SYSIBM', 'SYSIBMADM') OR lh.LOCK_OBJECT_TYPE = 'INTERNAL' " +
+                        "UNION ALL " +
+                        "SELECT w.AGENT_ID AS AGENT_ID, CAST(NULL AS TIMESTAMP) AS UOW_START_TIME, " +
+                        "CHAR(a.APPL_NAME, 128) AS APPL_NAME, CHAR(a.AUTHID, 128) AS AUTHID, " +
+                        "CHAR(w.TABSCHEMA, 128) AS TABSCHEMA, CHAR(w.TABNAME, 128) AS TABNAME, " +
+                        "CHAR('WAIT', 40) AS LOCK_OBJECT_TYPE, " +
+                        "CHAR(w.LOCK_MODE_REQUESTED, 20) AS LOCK_MODE, CHAR('WAITING', 20) AS LOCK_STATUS, " +
+                        "w.AGENT_ID_HOLDING_LK AS BLOCKED_BY, CHAR('WAIT', 10) AS LOCK_ROLE, " +
+                        "CHAR(a.APPL_STATUS, 40) AS APPL_STATUS, CHAR(a.CLIENT_NNAME, 128) AS CLIENT_IP " +
+                        "FROM SYSIBMADM.LOCKWAITS w " +
+                        "LEFT JOIN SYSIBMADM.APPLICATIONS a ON a.AGENT_ID = w.AGENT_ID";
+
+        StringBuilder whereSql = new StringBuilder();
+        List<Object> params = new ArrayList<>();
+        if (keyword != null && !keyword.trim().isEmpty()) {
+            String v = keyword.trim();
+            if (v.startsWith("=")) {
+                whereSql.append(" AND (RTRIM(t.TABNAME) = ? OR RTRIM(t.TABSCHEMA) = ?)");
+                params.add(v.substring(1).toUpperCase());
+                params.add(v.substring(1).toUpperCase());
+            } else {
+                whereSql.append(" AND (UPPER(t.TABNAME) LIKE ? OR UPPER(t.APPL_NAME) LIKE ?)");
+                params.add("%" + v.toUpperCase() + "%");
+                params.add("%" + v.toUpperCase() + "%");
+            }
+        }
+        if (role != null && !role.trim().isEmpty() && !"ALL".equalsIgnoreCase(role.trim())) {
+            whereSql.append(" AND RTRIM(t.LOCK_ROLE) = ?");
+            params.add(role.trim().toUpperCase());
+        }
+
+        String whereStr = whereSql.toString();
+        int total = 0;
+        String countSql = "SELECT COUNT(*) AS total FROM (" + unionSql + ") t WHERE 1=1" + whereStr;
+        try (Connection conn = dataSource.getConnection();
+             PreparedStatement ps = conn.prepareStatement(countSql)) {
+            for (int i = 0; i < params.size(); i++) {
+                ps.setObject(i + 1, params.get(i));
+            }
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) {
+                    total = rs.getInt("total");
+                }
+            }
+        } catch (SQLException e) {
+            throw new RuntimeException("查询目录锁总数失败: " + e.getMessage(), e);
+        }
+
+        String dataSql = "SELECT * FROM (" + unionSql + ") t WHERE 1=1" + whereStr +
+                " ORDER BY t.LOCK_ROLE, t.AGENT_ID, t.TABNAME " +
+                "OFFSET ? ROWS FETCH NEXT ? ROWS ONLY";
+        int offset = (pageNum - 1) * pageSize;
+        List<Map<String, Object>> rows = new ArrayList<>();
+        try (Connection conn = dataSource.getConnection();
+             PreparedStatement ps = conn.prepareStatement(dataSql)) {
+            for (int i = 0; i < params.size(); i++) {
+                ps.setObject(i + 1, params.get(i));
+            }
+            ps.setInt(params.size() + 1, offset);
+            ps.setInt(params.size() + 2, pageSize);
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    Map<String, Object> row = new LinkedHashMap<>();
+                    row.put("AGENT_ID", rs.getLong("AGENT_ID"));
+                    row.put("UOW_START_TIME", rs.getTimestamp("UOW_START_TIME"));
+                    row.put("APPL_NAME", rs.getString("APPL_NAME"));
+                    row.put("AUTHID", rs.getString("AUTHID"));
+                    row.put("TABSCHEMA", rs.getString("TABSCHEMA"));
+                    row.put("TABNAME", rs.getString("TABNAME"));
+                    row.put("LOCK_OBJECT_TYPE", rs.getString("LOCK_OBJECT_TYPE"));
+                    row.put("LOCK_MODE", rs.getString("LOCK_MODE"));
+                    row.put("LOCK_STATUS", rs.getString("LOCK_STATUS"));
+                    row.put("BLOCKED_BY", rs.getObject("BLOCKED_BY"));
+                    row.put("LOCK_ROLE", rs.getString("LOCK_ROLE"));
+                    row.put("APPL_STATUS", rs.getString("APPL_STATUS"));
+                    row.put("CLIENT_IP", rs.getString("CLIENT_IP"));
+                    rows.add(row);
+                }
+            }
+        } catch (SQLException e) {
+            throw new RuntimeException("查询目录锁列表失败: " + e.getMessage(), e);
+        }
+
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("rows", rows);
+        result.put("total", total);
+        result.put("pageNum", pageNum);
+        result.put("pageSize", pageSize);
+        return result;
+    }
+
     // ========================================================================
     //                           锁诊断（固定诊断SQL集 + 汇总分析）
     // ========================================================================

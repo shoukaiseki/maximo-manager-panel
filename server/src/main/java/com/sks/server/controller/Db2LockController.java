@@ -30,6 +30,20 @@ public class Db2LockController {
     }
 
     /**
+     * 目录锁 / 锁等待查询
+     * GET /solonapi/db2lock/catalogLocks?keyword=&role=ALL&pageNum=1&pageSize=20
+     */
+    @Mapping(value = "/db2lock/catalogLocks", method = MethodType.GET)
+    public RestResult<Map<String, Object>> catalogLocks(
+            String keyword,
+            @Param(defaultValue = "ALL") String role,
+            @Param(defaultValue = "1") int pageNum,
+            @Param(defaultValue = "20") int pageSize) {
+        Map<String, Object> data = db2LockService.queryCatalogLocks(keyword, role, pageNum, pageSize);
+        return RestResult.ok(data);
+    }
+
+    /**
      * 锁诊断：对指定进程执行固定诊断 SQL 集，返回汇总分析报告
      * GET /solonapi/db2lock/diagnose?agentId=36485&tabName=IBM_DO
      *

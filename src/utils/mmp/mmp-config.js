@@ -33,14 +33,30 @@ export function loadLanguageConfig() {
     languageConfigPromise = getLanguages().then(res => {
       if (res && res.code === 200 && res.data) {
         const data = res.data
-        const codes = (data.languages || [])
-          .map(item => normalizeLangcode(item.code))
-          .filter(Boolean)
+        const languages = []
+        const seen = {}
+        ;(data.languages || []).forEach(item => {
+          const code = normalizeLangcode(item.code)
+          if (!code || seen[code]) {
+            return
+          }
+          seen[code] = true
+          languages.push({
+            code,
+            name: item.name ? String(item.name) : code,
+            base: item.base === true || item.base === 'true'
+          })
+        })
         languageConfig = {
-          codes,
+          codes: languages.map(item => item.code),
+          languages,
           baseLanguage: normalizeLangcode(data.baseLanguage),
           mmpDefaultLang: normalizeLangcode(data.mmpDefaultLang)
         }
+      }
+      if (!languageConfig) {
+        // 接口异常时释放缓存, 允许下次调用重试
+        languageConfigPromise = null
       }
       return languageConfig
     }).catch(err => {
@@ -50,6 +66,36 @@ export function loadLanguageConfig() {
     })
   }
   return languageConfigPromise
+}
+
+/**
+ * 同步获取已缓存的全局语言配置（未加载时为 null）。
+ * 需要确保已调用过 loadLanguageConfig()。
+ *
+ * @returns {Object|null} { codes, languages:[{code,name,base}], baseLanguage, mmpDefaultLang }
+ */
+export function getLanguageConfig() {
+  return languageConfig
+}
+
+/**
+ * 同步获取已缓存的支持语言代码列表（未加载时为空数组）。
+ *
+ * @returns {Array<string>}
+ */
+export function getSupportedLanguageCodes() {
+  return languageConfig ? languageConfig.codes.slice() : []
+}
+
+/**
+ * 同步获取已缓存的支持语言选项（未加载时为空数组）。
+ *
+ * @returns {Array<Object>} [{ code, name, base }]
+ */
+export function getLanguageOptions() {
+  return languageConfig
+    ? languageConfig.languages.map(item => ({ code: item.code, name: item.name, base: item.base }))
+    : []
 }
 
 /**
