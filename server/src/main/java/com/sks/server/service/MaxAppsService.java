@@ -20,7 +20,7 @@ public class MaxAppsService {
      * 查询 MAXAPPS 列表（支持分页 + APP/描述/内容模糊搜索）
      * tab: all=所有应用；xml=有 XML 的应用（存在 MAXPRESENTATION）；mafapp=MAFAPP（APPTYPE in ('WC')）
      */
-    public Map<String, Object> queryList(String app, String description, String content,
+    public Map<String, Object> queryList(String app, String description, String content, String where,
                                          boolean contentCaseSensitive, String tab,
                                          int pageNum, int pageSize) {
         String mode = (tab == null || tab.trim().isEmpty()) ? "all" : tab.trim().toLowerCase();
@@ -51,6 +51,11 @@ public class MaxAppsService {
             whereSql.append(" AND a.APPTYPE IN ('WC')");
         } else if ("xml".equals(mode)) {
             whereSql.append(" AND EXISTS (SELECT 1 FROM MAXPRESENTATION xp WHERE xp.APP = a.APP)");
+        }
+
+        // 保存查询的自定义条件（用户可在其中使用主表别名 a）
+        if (where != null && !where.trim().isEmpty()) {
+            whereSql.append(" AND (").append(where.trim()).append(")");
         }
 
         boolean hasContent = content != null && !content.trim().isEmpty();
@@ -172,6 +177,7 @@ public class MaxAppsService {
         result.put("total", total);
         result.put("pageNum", pageNum);
         result.put("pageSize", pageSize);
+        result.put("where", where == null ? "" : where);
         return result;
     }
 

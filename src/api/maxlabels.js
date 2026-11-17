@@ -38,10 +38,16 @@ export function exportMaxLabels(data, opts) {
 }
 
 // 导入: { maxlabelsList:[ 标签对象... ] } → { total, added, updated, deleted, skipped, failed, results, sks:*SumTotal }
+// 导入统一走 SKS_MIGRATEAPI_CONFIGUR, 用 _onlyFunctions=mlmaxlabels 指定仅执行 MAXLABELS 多语言
 export function importMaxLabels(data, opts) {
-  const query = {}
+  const query = { _action: 'import', _onlyFunctions: 'mlmaxlabels' }
   if (opts && opts.dmDeploySet) query.dmDeploySet = 'true'
   if (opts && opts.allLangcode) query._allLangcode = 'true'
   if (opts && opts.errorAssert) query._errorAssert = 'true'
-  return post('import', query, data)
+  return request({
+    url: '/api/script/SKS_MIGRATEAPI_CONFIGUR',
+    method: 'post',
+    params: query,
+    data: data
+  })
 }

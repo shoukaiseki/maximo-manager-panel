@@ -7,6 +7,7 @@
           <p class="page-summary">查询 MAXAPPS 应用数据，支持 APP、描述、XML内容搜索。</p>
         </div>
         <div class="page-actions">
+          <saved-query-panel ref="savedQuery" appname="MAXAPPS" :default-where="buildFilterWhere()" @whereChange="handleQuery" />
           <el-button type="primary" size="mini" icon="el-icon-upload2" @click="openImport">导入应用信息</el-button>
         </div>
       </div>
@@ -83,6 +84,15 @@
         <template v-if="infoDialog.mode === 'json'">
           <div class="info-toolbar">
             <el-checkbox v-model="infoDialog.allLangcode" @change="reloadAppInfo">导出所有语言信息</el-checkbox>
+            <span class="info-toolbar-label">忽略</span>
+            <el-select v-model="infoDialog.excludeObjects" size="mini" multiple collapse-tags style="width:240px;" @change="reloadAppInfo">
+              <el-option v-for="opt in excludeObjectOptions" :key="opt.value" :label="opt.label" :value="opt.value" />
+            </el-select>
+            <el-select v-if="infoDialog.excludeObjects.includes('menus')" v-model="infoDialog.menuIgnoreScope" size="mini" style="width:210px;" @change="reloadAppInfo">
+              <el-option label="菜单全部忽略" value="all" />
+              <el-option label="只忽略 MODULE 类" value="module" />
+              <el-option label="只忽略 APPMENU/APPTOOL/SEARCHMENU" value="appMenu" />
+            </el-select>
             <el-button size="mini" icon="el-icon-refresh" :loading="infoDialog.loading" @click="reloadAppInfo">重 载</el-button>
             <el-button size="mini" icon="el-icon-copy-document" :disabled="!infoDialog.appInfo" @click="copyJson">复制JSON</el-button>
             <el-button size="mini" icon="el-icon-document" :disabled="!infoDialog.appInfo" @click="saveJsonFile">保存JSON</el-button>
@@ -97,6 +107,13 @@
           </el-tabs>
         </template>
         <template v-else>
+          <div class="info-toolbar">
+            <span style="margin-right:6px;">语言</span>
+            <el-select v-model="infoDialog.langcode" size="mini" filterable style="width:180px;" @change="reloadLangXml">
+              <el-option v-for="lang in langOptions" :key="lang.code" :label="languageLabel(lang)" :value="lang.code" />
+            </el-select>
+            <el-button size="mini" icon="el-icon-refresh" :loading="infoDialog.loading" @click="reloadLangXml">刷 新</el-button>
+          </div>
           <div v-if="infoDialog.content" ref="infoMonacoContainer" style="height:65vh;border:1px solid #dcdfe6"></div>
           <el-empty v-else-if="!infoDialog.loading" description="暂无内容" />
         </template>
@@ -110,28 +127,31 @@
 
     <!-- 导入应用信息弹窗 -->
     <el-dialog title="导入应用信息" :visible.sync="importDialog.visible" width="85%" top="4vh" custom-class="import-dialog" :close-on-click-modal="false" @opened="onImportDialogOpened">
-      <el-alert type="info" :closable="false" show-icon title="选择导出的应用信息 JSON 文件；内容会填入下方 JSON 编辑框，导入以编辑框内容为准，应用名取自 JSON 中的 app" />
-      <el-upload
-        ref="importUpload"
-        style="margin-top:12px;"
-        :file-list="importDialog.fileList"
-        :auto-upload="false"
-        :limit="1"
-        accept=".json"
-        :on-change="onImportFileChange"
-        :on-remove="onImportFileRemove">
-        <el-button size="small" icon="el-icon-folder-opened">选择 JSON 文件</el-button>
-      </el-upload>
-      <el-form label-width="110px" style="margin-top:12px;">
-        <el-form-item label="启用迁移模式">
-          <el-checkbox v-model="importDialog.dmDeploySet">dmDeploySet（MboSet 调用 setDMDeploySet(true)）</el-checkbox>
-        </el-form-item>
-      </el-form>
-      <div ref="importJsonContainer" style="height:42vh;border:1px solid #dcdfe6"></div>
-      <div v-if="importDialog.result" class="import-result-bar">
-        <el-tag :type="importDialog.resultSuccess ? 'success' : 'danger'" size="small">{{ importDialog.resultSuccess ? '导入成功' : '导入失败' }}</el-tag>
-        <span class="import-result-summary">{{ importDialog.summary }}</span>
-        <el-button type="text" size="mini" icon="el-icon-document" @click="openImportResult">查看详细返回信息</el-button>
+      <div class="import-drop-wrap" @dragover.prevent="importDragOver = true" @dragleave.prevent="importDragOver = false" @drop.prevent="onImportDrop">
+        <el-alert type="info" :closable="false" show-icon title="选择或拖入导出的应用信息 JSON 文件；内容会填入下方 JSON 编辑框，导入以编辑框内容为准，应用名取自 JSON 中的 app" />
+        <el-upload
+          ref="importUpload"
+          style="margin-top:12px;"
+          :file-list="importDialog.fileList"
+          :auto-upload="false"
+          :limit="1"
+          accept=".json"
+          :on-change="onImportFileChange"
+          :on-remove="onImportFileRemove">
+          <el-button size="small" icon="el-icon-folder-opened">选择 JSON 文件</el-button>
+        </el-upload>
+        <el-form label-width="110px" style="margin-top:12px;">
+          <el-form-item label="启用迁移模式">
+            <el-checkbox v-model="importDialog.dmDeploySet">dmDeploySet（MboSet 调用 setDMDeploySet(true)）</el-checkbox>
+          </el-form-item>
+        </el-form>
+        <div ref="importJsonContainer" style="height:42vh;border:1px solid #dcdfe6"></div>
+        <div v-if="importDialog.result" class="import-result-bar">
+          <el-tag :type="importDialog.resultSuccess ? 'success' : 'danger'" size="small">{{ importDialog.resultSuccess ? '导入成功' : '导入失败' }}</el-tag>
+          <span class="import-result-summary">{{ importDialog.summary }}</span>
+          <el-button type="text" size="mini" icon="el-icon-document" @click="openImportResult">查看详细返回信息</el-button>
+        </div>
+        <div v-if="importDragOver" class="import-drop-mask">松开鼠标即可读取 JSON 文件</div>
       </div>
       <span slot="footer" class="dialog-footer">
         <el-button @click="importDialog.visible = false">关 闭</el-button>
@@ -212,12 +232,14 @@
 import { getMaxAppsList, getMaxAppsDetail } from '@/api/maxapps'
 import { getMaxAppXmlSource, exportAppInfo, getAppXmlByLang, importAppInfo, downloadAppZip } from '@/api/maxappxml'
 import AuditPanel from '@/views/maximo/maxappxml/AuditPanel.vue'
-import { sksPageMixin } from "sks-plugin-el-erp/lib/sks-page";
+import SavedQueryPanel from '@/views/components/SavedQueryPanel.vue'
+import { getDefaultLangcode, getLanguageOptions, loadLanguageConfig } from '@/utils/mmp/mmp-config'
+import { sksPageMixin } from 'sks-plugin-el-erp/lib/sks-page'
 
 export default {
   name: 'MaxAppsList',
   mixins: [sksPageMixin],
-  components: { AuditPanel },
+  components: { AuditPanel, SavedQueryPanel },
   data() {
     return {
       loading: false,
@@ -249,11 +271,29 @@ export default {
         content: '',
         appInfo: null,
         allLangcode: true,
-        activeTab: 'common'
+        // 导出忽略项(对象key): 默认忽略 maxlabels
+        excludeObjects: ['maxlabels'],
+        // 菜单忽略范围: all(全部) / module(只忽略 MODULE 类) / appMenu(只忽略 APPMENU/APPTOOL/SEARCHMENU)
+        menuIgnoreScope: 'all',
+        activeTab: 'common',
+        // 当前语言XML 弹窗的语言(默认取全局配置语言)
+        langcode: ''
       },
+      langOptions: [],
+      // 导出可排除的子对象(MIGRATE_OBJECTS 中的 key)
+      excludeObjectOptions: [
+        { value: 'maxapps', label: '应用 maxapps' },
+        { value: 'presentation', label: 'XML presentation' },
+        { value: 'maxlabels', label: '标签 maxlabels' },
+        { value: 'menus', label: '菜单 menus' },
+        { value: 'sigoptions', label: '签名选项 sigoptions' },
+        { value: 'appdoctype', label: '文档类型 appdoctype' }
+      ],
       infoEditor: null,
       jsonEditors: {},
       importEditor: null,
+      // 导入弹窗拖拽状态
+      importDragOver: false,
       zipDownloading: false,
       xmlDownloading: false,
       // 导入应用信息
@@ -297,7 +337,10 @@ export default {
       if (!val) this.disposeInfoEditor()
     },
     'importDialog.visible'(val) {
-      if (!val) this.disposeImportEditor()
+      if (!val) {
+        this.disposeImportEditor()
+        this.importDragOver = false
+      }
     }
   },
   computed: {
@@ -422,6 +465,35 @@ export default {
       this.mainTable.queryParams.pageNum = 1
       this.fetchList()
     },
+    // 当前过滤条件对应的 where 子句(主表别名 a), 用于「where子句/保存查询」弹窗预填
+    buildFilterWhere() {
+      const esc = value => String(value).replace(/'/g, "''")
+      const conds = []
+      const app = String(this.formData.app || '').trim()
+      if (app) {
+        if (app.charAt(0) === '=') {
+          conds.push("a.APP = '" + esc(app.substring(1).toUpperCase()) + "'")
+        } else {
+          conds.push("a.APP LIKE '%" + esc(app.toUpperCase()) + "%'")
+        }
+      }
+      const description = String(this.formData.description || '').trim()
+      if (description) {
+        const like = '%' + esc(description.toUpperCase()) + '%'
+        conds.push("(UPPER(l_zh.DESCRIPTION) LIKE '" + like + "' OR UPPER(a.DESCRIPTION) LIKE '" + like + "')")
+      }
+      if (this.listTab === 'xml') {
+        conds.push('EXISTS (SELECT 1 FROM MAXPRESENTATION xp WHERE xp.APP = a.APP)')
+      } else if (this.listTab === 'mafapp') {
+        conds.push("a.APPTYPE IN ('WC')")
+      }
+      const content = String(this.formData.content || '').trim()
+      // 不区分大小写的 XML 内容过滤由服务端 Java 过滤, 无法用 SQL 表达, 不写入默认 where
+      if (content && this.contentCaseSensitive) {
+        conds.push("EXISTS (SELECT 1 FROM MAXPRESENTATION xp WHERE xp.APP = a.APP AND xp.PRESENTATION LIKE '%" + esc(content) + "%')")
+      }
+      return conds.join(' AND ')
+    },
     fetchList() {
       this.loading = true
       const params = {
@@ -432,6 +504,11 @@ export default {
         tab: this.listTab,
         pageNum: this.mainTable.queryParams.pageNum,
         pageSize: this.mainTable.queryParams.pageSize
+      }
+      // 保存查询的自定义 where 条件
+      const customWhere = this.$refs.savedQuery ? this.$refs.savedQuery.getWhere() : ''
+      if (customWhere) {
+        params.where = customWhere
       }
       getMaxAppsList(params)
         .then(res => {
@@ -467,6 +544,10 @@ export default {
       this.contentCaseSensitive = true
       this.listTab = 'all'
       this.hasSearched = false
+      // 同时清空保存查询的自定义条件，避免残留
+      if (this.$refs.savedQuery) {
+        this.$refs.savedQuery.setWhere('')
+      }
       this.mainTable.list = []
       this.mainTable.total = 0
       this.total = 0
@@ -604,6 +685,27 @@ export default {
     reloadAppInfo() {
       this.loadAppInfo()
     },
+    // 导出排除参数 _exclude: 对象key 排除整个对象, 对象key:条件 排除命中条件的行(分号分隔)
+    buildExcludeParam() {
+      const list = []
+      const selected = this.infoDialog.excludeObjects || []
+      selected.forEach(key => {
+        if (key !== 'menus') {
+          list.push(key)
+          return
+        }
+        const scope = this.infoDialog.menuIgnoreScope || 'all'
+        if (scope === 'module') {
+          list.push("menus:menutype = 'MODULE'")
+        } else if (scope === 'appMenu') {
+          // 使用与查询类似的 in 表达式传参
+          list.push("menus:menutype in ('APPMENU','APPTOOL','SEARCHMENU')")
+        } else {
+          list.push('menus')
+        }
+      })
+      return list.join(';')
+    },
     // 获取当前标签页的 JSON 文本(优先编辑器内容, 未就绪时按导出数据生成)
     getActiveJson() {
       const tab = this.infoDialog.activeTab || 'common'
@@ -664,7 +766,7 @@ export default {
     loadAppInfo() {
       const app = this.infoDialog.app
       this.infoDialog.loading = true
-      exportAppInfo(app, { allLangcode: this.infoDialog.allLangcode })
+      exportAppInfo(app, { allLangcode: this.infoDialog.allLangcode, exclude: this.buildExcludeParam() })
         .then(res => {
           let data = (res && res.data !== undefined) ? res.data : res
           if (typeof data === 'string') {
@@ -742,16 +844,32 @@ export default {
       window.URL.revokeObjectURL(url)
     },
     // === 查看当前语言 XML ===
+    languageLabel(lang) {
+      if (!lang) return ''
+      if (lang.name && lang.name !== lang.code) {
+        return lang.name + '（' + lang.code + '）'
+      }
+      return lang.code
+    },
     showLangXml(row) {
-      const langcode = 'ZH'
       this.infoDialog.mode = 'xml'
-      this.infoDialog.title = '当前语言XML(' + langcode + '): ' + row.APP
-      this.infoDialog.appInfo = null
-      this.disposeInfoEditor()
-      this.infoDialog.content = ''
-      this.infoDialog.loading = true
+      this.infoDialog.app = row.APP
+      // 默认使用当前设置的语言
+      this.infoDialog.langcode = getDefaultLangcode() || 'ZH'
       this.infoDialog.visible = true
-      getAppXmlByLang(row.APP, langcode)
+      this.reloadLangXml()
+    },
+    // 按弹窗内选择的语言重新获取 XML(切换语言/刷新按钮共用)
+    reloadLangXml() {
+      const app = this.infoDialog.app
+      const langcode = this.infoDialog.langcode || getDefaultLangcode() || 'ZH'
+      this.infoDialog.langcode = langcode
+      this.infoDialog.title = '当前语言XML(' + langcode + '): ' + app
+      this.infoDialog.appInfo = null
+      this.infoDialog.loading = true
+      this.infoDialog.content = ''
+      this.disposeInfoEditor()
+      getAppXmlByLang(app, langcode)
         .then(res => {
           let data = (res && res.data !== undefined) ? res.data : res
           if (typeof data === 'string') {
@@ -760,7 +878,7 @@ export default {
           const xml = (data && data.presentation) ? data.presentation : ''
           if (!xml) {
             this.$message.error('获取当前语言XML失败: ' + ((data && data.message) || '无内容'))
-            this.infoDialog.visible = false
+            this.infoDialog.content = ''
             return
           }
           this.infoDialog.content = this.formatXml(xml)
@@ -770,7 +888,6 @@ export default {
         })
         .catch(err => {
           this.$message.error('获取当前语言XML失败: ' + (err.message || String(err)))
-          this.infoDialog.visible = false
         })
         .finally(() => {
           this.infoDialog.loading = false
@@ -928,10 +1045,24 @@ export default {
     },
     onImportFileChange(file) {
       this.importDialog.fileList = [file]
-      this.importDialog.result = ''
-      this.importDialog.resultData = null
-      this.importDialog.resultSuccess = false
-      this.importDialog.summary = ''
+      this.resetImportFileState()
+      this.readImportJsonFile(file.raw, file.name)
+    },
+    // 拖拽文件到对话框时读取(与点击选择共用)
+    onImportDrop(event) {
+      this.importDragOver = false
+      const files = event.dataTransfer ? event.dataTransfer.files : null
+      const rawFile = files && files.length ? files[0] : null
+      if (!rawFile) return
+      if (!/\.json$/i.test(rawFile.name)) {
+        this.$message.warning('请拖入 .json 文件')
+        return
+      }
+      this.resetImportFileState()
+      this.readImportJsonFile(rawFile, rawFile.name)
+    },
+    // 读取 JSON 文件内容(点击选择与拖拽共用)
+    readImportJsonFile(rawFile, fileName) {
       const reader = new FileReader()
       reader.onload = e => {
         const text = String(e.target.result || '')
@@ -939,12 +1070,19 @@ export default {
         try {
           const payload = this.parseImportJson(text)
           const app = this.resolveImportApp(payload)
-          this.$message.success('已读取文件: ' + file.name + (app ? '（应用: ' + app + '）' : ''))
+          this.$message.success('已读取文件: ' + fileName + (app ? '（应用: ' + app + '）' : ''))
         } catch (err) {
           this.$message.error('JSON 解析失败: ' + (err.message || String(err)))
         }
       }
-      reader.readAsText(file.raw, 'UTF-8')
+      reader.readAsText(rawFile, 'UTF-8')
+    },
+    // 清空上一次导入结果(换文件时)
+    resetImportFileState() {
+      this.importDialog.result = ''
+      this.importDialog.resultData = null
+      this.importDialog.resultSuccess = false
+      this.importDialog.summary = ''
     },
     onImportFileRemove() {
       this.importDialog.fileList = []
@@ -1151,9 +1289,18 @@ export default {
         .finally(() => {
           this.detailLoading = false
         })
+    },
+    // 语言下拉: 复用全局语言缓存
+    initLangOptions() {
+      const apply = () => {
+        this.langOptions = getLanguageOptions()
+      }
+      apply()
+      loadLanguageConfig().then(apply).catch(() => {})
     }
   },
   mounted() {
+    this.initLangOptions()
     if (this.mainTable) {
       this.mainTable.onPageChange = (page, limit) => {
         this.handlePageChange(page, limit)
@@ -1185,6 +1332,14 @@ export default {
   margin-bottom: 8px;
   text-align: right;
 }
+.info-toolbar .info-toolbar-label {
+  margin-left: 12px;
+  margin-right: 6px;
+  color: #606266;
+}
+.info-toolbar .el-select + .el-select {
+  margin-left: 8px;
+}
 .monaco-pane {
   height: 60vh;
   border: 1px solid #dcdfe6;
@@ -1202,6 +1357,26 @@ export default {
   margin-top: 12px;
   display: flex;
   align-items: center;
+}
+/* 导入弹窗: 内容区整体支持拖拽 JSON 文件 */
+.import-drop-wrap {
+  position: relative;
+}
+.import-drop-mask {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(64, 158, 255, 0.08);
+  border: 1px dashed #409eff;
+  border-radius: 6px;
+  color: #409eff;
+  font-size: 13px;
+  pointer-events: none;
 }
 .import-result-summary {
   margin: 0 8px;

@@ -5,10 +5,16 @@
         <div>
           <h2>{{ config.title }}</h2>
           <p class="page-summary">
-            维护 {{ config.objectName }}.{{ config.mlField }} 的多语言译文，支持按行维护及 JSON 导入/导出。
+            维护 {{ config.objectName }} 的 {{ mlFieldLabel }} 多语言译文，支持按行维护及 JSON 导入/导出。
           </p>
         </div>
         <div class="page-actions">
+          <saved-query-panel
+            ref="savedQuery"
+            :appname="config.savedQueryApp"
+            :default-where="buildWhere()"
+            @whereChange="handleWhereChange"
+            @ready="handleSavedQueryReady" />
           <el-button type="primary" size="mini" icon="el-icon-upload2" @click="openImport">导入</el-button>
           <el-button size="mini" icon="el-icon-download" @click="openExport">导出</el-button>
         </div>
@@ -43,6 +49,11 @@
           <el-button size="mini" icon="el-icon-refresh" @click="resetForm">重置</el-button>
         </el-form-item>
       </el-form>
+
+      <!-- 过滤标签页: 仅用标签头作为查询条件(如 所有/应用XML/MAFAPP) -->
+      <el-tabs v-if="config.tabs && config.tabs.length" v-model="listTab" class="filter-tabs" @tab-click="handleTabChange">
+        <el-tab-pane v-for="tab in config.tabs" :key="tab.name" :label="tab.label" :name="tab.name" />
+      </el-tabs>
 
       <div class="table-toolbar">
         <el-tooltip :content="showAllColumns ? '隐藏多余列' : '显示所有列'" placement="top">
@@ -95,7 +106,7 @@
             </template>
           </template>
           <template slot-scope="scope">
-            <span v-if="langValue(scope.row, col.code)" :class="{ 'ml-current': col.code === queryLang }">{{ langValue(scope.row, col.code) }}</span>
+            <span v-if="langValue(scope.row, col.mlField, col.code)" :class="{ 'ml-current': col.code === queryLang }">{{ langValue(scope.row, col.mlField, col.code) }}</span>
             <span v-else class="ml-empty">-</span>
           </template>
         </el-table-column>
@@ -139,15 +150,43 @@
       </div>
       <el-tabs v-model="editor.activeLang">
         <el-tab-pane v-for="tab in editor.languages" :key="tab.code" :label="tab.label" :name="tab.code">
-          <el-input
-            v-model="tab.value"
-            type="textarea"
-            :rows="4"
-            maxlength="4000"
-            show-word-limit
-            :placeholder="config.mlField + ' 的 ' + tab.code + ' 译文'" />
+          <div v-for="def in mlFieldDefs" :key="def.field" class="editor-field">
+            <div class="editor-field-label">{{ def.label || def.field }}</div>
+            <el-input
+              v-model="tab.values[def.field]"
+              type="textarea"
+              :rows="mlFieldDefs.length > 1 ? 3 : 4"
+              :maxlength="def.maxlength || 4000"
+              show-word-limit
+              :placeholder="def.field + ' 的 ' + tab.code + ' 译文'" />
+          </div>
         </el-tab-pane>
       </el-tabs>
+      <!-- JSON 预览/编辑: 默认收起, 首次展开生成当前表单 JSON -->
+      <el-collapse v-model="editor.collapse" class="editor-json-collapse" @change="handleEditorCollapse">
+        <el-collapse-item name="json">
+          <template slot="title">
+            <span class="editor-json-title">JSON 预览/编辑</span>
+          </template>
+          <div class="editor-json-toolbar">
+            <el-tooltip content="根据对话框内填写的内容更新 JSON" placement="top">
+              <el-button size="mini" type="primary" plain icon="el-icon-caret-bottom" @click="syncJsonFromForm">更新JSON</el-button>
+            </el-tooltip>
+            <el-tooltip content="根据 JSON 内容更新对话框内的输入框和其他属性" placement="top">
+              <el-button size="mini" type="success" plain icon="el-icon-caret-top" @click="applyJsonToForm">应用到表单</el-button>
+            </el-tooltip>
+            <el-button size="mini" icon="el-icon-copy-document" @click="copyEditorJson">复制当前JSON</el-button>
+          </div>
+          <el-tabs v-model="editor.jsonTab">
+            <el-tab-pane label="单对象JSON" name="single">
+              <el-input v-model="editor.jsonSingle" type="textarea" :rows="12" placeholder="当前行对象的多语言 JSON" />
+            </el-tab-pane>
+            <el-tab-pane label="可导入JSON" name="importable">
+              <el-input v-model="editor.jsonImportable" type="textarea" :rows="12" placeholder="外层包导入根节点的 JSON，可直接粘贴到导入对话框" />
+            </el-tab-pane>
+          </el-tabs>
+        </el-collapse-item>
+      </el-collapse>
       <span slot="footer" class="dialog-footer">
         <el-button @click="editor.visible = false">取 消</el-button>
         <el-button type="primary" :loading="editor.saving" @click="saveEditor">保 存</el-button>
@@ -155,28 +194,34 @@
     </el-dialog>
 
     <!-- 导入 -->
-    <el-dialog title="导入多语言 JSON" :visible.sync="importDialog.visible" width="80%" top="5vh" :close-on-click-modal="false">
+    <el-dialog title="导入多语言 JSON" :visible.sync="importDialog.visible" width="80%" top="5vh" :close-on-click-modal="false" @opened="onImportDialogOpened" @closed="disposeImportEditor">
       <el-alert
         type="info"
         :closable="false"
         show-icon
         style="margin-bottom:12px;"
-        :title="'根节点为 ' + config.listKey + '，按 ' + config.keyFields.join(' + ') + ' 匹配更新；勾选「启用迁移模式」时 MboSet 使用 setDMDeploySet(true)。'" />
-      <div class="dialog-toolbar">
-        <el-upload
-          ref="importUpload"
-          :auto-upload="false"
-          :show-file-list="false"
-          accept=".json"
-          :on-change="onImportFile">
-          <el-button size="mini" icon="el-icon-folder-opened">选择 JSON 文件</el-button>
-        </el-upload>
-        <el-checkbox v-model="importDialog.dmDeploySet">启用迁移模式(dmDeploySet)</el-checkbox>
-      </div>
-      <el-input v-model="importDialog.text" type="textarea" :rows="16" placeholder="粘贴导出 JSON 或选择文件" />
-      <div v-if="importDialog.result" class="import-result-bar">
-        <el-tag :type="importDialog.resultSuccess ? 'success' : 'danger'" size="small">{{ importDialog.resultSuccess ? '导入完成' : '导入存在失败' }}</el-tag>
-        <span class="import-result-summary">{{ importDialog.result }}</span>
+        :title="config.importMaxObjects
+          ? '支持 maxObjects 格式（表结构+多语言 / 仅多语言 / 仅结构，自动识别）或 ' + config.listKey + ' 平铺格式，按 ' + config.keyFields.join(' + ') + ' 匹配更新。'
+          : '根节点为 ' + config.listKey + '，按 ' + config.keyFields.join(' + ') + ' 匹配更新；勾选「启用迁移模式」时 MboSet 使用 setDMDeploySet(true)。'" />
+      <div class="import-drop-wrap" @dragover.prevent="importDragOver = true" @dragleave.prevent="importDragOver = false" @drop.prevent="onImportDrop">
+        <div class="dialog-toolbar">
+          <el-upload
+            ref="importUpload"
+            :auto-upload="false"
+            :show-file-list="false"
+            accept=".json"
+            :on-change="onImportFile">
+            <el-button size="mini" icon="el-icon-folder-opened">选择 JSON 文件</el-button>
+          </el-upload>
+          <el-checkbox v-model="importDialog.dmDeploySet">启用迁移模式(dmDeploySet)</el-checkbox>
+          <span class="import-drop-tip">也可将 .json 文件直接拖入本对话框</span>
+        </div>
+        <div ref="importMonacoRef" class="monaco-container import-monaco" />
+        <div v-if="importDialog.result" class="import-result-bar">
+          <el-tag :type="importDialog.resultSuccess ? 'success' : 'danger'" size="small">{{ importDialog.resultSuccess ? '导入完成' : '导入存在失败' }}</el-tag>
+          <span class="import-result-summary">{{ importDialog.result }}</span>
+        </div>
+        <div v-if="importDragOver" class="import-drop-mask">松开鼠标即可读取 JSON 文件</div>
       </div>
       <span slot="footer" class="dialog-footer">
         <el-button @click="importDialog.visible = false">关 闭</el-button>
@@ -215,12 +260,18 @@
 
 <script>
 import { getDefaultLangcode, getLanguageConfig, getLanguageOptions, loadLanguageConfig } from '@/utils/mmp/mmp-config'
+import { exportConfigurMl } from '@/api/mlmaint'
 import { generateUUID } from '@/utils/sks'
+import SavedQueryPanel from '@/views/components/SavedQueryPanel.vue'
+import * as monaco from 'monaco-editor'
 
 const IMPORT_BATCH_SIZE = 200
 
 export default {
   name: 'MlMaintain',
+  components: {
+    SavedQueryPanel
+  },
   props: {
     config: {
       type: Object,
@@ -235,6 +286,8 @@ export default {
     return {
       formData,
       queryLang: getDefaultLangcode(),
+      // 过滤标签页: config.tabs 的第一个 name(如 all), 未配置为空
+      listTab: (this.config.tabs && this.config.tabs[0] && this.config.tabs[0].name) || '',
       langOptions: [],
       list: [],
       total: 0,
@@ -242,6 +295,8 @@ export default {
       pageSize: 20,
       loading: false,
       hasSearched: false,
+      // 保存查询初始化完成前不查主表
+      sqReady: false,
       showAllColumns: false,
       showPropName: false,
       colInfoDialog: {
@@ -254,7 +309,13 @@ export default {
         saving: false,
         row: {},
         activeLang: 'EN',
-        languages: []
+        languages: [],
+        // JSON 折叠面板: 默认收起, 数据按需生成
+        collapse: [],
+        jsonTab: 'single',
+        jsonSingle: '',
+        jsonImportable: '',
+        jsonReady: false
       },
       importDialog: {
         visible: false,
@@ -262,8 +323,14 @@ export default {
         dmDeploySet: true,
         text: '',
         result: '',
-        resultSuccess: false
+        resultSuccess: false,
+        // 非空表示当前 JSON 为 CONFIGUR 的 maxObjects 格式
+        maxObjects: null
       },
+      // 导入对话框正在拖入文件
+      importDragOver: false,
+      // 导入 JSON 的 Monaco 编辑器实例
+      importMonaco: null,
       exportDialog: {
         visible: false,
         loading: false,
@@ -279,33 +346,54 @@ export default {
     editorTitle() {
       return this.config.keyFields.map(key => this.editor.row[key]).filter(v => v !== null && v !== undefined && v !== '').join(' / ')
     },
+    // 多语言字段定义: config.mlFields 支持字符串或 { field, label, maxlength }; 未配置时回退 config.mlField
+    mlFieldDefs() {
+      const list = this.config.mlFields && this.config.mlFields.length ? this.config.mlFields : [this.config.mlField]
+      return list.map(item => {
+        const def = typeof item === 'string' ? { field: item } : Object.assign({}, item)
+        if (!def.label) {
+          def.label = def.field
+        }
+        return def
+      })
+    },
+    mlFieldLabel() {
+      return this.mlFieldDefs.map(def => def.label || def.field).join(' / ')
+    },
     visibleColumns() {
       return this.showAllColumns
         ? this.config.columns
         : this.config.columns.filter(col => !col.advanced)
     },
-    // 动态语言列: 后端 sks:langdata.<mlField>({语言:值}), 前端扫描语言生成列
+    // 动态语言列: 每个多语言字段 × 后端 sks:langdata 中出现的语言
     valueLangColumns() {
-      const codes = []
-      const add = code => {
-        const key = String(code || '').toUpperCase()
-        if (key && codes.indexOf(key) === -1) {
-          codes.push(key)
-        }
-      }
-      this.list.forEach(row => {
-        Object.keys(this.langData(row)).forEach(add)
-      })
       const current = String(this.queryLang || '').toUpperCase()
-      if (current && codes.indexOf(current) >= 0) {
-        codes.splice(codes.indexOf(current), 1)
-        codes.unshift(current)
-      }
-      return codes.map(code => ({
-        code,
-        prop: 'sks:langdata.' + this.config.mlField + '.' + code,
-        label: '译文(' + code + ')'
-      }))
+      const columns = []
+      this.mlFieldDefs.forEach(def => {
+        const codes = []
+        const add = code => {
+          const key = String(code || '').toUpperCase()
+          if (key && codes.indexOf(key) === -1) {
+            codes.push(key)
+          }
+        }
+        this.list.forEach(row => {
+          Object.keys(this.langData(row, def.field)).forEach(add)
+        })
+        if (current && codes.indexOf(current) >= 0) {
+          codes.splice(codes.indexOf(current), 1)
+          codes.unshift(current)
+        }
+        codes.forEach(code => {
+          columns.push({
+            code,
+            mlField: def.field,
+            prop: 'sks:langdata.' + def.field + '.' + code,
+            label: this.mlFieldDefs.length > 1 ? (def.label || def.field) + '(' + code + ')' : '译文(' + code + ')'
+          })
+        })
+      })
+      return columns
     },
     // 放大镜弹窗内容: 列配置 + 当前页首个非空示例值
     colInfoRows() {
@@ -318,11 +406,11 @@ export default {
         { key: '显示名 (label)', value: col.label },
         { key: '列宽 (width)', value: col.width || '-' },
         { key: '最小列宽 (minWidth)', value: col.minWidth || '-' },
-        { key: '列类型', value: col.code ? '多语言译文列（' + col.code + '）' : (col.advanced ? '高级列（仅「显示所有列」时展示）' : '普通列') }
+        { key: '列类型', value: col.code ? '多语言译文列（' + col.mlField + ' / ' + col.code + '）' : (col.advanced ? '高级列（仅「显示所有列」时展示）' : '普通列') }
       ]
       let sample = '-'
       for (let i = 0; i < this.list.length; i++) {
-        const value = col.code ? this.langValue(this.list[i], col.code) : this.list[i][col.prop]
+        const value = col.code ? this.langValue(this.list[i], col.mlField, col.code) : this.list[i][col.prop]
         if (value !== null && typeof value !== 'undefined' && value !== '') {
           sample = String(value)
           break
@@ -334,7 +422,7 @@ export default {
   },
   created() {
     this.initLanguages()
-    this.getList()
+    // 等保存查询 ready 后再首次查询, 保证首查带默认查询条件
   },
   methods: {
     // ==================== 语言 ====================
@@ -380,6 +468,44 @@ export default {
       return (configured && (configured.mmpDefaultLang || configured.baseLanguage)) || (this.langOptions[0] || {}).code || 'EN'
     },
 
+    // ==================== 保存查询 ====================
+    getCustomWhere() {
+      const panel = this.$refs.savedQuery
+      return panel && panel.getWhere ? String(panel.getWhere() || '').trim() : ''
+    },
+    // 当前表单条件生成的 SQL, 用于「保存查询」弹窗预填
+    buildWhere() {
+      const conds = []
+      this.config.searchFields.forEach(field => {
+        if (!field.col) {
+          return
+        }
+        const raw = this.formData[field.param]
+        const value = raw === undefined || raw === null ? '' : String(raw).trim()
+        if (!value) {
+          return
+        }
+        const exact = field.type === 'select' || value.charAt(0) === '='
+        const text = (field.type === 'select' ? value : (exact ? value.substring(1) : value)).replace(/'/g, "''")
+        const pattern = exact ? text : (text.indexOf('%') >= 0 ? text : '%' + text + '%')
+        conds.push('upper(' + field.col + ') ' + (exact ? '=' : 'like') + " '" + pattern.toUpperCase() + "'")
+      })
+      return conds.join(' and ')
+    },
+    handleWhereChange() {
+      // 初始化阶段默认查询触发的 whereChange 忽略, 由 ready 统一查询
+      if (!this.sqReady) {
+        return
+      }
+      this.pageNum = 1
+      this.getList()
+    },
+    handleSavedQueryReady() {
+      this.sqReady = true
+      this.pageNum = 1
+      this.getList()
+    },
+
     // ==================== 查询 ====================
     async getList() {
       this.loading = true
@@ -397,6 +523,13 @@ export default {
             params[field.param] = field.type === 'select' ? '=' + String(value).trim() : String(value).trim()
           }
         })
+        const customWhere = this.getCustomWhere()
+        if (customWhere) {
+          params.where = customWhere
+        }
+        if (this.listTab) {
+          params.tab = this.listTab
+        }
         const res = await this.config.api.query(params)
         const data = this.parseScriptResponse(res)
         this.list = data[this.config.listKey] || []
@@ -412,10 +545,21 @@ export default {
       this.pageNum = 1
       this.getList()
     },
+    // 标签页作为过滤条件(所有/应用XML/MAFAPP), 切换后重新查询
+    handleTabChange() {
+      this.pageNum = 1
+      this.getList()
+    },
     resetForm() {
       this.config.searchFields.forEach(field => {
         this.formData[field.param] = ''
       })
+      if (this.config.tabs && this.config.tabs.length) {
+        this.listTab = this.config.tabs[0].name
+      }
+      if (this.$refs.savedQuery) {
+        this.$refs.savedQuery.setWhere('')
+      }
       this.handleQuery()
     },
     handlePageChange(page) {
@@ -438,11 +582,12 @@ export default {
       }
       return body.data || {}
     },
-    langData(row) {
-      return (row && row['sks:langdata'] && row['sks:langdata'][this.config.mlField]) || {}
+    langData(row, field) {
+      const all = (row && row['sks:langdata']) || {}
+      return all[field] || {}
     },
-    langValue(row, code) {
-      return this.langData(row)[code] || ''
+    langValue(row, field, code) {
+      return this.langData(row, field)[code] || ''
     },
     formatCell(value) {
       if (value === null || value === undefined || value === '') {
@@ -488,7 +633,17 @@ export default {
       })
       return keys
     },
-    buildTabs(values) {
+    // 某语言下各多语言字段的编辑值
+    fieldValues(langdata, code) {
+      const values = {}
+      this.mlFieldDefs.forEach(def => {
+        const fieldData = (langdata && langdata[def.field]) || {}
+        const v = fieldData[code]
+        values[def.field] = v === undefined || v === null ? '' : String(v)
+      })
+      return values
+    },
+    buildTabs(langdata) {
       const codes = []
       const add = code => {
         const key = String(code || '').toUpperCase()
@@ -501,23 +656,30 @@ export default {
       if (codes.length === 0) {
         add('EN')
       }
-      Object.keys(values || {}).forEach(add)
+      this.mlFieldDefs.forEach(def => {
+        Object.keys((langdata && langdata[def.field]) || {}).forEach(add)
+      })
       return codes.map(code => ({
         code,
         label: this.languageLabelByCode(code),
-        value: values && values[code] !== undefined && values[code] !== null ? String(values[code]) : ''
+        values: this.fieldValues(langdata, code)
       }))
     },
     async openEditor(row) {
       const keys = this.pickKeys(row)
-      const tabs = this.buildTabs(this.langData(row))
+      const tabs = this.buildTabs(row['sks:langdata'])
       const preferred = String(this.queryLang || '').toUpperCase()
       this.editor = {
         visible: true,
         saving: false,
         row: keys,
         activeLang: tabs.some(tab => tab.code === preferred) ? preferred : (tabs[0] ? tabs[0].code : 'EN'),
-        languages: tabs
+        languages: tabs,
+        collapse: [],
+        jsonTab: 'single',
+        jsonSingle: '',
+        jsonImportable: '',
+        jsonReady: false
       }
       try {
         const params = Object.assign({ _langcode: this.queryLang, _allLangcode: 'true' }, keys)
@@ -526,7 +688,11 @@ export default {
         const detail = (data[this.config.listKey] || [])[0]
         if (detail) {
           this.editor.row = this.pickKeys(detail)
-          this.editor.languages = this.buildTabs(this.langData(detail))
+          this.editor.languages = this.buildTabs(detail['sks:langdata'])
+          // 详情内容变化, JSON 需重新生成
+          this.editor.jsonSingle = ''
+          this.editor.jsonImportable = ''
+          this.editor.jsonReady = false
           if (!this.editor.languages.some(tab => tab.code === this.editor.activeLang)) {
             this.editor.activeLang = this.editor.languages[0] ? this.editor.languages[0].code : 'EN'
           }
@@ -536,19 +702,26 @@ export default {
       }
     },
     async saveEditor() {
-      const values = {}
-      this.editor.languages.forEach(tab => {
-        const text = String(tab.value === undefined || tab.value === null ? '' : tab.value)
-        if (text.trim() !== '') {
-          values[tab.code] = text
+      const langdata = {}
+      this.mlFieldDefs.forEach(def => {
+        const values = {}
+        this.editor.languages.forEach(tab => {
+          const raw = tab.values[def.field]
+          const text = String(raw === undefined || raw === null ? '' : raw)
+          if (text.trim() !== '') {
+            values[tab.code] = text
+          }
+        })
+        if (Object.keys(values).length > 0) {
+          langdata[def.field] = values
         }
       })
-      if (Object.keys(values).length === 0) {
+      if (Object.keys(langdata).length === 0) {
         this.$message.warning('请至少填写一种语言的译文')
         return
       }
       const row = Object.assign({}, this.editor.row)
-      row['sks:langdata'] = { [this.config.mlField]: values }
+      row['sks:langdata'] = langdata
       this.editor.saving = true
       try {
         const res = await this.config.api.importData(
@@ -572,25 +745,202 @@ export default {
       }
     },
 
+    // ==================== 维护弹窗 JSON 面板 ====================
+    // 折叠面板首次展开时生成 JSON
+    handleEditorCollapse(names) {
+      const opened = Array.isArray(names) ? names.indexOf('json') >= 0 : names === 'json'
+      if (opened && !this.editor.jsonReady) {
+        this.syncJsonFromForm(true)
+      }
+    },
+    // 表单当前内容 => 行对象(含 sks:langdata)
+    buildEditorRow() {
+      const row = Object.assign({}, this.editor.row)
+      const langdata = {}
+      this.mlFieldDefs.forEach(def => {
+        const values = {}
+        this.editor.languages.forEach(tab => {
+          const raw = tab.values[def.field]
+          const text = String(raw === undefined || raw === null ? '' : raw)
+          if (text.trim() !== '') {
+            values[tab.code] = text
+          }
+        })
+        if (Object.keys(values).length > 0) {
+          langdata[def.field] = values
+        }
+      })
+      if (Object.keys(langdata).length > 0) {
+        row['sks:langdata'] = langdata
+      }
+      return row
+    },
+    // 对话框内容 -> JSON(el-icon-caret-bottom)
+    syncJsonFromForm(silent) {
+      const row = this.buildEditorRow()
+      this.editor.jsonSingle = JSON.stringify(row, null, 2)
+      this.editor.jsonImportable = JSON.stringify({ [this.config.listKey]: [row] }, null, 2)
+      this.editor.jsonReady = true
+      if (!silent) {
+        this.$message.success('已根据表单内容更新 JSON')
+      }
+    },
+    // JSON -> 对话框内容(el-icon-caret-top)
+    applyJsonToForm() {
+      const text = this.editor.jsonTab === 'importable' ? this.editor.jsonImportable : this.editor.jsonSingle
+      if (!text || !text.trim()) {
+        this.$message.warning('JSON 内容为空，请先填写或点击「更新JSON」')
+        return
+      }
+      let parsed
+      try {
+        parsed = JSON.parse(text)
+      } catch (e) {
+        this.$message.error('JSON 解析失败: ' + (e.message || String(e)))
+        return
+      }
+      // 兼容可导入格式: 根节点数组 / maxObjects
+      if (parsed && Array.isArray(parsed[this.config.listKey])) {
+        parsed = parsed[this.config.listKey][0]
+      } else if (parsed && Array.isArray(parsed.maxObjects)) {
+        parsed = parsed.maxObjects[0]
+      }
+      if (!parsed || typeof parsed !== 'object') {
+        this.$message.error('JSON 结构不正确，需为单个行对象')
+        return
+      }
+      // 更新行字段(忽略 sks: 注解与 _ 控制字段)
+      const row = Object.assign({}, this.editor.row)
+      Object.keys(parsed).forEach(key => {
+        if (key === 'sks:langdata' || key.indexOf('sks:') === 0 || key.charAt(0) === '_') return
+        row[key] = parsed[key]
+      })
+      this.editor.row = row
+      // 更新各语言输入框, 未知语言自动补页签
+      const tabs = this.editor.languages.map(tab => ({
+        code: tab.code,
+        label: tab.label,
+        values: Object.assign({}, tab.values)
+      }))
+      const langdata = parsed['sks:langdata'] || {}
+      const fieldNames = this.mlFieldDefs.map(def => def.field)
+      Object.keys(langdata).forEach(field => {
+        if (fieldNames.indexOf(field) === -1) return
+        const values = langdata[field] || {}
+        Object.keys(values).forEach(lang => {
+          const code = String(lang).toUpperCase()
+          let tab = tabs.filter(item => item.code === code)[0]
+          if (!tab) {
+            tab = {
+              code,
+              label: this.languageLabelByCode(code),
+              values: {}
+            }
+            tabs.push(tab)
+          }
+          tab.values[field] = values[lang]
+        })
+      })
+      this.editor.languages = tabs
+      this.$message.success('已按 JSON 更新对话框内容')
+    },
+    copyEditorJson() {
+      const text = this.editor.jsonTab === 'importable' ? this.editor.jsonImportable : this.editor.jsonSingle
+      if (!text) {
+        this.$message.warning('JSON 内容为空')
+        return
+      }
+      this.copyText(text, 'JSON 已复制')
+    },
+
     // ==================== 导入 ====================
     openImport() {
       this.importDialog.text = ''
       this.importDialog.result = ''
       this.importDialog.resultSuccess = false
       this.importDialog.dmDeploySet = true
+      this.importDialog.maxObjects = null
+      this.importDragOver = false
       this.importDialog.visible = true
     },
     onImportFile(file) {
+      if (!file || !file.raw) return
+      this.readImportFile(file.raw)
+    },
+    // 拖拽文件到对话框时读取(与点击选择共用)
+    onImportDrop(event) {
+      this.importDragOver = false
+      const files = event.dataTransfer ? event.dataTransfer.files : null
+      const file = files && files.length ? files[0] : null
+      if (!file) return
+      if (!/\.json$/i.test(file.name)) {
+        this.$message.warning('请拖入 .json 文件')
+        return
+      }
+      this.readImportFile(file)
+    },
+    // 导入对话框打开后初始化 Monaco
+    onImportDialogOpened() {
+      this.$nextTick(() => {
+        if (!this.$refs.importMonacoRef) {
+          return
+        }
+        if (!this.importMonaco) {
+          this.importMonaco = monaco.editor.create(this.$refs.importMonacoRef, {
+            value: this.importDialog.text || '',
+            language: 'json',
+            theme: 'vs',
+            minimap: { enabled: false },
+            automaticLayout: true,
+            scrollBeyondLastLine: false,
+            folding: true,
+            wordWrap: 'on',
+            fontSize: 12
+          })
+          this.importMonaco.onDidChangeModelContent(() => {
+            this.importDialog.text = this.importMonaco.getValue()
+          })
+        } else {
+          this.importMonaco.setValue(this.importDialog.text || '')
+        }
+      })
+    },
+    disposeImportEditor() {
+      if (this.importMonaco) {
+        this.importMonaco.dispose()
+        this.importMonaco = null
+      }
+    },
+    // 文件内容写入 Monaco(编辑器未创建时先放 text, 打开后同步)
+    setImportText(text) {
+      this.importDialog.text = text
+      if (this.importMonaco) {
+        this.importMonaco.setValue(text || '')
+      }
+    },
+    readImportFile(file) {
       const reader = new FileReader()
       reader.onload = e => {
-        this.importDialog.text = String(e.target.result || '')
+        this.setImportText(String(e.target.result || ''))
+        this.importDialog.result = ''
+        this.importDialog.resultSuccess = false
+        this.$message.success('已读取文件: ' + file.name)
       }
-      reader.readAsText(file.raw)
+      reader.onerror = () => {
+        this.$message.error('读取文件失败: ' + file.name)
+      }
+      reader.readAsText(file)
     },
     parseImportRows(text) {
       const parsed = JSON.parse(text)
+      this.importDialog.maxObjects = null
       if (Array.isArray(parsed)) {
         return parsed
+      }
+      // SKS_MIGRATEAPI_CONFIGUR 的 maxObjects 格式(表结构/仅多语言)
+      if (this.config.importMaxObjects && parsed && Array.isArray(parsed.maxObjects)) {
+        this.importDialog.maxObjects = parsed.maxObjects
+        return parsed.maxObjects
       }
       if (parsed && Array.isArray(parsed[this.config.listKey])) {
         return parsed[this.config.listKey]
@@ -598,7 +948,7 @@ export default {
       if (parsed && parsed.data && Array.isArray(parsed.data[this.config.listKey])) {
         return parsed.data[this.config.listKey]
       }
-      throw new Error('未找到根节点 ' + this.config.listKey)
+      throw new Error('未找到根节点 ' + (this.config.importMaxObjects ? 'maxObjects 或 ' : '') + this.config.listKey)
     },
     async doImport() {
       if (!this.importDialog.text || this.importDialog.text.trim() === '') {
@@ -633,7 +983,7 @@ export default {
               _allLangcode: 'true',
               dmDeploySet: this.importDialog.dmDeploySet ? 'true' : 'false'
             },
-            { [this.config.listKey]: batch }
+            this.importDialog.maxObjects ? { maxObjects: batch } : { [this.config.listKey]: batch }
           )
           const data = this.parseScriptResponse(res)
           merged.total += Number(data.total || batch.length)
@@ -680,28 +1030,44 @@ export default {
         _langcode: this.queryLang,
         _allLangcode: this.exportDialog.allLangcode ? 'true' : 'false'
       }
-      if (this.exportDialog.scope === 'selected') {
-        const ids = this.selectedRows
-          .map(row => row[this.config.primaryKey])
-          .filter(value => value !== null && value !== undefined && String(value) !== '')
-        if (ids.length === 0) {
-          this.$message.warning('选中记录缺少 ' + this.config.primaryKey + '，无法导出')
-          return
-        }
-        params[this.config.idsParam] = ids
-      } else {
-        this.config.searchFields.forEach(field => {
-          const value = this.formData[field.param]
-          if (value !== undefined && value !== null && String(value).trim() !== '') {
-            params[field.param] = field.type === 'select' ? '=' + String(value).trim() : String(value).trim()
-          }
-        })
+      if (this.listTab) {
+        params.tab = this.listTab
       }
       this.exportDialog.loading = true
       try {
+        if (this.exportDialog.scope === 'selected') {
+          // 仅多语言导出(maxObjects 格式): 直接用选中行, 不再按 id 参数查询
+          if (this.config.exportMl) {
+            await this.loadMlExport(this.selectedRows.slice())
+            return
+          }
+          const ids = this.selectedRows
+            .map(row => row[this.config.primaryKey])
+            .filter(value => value !== null && value !== undefined && String(value) !== '')
+          if (ids.length === 0) {
+            this.$message.warning('选中记录缺少 ' + this.config.primaryKey + '，无法导出')
+            return
+          }
+          params[this.config.idsParam] = ids
+        } else {
+          this.config.searchFields.forEach(field => {
+            const value = this.formData[field.param]
+            if (value !== undefined && value !== null && String(value).trim() !== '') {
+              params[field.param] = field.type === 'select' ? '=' + String(value).trim() : String(value).trim()
+            }
+          })
+          const customWhere = this.getCustomWhere()
+          if (customWhere) {
+            params.where = customWhere
+          }
+        }
         const res = await this.config.api.exportData(params)
         const data = this.parseScriptResponse(res)
         const rows = data[this.config.listKey] || []
+        if (this.config.exportMl) {
+          await this.loadMlExport(rows)
+          return
+        }
         rows.forEach(row => {
           if (this.exportDialog.withUuid) {
             if (!row['sks:uuid']) {
@@ -718,6 +1084,30 @@ export default {
       } finally {
         this.exportDialog.loading = false
       }
+    },
+    // 仅多语言导出: 组装 maxObjects 格式(对象名 + ATTRIBUTENAME + sks:langdata)
+    async loadMlExport(rows) {
+      const objectNames = []
+      const attributeFilters = []
+      rows.forEach(row => {
+        const objectName = row.OBJECTNAME
+        if (objectName && objectNames.indexOf(objectName) === -1) {
+          objectNames.push(objectName)
+        }
+        if (this.config.exportAttributes && objectName && row.ATTRIBUTENAME) {
+          attributeFilters.push({ object: objectName, attribute: row.ATTRIBUTENAME })
+        }
+      })
+      if (objectNames.length === 0) {
+        this.exportDialog.total = 0
+        this.exportDialog.json = ''
+        return
+      }
+      const res = await exportConfigurMl({ objectNames, attributeFilters }, { _langcode: this.queryLang })
+      const data = this.parseScriptResponse(res)
+      const maxObjects = data.maxObjects || []
+      this.exportDialog.total = maxObjects.length
+      this.exportDialog.json = JSON.stringify({ maxObjects }, null, 2)
     },
     copyExport() {
       const text = this.exportDialog.json
@@ -788,6 +1178,15 @@ export default {
     margin-bottom: 8px;
   }
 
+  /* 过滤标签页: 仅标签头作为过滤条件, 不显示空的标签内容区 */
+  .filter-tabs ::v-deep .el-tabs__content {
+    display: none;
+  }
+
+  .filter-tabs ::v-deep .el-tabs__header {
+    margin-bottom: 8px;
+  }
+
   .prop-name-tag {
     margin-left: 6px;
     cursor: pointer;
@@ -815,6 +1214,69 @@ export default {
 
   .editor-meta-item {
     margin-right: 16px;
+  }
+
+  .import-drop-wrap {
+    position: relative;
+  }
+
+  .import-drop-tip {
+    font-size: 12px;
+    color: #909399;
+  }
+
+  .monaco-container {
+    border: 1px solid #dcdfe6;
+    border-radius: 4px;
+    overflow: hidden;
+  }
+
+  .import-monaco {
+    height: 320px;
+  }
+
+  .import-drop-mask {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(64, 158, 255, 0.08);
+    border: 1px dashed #409eff;
+    border-radius: 6px;
+    color: #409eff;
+    font-size: 13px;
+    pointer-events: none;
+  }
+
+  .editor-json-collapse {
+    margin-top: 10px;
+
+    .editor-json-title {
+      font-size: 13px;
+      color: #606266;
+    }
+
+    .editor-json-toolbar {
+      margin-bottom: 8px;
+    }
+
+    .el-collapse-item__content {
+      padding-bottom: 0;
+    }
+  }
+
+  .editor-field {
+    margin-bottom: 10px;
+  }
+
+  .editor-field-label {
+    margin-bottom: 4px;
+    color: #606266;
+    font-size: 12px;
   }
 
   .dialog-toolbar {

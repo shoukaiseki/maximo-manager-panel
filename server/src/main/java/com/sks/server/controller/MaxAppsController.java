@@ -20,16 +20,17 @@ public class MaxAppsController {
      * MAXAPPS 列表查询（支持分页）
      * GET /solonapi/maxapps/list?app=&description=&content=&contentCaseSensitive=true&tab=all&pageNum=1&pageSize=20
      * tab: all=所有应用；xml=有 XML 的应用；mafapp=MAFAPP（APPTYPE in ('WC')）
+     * where: 保存查询的自定义 SQL 条件（追加在主表别名 a 之后）
      */
     @Mapping(value = "/maxapps/list", method = MethodType.GET)
     public RestResult<Map<String, Object>> list(
-            String app, String description, String content,
+            String app, String description, String content, String where,
             @Param(defaultValue = "true") boolean contentCaseSensitive,
             @Param(defaultValue = "all") String tab,
             @Param(defaultValue = "1") int pageNum,
             @Param(defaultValue = "20") int pageSize) {
         Map<String, Object> data = maxAppsService.queryList(
-                app, description, content, contentCaseSensitive, tab, pageNum, pageSize);
+                app, description, content, where, contentCaseSensitive, tab, pageNum, pageSize);
         return RestResult.ok(data);
     }
 

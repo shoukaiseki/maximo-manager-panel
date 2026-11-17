@@ -1,0 +1,226 @@
+{
+  "maxObjects": [
+    {
+      "object": "TEST_SKS_WF1",
+      "description": "流程测试主表",
+      "sks:langdata": {
+        "DESCRIPTION": {
+          "JA": "流程测试主表(JA)",
+          "EN": "流程测试主表(EN)",
+          "ZH": "流程测试主表(ZH)"
+        }
+      },
+      "persistent": true,
+      "addRowstamp": true,
+      "level": "SITE",
+      "attributes": [
+        {
+          "attribute": "SITEID", "description": "站点ID", "title": "站点", "type": "UPPER", "length": 8, "required": true, "persistent": true, "sameAsObject": "SITE", "sameAsAttribute": "SITEID", "searchType": "WILDCARD",
+          "sks:langdata": {
+            "TITLE": { "JA": "站点(JA)", "EN": "站点(EN)", "ZH": "站点(ZH)" },
+            "REMARKS": { "JA": "站点ID(JA)", "EN": "站点ID(EN)", "ZH": "站点ID(ZH)" }
+          }
+        },
+        {
+          "attribute": "ORGID", "description": "组织ID", "title": "组织", "type": "UPPER", "length": 8, "required": true, "persistent": true, "sameAsObject": "ORGANIZATION", "sameAsAttribute": "ORGID", "searchType": "WILDCARD",
+          "sks:langdata": {
+            "TITLE": { "JA": "组织(JA)", "EN": "组织(EN)", "ZH": "组织(ZH)" },
+            "REMARKS": { "JA": "组织ID(JA)", "EN": "组织ID(EN)", "ZH": "组织ID(ZH)" }
+          }
+        },
+        {
+          "attribute": "TEST_SKS_WF1NUM", "description": "编号", "title": "编号", "type": "UPPER", "length": 30, "required": false, "persistent": true,  "canAutonumber": true, "autonumber": "TEST_SKS_WF1NUM", "defaultValue": "&AUTOKEY&", "searchType": "WILDCARD",
+          "sks:langdata": {
+            "TITLE": { "JA": "编号(JA)", "EN": "编号(EN)", "ZH": "编号(ZH)" },
+            "REMARKS": { "JA": "编号(JA)", "EN": "编号(EN)", "ZH": "编号(ZH)" }
+          }
+        },
+        {
+          "attribute": "DESCRIPTION", "description": "描述", "title": "描述", "type": "ALN", "length": 50, "scale": 0, "localizable": true, "longDescriptionOwner": true, "userDefined": false, "searchType": "WILDCARD" ,
+          "sks:langdata": {
+            "TITLE": {
+              "JA": "描述(JA)2",
+              "EN": "描述(EN)2",
+              "ZH": "描述(ZH)2"
+            },
+            "REMARKS": {
+              "JA": "描述备注(JA)2",
+              "EN": "描述备注(EN)2",
+              "ZH": "描述备注(ZH)2"
+            }
+          }
+        },
+        {
+          "attribute": "STATUS", "description": "状态", "title": "状态", "type": "ALN", "length": 20, "persistent": true, "defaultValue": "DRAFT", "searchType": "EXACT",
+          "sks:langdata": {
+            "TITLE": { "JA": "状态(JA)", "EN": "状态(EN)", "ZH": "状态(ZH)" },
+            "REMARKS": { "JA": "状态(JA)", "EN": "状态(EN)", "ZH": "状态(ZH)" }
+          }
+        },
+        {
+          "attribute": "CREATEBY", "description": "创建人", "title": "创建人", "type": "UPPER", "length": 50, "persistent": true, "sameAsObject": "PERSON", "sameAsAttribute": "PERSONID", "defaultValue": "&PERSONID&", "searchType": "WILDCARD",
+          "sks:langdata": {
+            "TITLE": { "JA": "创建人(JA)", "EN": "创建人(EN)", "ZH": "创建人(ZH)" },
+            "REMARKS": { "JA": "创建人(JA)", "EN": "创建人(EN)", "ZH": "创建人(ZH)" }
+          }
+        },
+        {
+          "attribute": "CREATETIME", "description": "创建时间", "title": "创建时间", "type": "DATETIME", "length": 10, "persistent": true, "defaultValue": "&SYSDATE&",
+          "sks:langdata": {
+            "TITLE": { "JA": "创建时间(JA)", "EN": "创建时间(EN)", "ZH": "创建时间(ZH)" },
+            "REMARKS": { "JA": "创建时间(JA)", "EN": "创建时间(EN)", "ZH": "创建时间(ZH)" }
+          }
+        },
+        {
+          "attribute": "CHANGEBY", "description": "修改人", "title": "修改人", "type": "UPPER", "length": 50, "persistent": true, "searchType": "WILDCARD",
+          "sks:langdata": {
+            "TITLE": { "JA": "修改人(JA)", "EN": "修改人(EN)", "ZH": "修改人(ZH)" },
+            "REMARKS": { "JA": "修改人(JA)", "EN": "修改人(EN)", "ZH": "修改人(ZH)" }
+          }
+        },
+        {
+          "attribute": "CHANGEDATE", "description": "修改时间", "title": "修改时间", "type": "DATETIME", "length": 10, "persistent": true,
+          "sks:langdata": {
+            "TITLE": { "JA": "修改时间(JA)", "EN": "修改时间(EN)", "ZH": "修改时间(ZH)" },
+            "REMARKS": { "JA": "修改时间(JA)", "EN": "修改时间(EN)", "ZH": "修改时间(ZH)" }
+          }
+        },
+        {
+          "attribute": "REMARK", "description": "备注", "title": "备注", "type": "ALN", "length": 255, "persistent": true, "searchType": "WILDCARD",
+          "sks:langdata": {
+            "TITLE": { "JA": "备注(JA)", "EN": "备注(EN)", "ZH": "备注(ZH)" },
+            "REMARKS": { "JA": "备注(JA)", "EN": "备注(EN)", "ZH": "备注(ZH)" }
+          }
+        },
+        {
+          "attribute": "IBM_SYNCFLAG01", "description": "同步标识01", "title": "同步标识01", "type": "YORN", "length": 1, "scale": 0, "required": true, "defaultValue": "0", "searchType": "EXACT",
+          "sks:langdata": {
+            "TITLE": { "JA": "同步标识01(JA)", "EN": "同步标识01(EN)", "ZH": "同步标识01(ZH)" },
+            "REMARKS": { "JA": "同步标识01(JA)", "EN": "同步标识01(EN)", "ZH": "同步标识01(ZH)" }
+          }
+        },
+        {
+          "attribute": "IBM_SYNCFLAG02", "description": "同步标识02", "title": "同步标识02", "type": "YORN", "length": 1, "scale": 0, "required": true, "defaultValue": "0", "searchType": "EXACT",
+          "sks:langdata": {
+            "TITLE": { "JA": "同步标识02(JA)", "EN": "同步标识02(EN)", "ZH": "同步标识02(ZH)" },
+            "REMARKS": { "JA": "同步标识02(JA)", "EN": "同步标识02(EN)", "ZH": "同步标识02(ZH)" }
+          }
+        },
+        {
+          "attribute": "IBM_SYNCFLAG03", "description": "同步标识03", "title": "同步标识03", "type": "YORN", "length": 1, "scale": 0, "required": true, "defaultValue": "0", "searchType": "EXACT",
+          "sks:langdata": {
+            "TITLE": { "JA": "同步标识03(JA)", "EN": "同步标识03(EN)", "ZH": "同步标识03(ZH)" },
+            "REMARKS": { "JA": "同步标识03(JA)", "EN": "同步标识03(EN)", "ZH": "同步标识03(ZH)" }
+          }
+        },
+        {
+          "attribute": "IBM_SYNCFLAG04", "description": "同步标识04", "title": "同步标识04", "type": "YORN", "length": 1, "scale": 0, "required": true, "defaultValue": "0", "searchType": "EXACT",
+          "sks:langdata": {
+            "TITLE": { "JA": "同步标识04(JA)", "EN": "同步标识04(EN)", "ZH": "同步标识04(ZH)" },
+            "REMARKS": { "JA": "同步标识04(JA)", "EN": "同步标识04(EN)", "ZH": "同步标识04(ZH)" }
+          }
+        },
+        {
+          "attribute": "IBM_SYNCFLAG05", "description": "同步标识05", "title": "同步标识05", "type": "YORN", "length": 1, "scale": 0, "required": true, "defaultValue": "0", "searchType": "EXACT",
+          "sks:langdata": {
+            "TITLE": { "JA": "同步标识05(JA)", "EN": "同步标识05(EN)", "ZH": "同步标识05(ZH)" },
+            "REMARKS": { "JA": "同步标识05(JA)", "EN": "同步标识05(EN)", "ZH": "同步标识05(ZH)" }
+          }
+        },
+        {
+          "attribute": "IBM_SYNCFLAG06", "description": "同步标识06", "title": "同步标识06", "type": "YORN", "length": 1, "scale": 0, "required": true, "defaultValue": "0", "searchType": "EXACT",
+          "sks:langdata": {
+            "TITLE": { "JA": "同步标识06(JA)", "EN": "同步标识06(EN)", "ZH": "同步标识06(ZH)" },
+            "REMARKS": { "JA": "同步标识06(JA)", "EN": "同步标识06(EN)", "ZH": "同步标识06(ZH)" }
+          }
+        }
+      ]
+    },
+    {
+      "object": "TEST_SKS_WF2",
+      "description": "流程测试主表",
+      "sks:langdata": {
+        "DESCRIPTION": {
+          "JA": "流程测试主表(JA)",
+          "EN": "流程测试主表(EN)",
+          "ZH": "流程测试主表(ZH)"
+        }
+      },
+      "persistent": true,
+      "addRowstamp": true,
+      "level": "SITE",
+      "attributes": [
+        {
+          "attribute": "SITEID", "description": "站点ID", "title": "站点", "type": "UPPER", "length": 8, "required": true, "persistent": true, "sameAsObject": "SITE", "sameAsAttribute": "SITEID", "searchType": "WILDCARD",
+          "sks:langdata": {
+            "TITLE": { "JA": "站点(JA)", "EN": "站点(EN)", "ZH": "站点(ZH)" },
+            "REMARKS": { "JA": "站点ID(JA)", "EN": "站点ID(EN)", "ZH": "站点ID(ZH)" }
+          }
+        },
+        {
+          "attribute": "ORGID", "description": "组织ID", "title": "组织", "type": "UPPER", "length": 8, "required": true, "persistent": true, "sameAsObject": "ORGANIZATION", "sameAsAttribute": "ORGID", "searchType": "WILDCARD",
+          "sks:langdata": {
+            "TITLE": { "JA": "组织(JA)", "EN": "组织(EN)", "ZH": "组织(ZH)" },
+            "REMARKS": { "JA": "组织ID(JA)", "EN": "组织ID(EN)", "ZH": "组织ID(ZH)" }
+          }
+        },
+        {
+          "attribute": "TEST_SKS_WF1NUM", "description": "编号", "title": "编号", "type": "UPPER", "length": 30, "required": true, "persistent": true,  "searchType": "WILDCARD",
+          "sks:langdata": {
+            "TITLE": { "JA": "编号(JA)", "EN": "编号(EN)", "ZH": "编号(ZH)" },
+            "REMARKS": { "JA": "编号(JA)", "EN": "编号(EN)", "ZH": "编号(ZH)" }
+          }
+        },
+        {
+          "attribute": "WFPERSONID", "description": "用于测试流程待办多个人员", "title": "流程接收人", "type": "UPPER", "length": 50, "persistent": true, "sameAsObject": "PERSON", "sameAsAttribute": "PERSONID",  "searchType": "WILDCARD",
+          "sks:langdata": {
+            "TITLE": { "JA": "流程接收人(JA)", "EN": "流程接收人(EN)", "ZH": "流程接收人(ZH)" },
+            "REMARKS": { "JA": "用于测试流程待办多个人员(JA)", "EN": "用于测试流程待办多个人员(EN)", "ZH": "用于测试流程待办多个人员(ZH)" }
+          }
+        },
+        {
+          "attribute": "STATUS", "description": "状态", "title": "状态", "type": "ALN", "length": 20, "persistent": true, "defaultValue": "DRAFT", "searchType": "EXACT",
+          "sks:langdata": {
+            "TITLE": { "JA": "状态(JA)", "EN": "状态(EN)", "ZH": "状态(ZH)" },
+            "REMARKS": { "JA": "状态(JA)", "EN": "状态(EN)", "ZH": "状态(ZH)" }
+          }
+        },
+        {
+          "attribute": "CREATEBY", "description": "创建人", "title": "创建人", "type": "UPPER", "length": 50, "persistent": true, "sameAsObject": "PERSON", "sameAsAttribute": "PERSONID", "defaultValue": "&PERSONID&", "searchType": "WILDCARD",
+          "sks:langdata": {
+            "TITLE": { "JA": "创建人(JA)", "EN": "创建人(EN)", "ZH": "创建人(ZH)" },
+            "REMARKS": { "JA": "创建人(JA)", "EN": "创建人(EN)", "ZH": "创建人(ZH)" }
+          }
+        },
+        {
+          "attribute": "CREATETIME", "description": "创建时间", "title": "创建时间", "type": "DATETIME", "length": 10, "persistent": true, "defaultValue": "&SYSDATE&",
+          "sks:langdata": {
+            "TITLE": { "JA": "创建时间(JA)", "EN": "创建时间(EN)", "ZH": "创建时间(ZH)" },
+            "REMARKS": { "JA": "创建时间(JA)", "EN": "创建时间(EN)", "ZH": "创建时间(ZH)" }
+          }
+        },
+        {
+          "attribute": "CHANGEBY", "description": "修改人", "title": "修改人", "type": "UPPER", "length": 50, "persistent": true, "searchType": "WILDCARD",
+          "sks:langdata": {
+            "TITLE": { "JA": "修改人(JA)", "EN": "修改人(EN)", "ZH": "修改人(ZH)" },
+            "REMARKS": { "JA": "修改人(JA)", "EN": "修改人(EN)", "ZH": "修改人(ZH)" }
+          }
+        },
+        {
+          "attribute": "CHANGEDATE", "description": "修改时间", "title": "修改时间", "type": "DATETIME", "length": 10, "persistent": true,
+          "sks:langdata": {
+            "TITLE": { "JA": "修改时间(JA)", "EN": "修改时间(EN)", "ZH": "修改时间(ZH)" },
+            "REMARKS": { "JA": "修改时间(JA)", "EN": "修改时间(EN)", "ZH": "修改时间(ZH)" }
+          }
+        },
+        {
+          "attribute": "REMARK", "description": "备注", "title": "备注", "type": "ALN", "length": 255, "persistent": true, "searchType": "WILDCARD",
+          "sks:langdata": {
+            "TITLE": { "JA": "备注(JA)", "EN": "备注(EN)", "ZH": "备注(ZH)" },
+            "REMARKS": { "JA": "备注(JA)", "EN": "备注(EN)", "ZH": "备注(ZH)" }
+          }
+        }
+      ]
+    }
+  ]
+}

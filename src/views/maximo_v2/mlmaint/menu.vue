@@ -19,17 +19,19 @@ export default {
         primaryKey: 'MAXMENUID',
         idsParam: 'maxmenuIds',
         keyFields: ['MENUTYPE', 'MODULEAPP', 'ELEMENTTYPE', 'KEYVALUE'],
+        savedQueryApp: 'MLMAINT_MAXMENU',
         searchFields: [
           {
             param: 'menutype',
             label: '菜单类型',
             width: 150,
             type: 'select',
+            col: 'MENUTYPE',
             options: ['APPMENU', 'APPTOOL', 'MODULE', 'SEARCHMENU']
           },
-          { param: 'moduleapp', label: '模块应用', width: 150 },
-          { param: 'elementtype', label: '元素类型', width: 130 },
-          { param: 'keyvalue', label: '键值', width: 170 },
+          { param: 'moduleapp', label: '模块应用', width: 150, col: 'MODULEAPP' },
+          { param: 'elementtype', label: '元素类型', width: 130, col: 'ELEMENTTYPE' },
+          { param: 'keyvalue', label: '键值', width: 170, col: 'KEYVALUE' },
           { param: 'value', label: '描述', width: 170 }
         ],
         columns: [

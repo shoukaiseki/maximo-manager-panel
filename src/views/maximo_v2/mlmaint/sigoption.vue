@@ -19,9 +19,10 @@ export default {
         primaryKey: 'SIGOPTIONID',
         idsParam: 'sigoptionIds',
         keyFields: ['APP', 'OPTIONNAME'],
+        savedQueryApp: 'MLMAINT_SIGOPTION',
         searchFields: [
-          { param: 'app', label: '应用', width: 180 },
-          { param: 'optionname', label: '选项名', width: 180 },
+          { param: 'app', label: '应用', width: 180, col: 'APP' },
+          { param: 'optionname', label: '选项名', width: 180, col: 'OPTIONNAME' },
           { param: 'value', label: '描述', width: 200 }
         ],
         columns: [

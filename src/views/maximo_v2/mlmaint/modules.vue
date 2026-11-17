@@ -19,8 +19,9 @@ export default {
         primaryKey: 'MAXMODULESID',
         idsParam: 'maxmodulesIds',
         keyFields: ['MODULE'],
+        savedQueryApp: 'MLMAINT_MAXMODULES',
         searchFields: [
-          { param: 'module', label: '模块', width: 180 },
+          { param: 'module', label: '模块', width: 180, col: 'MODULE' },
           { param: 'value', label: '描述', width: 200 }
         ],
         columns: [

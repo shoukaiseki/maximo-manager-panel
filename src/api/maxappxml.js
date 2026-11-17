@@ -79,6 +79,7 @@ export function getMaxAppXmlAuditDetail(eaudittransid) {
  * @param {Object} [opts]
  * @param {boolean} [opts.allLangcode] 导出所有语言信息（URL 参数 _allLangcode=true）
  * @param {string} [opts.include] 大字段参数：presentation / zip
+ * @param {string} [opts.exclude] 排除项（分号分隔）：对象key 排除整个对象，对象key:条件 排除命中条件的行
  */
 export function exportAppInfo(app, opts) {
   opts = opts || {}
@@ -90,7 +91,8 @@ export function exportAppInfo(app, opts) {
       app: app,
       _langcode: 'ZH',
       _allLangcode: opts.allLangcode ? 'true' : undefined,
-      _include: opts.include
+      _include: opts.include,
+      _exclude: opts.exclude || undefined
     }
   })
 }

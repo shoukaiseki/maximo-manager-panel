@@ -576,6 +576,12 @@ export const constantRoutes = [
                 meta: { title: '应用XML多语言', icon: 'document', noCache: false }
             },
             {
+                path: 'maxapps',
+                component: (resolve) => require(['/src/views/maximo_v2/mlmaint/maxapps'], resolve),
+                name: 'MaxAppsMlMaintain',
+                meta: { title: 'MAXAPPS 多语言', icon: 'document', noCache: false }
+            },
+            {
                 path: 'modules',
                 component: (resolve) => require(['/src/views/maximo_v2/mlmaint/modules'], resolve),
                 name: 'MaxModulesMlMaintain',
@@ -592,6 +598,18 @@ export const constantRoutes = [
                 component: (resolve) => require(['/src/views/maximo_v2/mlmaint/sigoption'], resolve),
                 name: 'SigOptionMlMaintain',
                 meta: { title: 'SIGOPTION 多语言', icon: 'document', noCache: false }
+            },
+            {
+                path: 'maxobjectcfg',
+                component: (resolve) => require(['/src/views/maximo_v2/mlmaint/maxobjectcfg'], resolve),
+                name: 'MaxObjectCfgMlMaintain',
+                meta: { title: 'MAXOBJECTCFG 多语言', icon: 'document', noCache: false }
+            },
+            {
+                path: 'maxattributecfg',
+                component: (resolve) => require(['/src/views/maximo_v2/mlmaint/maxattributecfg'], resolve),
+                name: 'MaxAttributeCfgMlMaintain',
+                meta: { title: 'MAXATTRIBUTECFG 多语言', icon: 'document', noCache: false }
             }
         ]
     },

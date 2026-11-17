@@ -151,32 +151,35 @@
 
     <!-- 导入弹窗 -->
     <el-dialog title="导入标签多语言" :visible.sync="importDialog.visible" width="85%" top="4vh" :close-on-click-modal="false" @opened="onImportDialogOpened" @closed="disposeImportEditor">
-      <el-alert type="info" :closable="false" show-icon title="粘贴导出的 JSON 或选择 .json 文件（支持 {maxlabelsList:[...]} / 数组 / 单个对象）；按 APP + ID + PROPERTY 匹配新增或更新，_delete=true 删除，sks: 开头属性为注解会被忽略" />
-      <el-upload
-        ref="importUpload"
-        style="margin-top:12px;"
-        :file-list="importDialog.fileList"
-        :auto-upload="false"
-        :limit="1"
-        accept=".json"
-        :on-change="onImportFileChange"
-        :on-remove="onImportFileRemove"
-      >
-        <el-button size="small" icon="el-icon-folder-opened">选择 JSON 文件</el-button>
-      </el-upload>
-      <el-form label-width="150px" style="margin-top:12px;">
-        <el-form-item label="导入多语言(sks:langdata)">
-          <el-checkbox v-model="importDialog.allLangcode">按 sks:langdata 写入各语言译文（_allLangcode=true）</el-checkbox>
-        </el-form-item>
-        <el-form-item label="启用迁移模式">
-          <el-checkbox v-model="importDialog.dmDeploySet">dmDeploySet（MboSet 调用 setDMDeploySet(true)）</el-checkbox>
-        </el-form-item>
-      </el-form>
-      <div ref="importMonacoRef" class="monaco-container import-monaco" />
-      <div v-if="importDialog.result" class="import-result-bar">
-        <el-tag :type="importDialog.result.failed > 0 ? 'danger' : 'success'" size="small">{{ importDialog.result.failed > 0 ? '存在失败记录' : '导入成功' }}</el-tag>
-        <span class="import-result-summary">{{ importSummaryText }}</span>
-        <el-button type="text" size="mini" @click="openImportDetailDialog">查看详细返回信息</el-button>
+      <el-alert type="info" :closable="false" show-icon title="粘贴导出的 JSON 或选择/拖入 .json 文件（支持 {maxlabelsList:[...]} / 数组 / 单个对象）；按 APP + ID + PROPERTY 匹配新增或更新，_delete=true 删除，sks: 开头属性为注解会被忽略" />
+      <div class="import-drop-wrap" @dragover.prevent="importDragOver = true" @dragleave.prevent="importDragOver = false" @drop.prevent="onImportDrop">
+        <el-upload
+          ref="importUpload"
+          style="margin-top:12px;"
+          :file-list="importDialog.fileList"
+          :auto-upload="false"
+          :limit="1"
+          accept=".json"
+          :on-change="onImportFileChange"
+          :on-remove="onImportFileRemove"
+        >
+          <el-button size="small" icon="el-icon-folder-opened">选择 JSON 文件</el-button>
+        </el-upload>
+        <el-form label-width="150px" style="margin-top:12px;">
+          <el-form-item label="导入多语言(sks:langdata)">
+            <el-checkbox v-model="importDialog.allLangcode">按 sks:langdata 写入各语言译文（_allLangcode=true）</el-checkbox>
+          </el-form-item>
+          <el-form-item label="启用迁移模式">
+            <el-checkbox v-model="importDialog.dmDeploySet">dmDeploySet（MboSet 调用 setDMDeploySet(true)）</el-checkbox>
+          </el-form-item>
+        </el-form>
+        <div ref="importMonacoRef" class="monaco-container import-monaco" />
+        <div v-if="importDialog.result" class="import-result-bar">
+          <el-tag :type="importDialog.result.failed > 0 ? 'danger' : 'success'" size="small">{{ importDialog.result.failed > 0 ? '存在失败记录' : '导入成功' }}</el-tag>
+          <span class="import-result-summary">{{ importSummaryText }}</span>
+          <el-button type="text" size="mini" @click="openImportDetailDialog">查看详细返回信息</el-button>
+        </div>
+        <div v-if="importDragOver" class="import-drop-mask">松开鼠标即可读取 JSON 文件</div>
       </div>
       <span slot="footer" class="dialog-footer">
         <el-button @click="importDialog.visible = false">关 闭</el-button>
@@ -236,7 +239,8 @@
         :closable="false"
         show-icon
         style="margin-bottom:12px;"
-        title="「记录片段」可直接粘贴到已有 JSON 的 maxlabelsList 数组中；「可直接导入」是包含根节点的完整 JSON，可直接用于导入。" />
+        title="「记录片段」可直接粘贴到已有 JSON 的 maxlabelsList 数组中；「可直接导入」是包含根节点的完整 JSON，可直接用于导入。"
+      />
       <div class="json-toolbar" style="margin-bottom:8px;">
         <el-checkbox v-model="rowExportDialog.withUuid" @change="rebuildRowExport">生成UUID</el-checkbox>
       </div>
@@ -357,6 +361,8 @@ export default {
         result: null
       },
       importMonaco: null,
+      // 导入弹窗正在拖入文件
+      importDragOver: false,
       importDetailDialog: {
         visible: false,
         rows: []
@@ -727,6 +733,7 @@ export default {
       this.importDialog.allLangcode = true
       this.importDialog.dmDeploySet = false
       this.importDialog.fileList = []
+      this.importDragOver = false
       this.importDialog.text = ''
       this.importDialog.result = null
     },
@@ -756,15 +763,34 @@ export default {
       if (!raw) {
         return
       }
+      this.importDialog.fileList = fileList.slice(-1)
+      this.readImportJsonFile(raw)
+    },
+    // 拖拽文件到弹窗时读取(与点击选择共用)
+    onImportDrop(event) {
+      this.importDragOver = false
+      const files = event.dataTransfer ? event.dataTransfer.files : null
+      const file = files && files.length ? files[0] : null
+      if (!file) {
+        return
+      }
+      if (!/\.json$/i.test(file.name)) {
+        this.$message.warning('请拖入 .json 文件')
+        return
+      }
+      this.importDialog.fileList = []
+      this.readImportJsonFile(file)
+    },
+    readImportJsonFile(raw) {
       const reader = new FileReader()
       reader.onload = e => {
         const text = String(e.target.result || '')
         try {
           this.importDialog.text = JSON.stringify(JSON.parse(text), null, 2)
+          this.$message.success('已读取文件: ' + raw.name)
         } catch (err) {
           this.$message.error('JSON 解析失败：' + (err.message || err))
         }
-        this.importDialog.fileList = fileList.slice(-1)
         if (this.importMonaco) {
           this.importMonaco.setValue(this.importDialog.text)
         }
@@ -1156,6 +1182,25 @@ export default {
   height: 320px;
   border: 1px solid #dcdfe6;
   border-radius: 4px;
+}
+.import-drop-wrap {
+  position: relative;
+}
+.import-drop-mask {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(64, 158, 255, 0.08);
+  border: 1px dashed #409eff;
+  border-radius: 6px;
+  color: #409eff;
+  font-size: 13px;
+  pointer-events: none;
 }
 .import-monaco {
   height: 42vh;
