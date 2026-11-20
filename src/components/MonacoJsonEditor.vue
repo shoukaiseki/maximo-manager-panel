@@ -21,6 +21,18 @@ export default {
     placeholder: {
       type: String,
       default: ''
+    },
+    language: {
+      type: String,
+      default: 'json'
+    },
+    wordWrap: {
+      type: String,
+      default: 'off'
+    },
+    fontSize: {
+      type: Number,
+      default: 12
     }
   },
   data() {
@@ -55,14 +67,14 @@ export default {
       this.monacoApi = monaco
       this.editor = monaco.editor.create(element, {
         value: this.value || '',
-        language: 'json',
+        language: this.language,
         readOnly: this.readOnly,
         automaticLayout: true,
         minimap: { enabled: false },
         scrollBeyondLastLine: false,
-        fontSize: 12,
+        fontSize: this.fontSize,
         tabSize: 2,
-        wordWrap: 'off',
+        wordWrap: this.wordWrap,
         placeholder: this.placeholder || undefined
       })
       this.editor.onDidChangeModelContent(() => {

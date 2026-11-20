@@ -378,6 +378,12 @@ export const constantRoutes = [
                 meta: { title: '条件表达式', icon: 'link', noCache: false }
             },
             {
+                path: 'conditionDebug',
+                component: (resolve) => require(['/src/views/maximo/condition/debug'], resolve),
+                name: 'ConditionDebug',
+                meta: { title: '条件表达式调试', icon: 'edit', noCache: false }
+            },
+            {
                 path: 'maxintobject',
                 component: (resolve) => require(['/src/views/maximo/maxintobject/index'], resolve),
                 name: 'MaxIntObject',

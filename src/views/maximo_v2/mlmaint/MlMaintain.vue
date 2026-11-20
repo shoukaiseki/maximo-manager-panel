@@ -144,7 +144,7 @@
     </el-dialog>
 
     <!-- 多语言维护 -->
-    <el-dialog :title="'维护多语言 - ' + editorTitle" :visible.sync="editor.visible" width="720px" top="6vh" :close-on-click-modal="false">
+    <el-dialog :title="'维护多语言 - ' + editorTitle" :visible.sync="editor.visible" width="720px" top="6vh" :close-on-click-modal="false" @closed="disposeEditorJsonMonaco">
       <div class="editor-meta">
         <span v-for="key in config.keyFields" :key="key" class="editor-meta-item">{{ key }}: {{ editor.row[key] }}</span>
       </div>
@@ -177,14 +177,11 @@
             </el-tooltip>
             <el-button size="mini" icon="el-icon-copy-document" @click="copyEditorJson">复制当前JSON</el-button>
           </div>
-          <el-tabs v-model="editor.jsonTab">
-            <el-tab-pane label="单对象JSON" name="single">
-              <el-input v-model="editor.jsonSingle" type="textarea" :rows="12" placeholder="当前行对象的多语言 JSON" />
-            </el-tab-pane>
-            <el-tab-pane label="可导入JSON" name="importable">
-              <el-input v-model="editor.jsonImportable" type="textarea" :rows="12" placeholder="外层包导入根节点的 JSON，可直接粘贴到导入对话框" />
-            </el-tab-pane>
+          <el-tabs v-model="editor.jsonTab" @tab-click="onEditorJsonTabChange">
+            <el-tab-pane label="单对象JSON" name="single" />
+            <el-tab-pane label="可导入JSON" name="importable" />
           </el-tabs>
+          <div ref="editorJsonMonacoRef" class="monaco-container editor-json-monaco" />
         </el-collapse-item>
       </el-collapse>
       <span slot="footer" class="dialog-footer">
@@ -230,7 +227,7 @@
     </el-dialog>
 
     <!-- 导出 -->
-    <el-dialog title="导出多语言 JSON" :visible.sync="exportDialog.visible" width="80%" top="5vh" :close-on-click-modal="false">
+    <el-dialog title="导出多语言 JSON" :visible.sync="exportDialog.visible" width="80%" top="5vh" :close-on-click-modal="false" @opened="onExportDialogOpened" @closed="disposeExportEditor">
       <el-alert
         type="info"
         :closable="false"
@@ -248,7 +245,7 @@
         <span class="export-total">共 {{ exportDialog.total }} 条</span>
       </div>
       <div v-if="!exportDialog.json && !exportDialog.loading" class="export-empty-tip">点击「刷新」生成导出 JSON</div>
-      <el-input :value="exportDialog.json" type="textarea" :rows="16" readonly placeholder="" />
+      <div v-show="exportDialog.json || exportDialog.loading" ref="exportMonacoRef" class="monaco-container export-monaco" />
       <span slot="footer" class="dialog-footer">
         <el-button size="mini" icon="el-icon-copy-document" :disabled="!exportDialog.json" @click="copyExport">复制 JSON</el-button>
         <el-button size="mini" icon="el-icon-download" :disabled="!exportDialog.json" @click="downloadExport">下载 JSON</el-button>
@@ -315,7 +312,9 @@ export default {
         jsonTab: 'single',
         jsonSingle: '',
         jsonImportable: '',
-        jsonReady: false
+        jsonReady: false,
+        // JSON 面板的 Monaco 编辑器实例
+        jsonMonaco: null
       },
       importDialog: {
         visible: false,
@@ -331,6 +330,8 @@ export default {
       importDragOver: false,
       // 导入 JSON 的 Monaco 编辑器实例
       importMonaco: null,
+      // 导出 JSON 的 Monaco 编辑器实例
+      exportMonaco: null,
       exportDialog: {
         visible: false,
         loading: false,
@@ -679,7 +680,8 @@ export default {
         jsonTab: 'single',
         jsonSingle: '',
         jsonImportable: '',
-        jsonReady: false
+        jsonReady: false,
+        jsonMonaco: null
       }
       try {
         const params = Object.assign({ _langcode: this.queryLang, _allLangcode: 'true' }, keys)
@@ -752,6 +754,64 @@ export default {
       if (opened && !this.editor.jsonReady) {
         this.syncJsonFromForm(true)
       }
+      if (opened) {
+        this.$nextTick(() => {
+          this.ensureEditorJsonMonaco()
+        })
+      }
+    },
+    // JSON 面板 Monaco: 懒创建, 已存在则同步内容
+    ensureEditorJsonMonaco() {
+      const el = this.$refs.editorJsonMonacoRef
+      if (!el) {
+        return
+      }
+      if (!this.editor.jsonMonaco) {
+        this.editor.jsonMonaco = monaco.editor.create(el, {
+          value: this.currentEditorJson(),
+          language: 'json',
+          theme: 'vs',
+          minimap: { enabled: false },
+          automaticLayout: true,
+          scrollBeyondLastLine: false,
+          folding: true,
+          wordWrap: 'on',
+          fontSize: 12
+        })
+        this.editor.jsonMonaco.onDidChangeModelContent(() => {
+          const value = this.editor.jsonMonaco.getValue()
+          if (this.editor.jsonTab === 'importable') {
+            this.editor.jsonImportable = value
+          } else {
+            this.editor.jsonSingle = value
+          }
+        })
+      } else {
+        this.editor.jsonMonaco.setValue(this.currentEditorJson())
+      }
+      this.$nextTick(() => {
+        if (this.editor.jsonMonaco) {
+          this.editor.jsonMonaco.layout()
+        }
+      })
+    },
+    disposeEditorJsonMonaco() {
+      if (this.editor.jsonMonaco) {
+        this.editor.jsonMonaco.dispose()
+        this.editor.jsonMonaco = null
+      }
+    },
+    // 当前页签对应的 JSON 文本
+    currentEditorJson() {
+      return this.editor.jsonTab === 'importable' ? this.editor.jsonImportable : this.editor.jsonSingle
+    },
+    // 切换单对象/可导入 JSON 时刷新编辑器内容
+    onEditorJsonTabChange() {
+      this.$nextTick(() => {
+        if (this.editor.jsonMonaco) {
+          this.editor.jsonMonaco.setValue(this.currentEditorJson())
+        }
+      })
     },
     // 表单当前内容 => 行对象(含 sks:langdata)
     buildEditorRow() {
@@ -781,6 +841,9 @@ export default {
       this.editor.jsonSingle = JSON.stringify(row, null, 2)
       this.editor.jsonImportable = JSON.stringify({ [this.config.listKey]: [row] }, null, 2)
       this.editor.jsonReady = true
+      if (this.editor.jsonMonaco) {
+        this.editor.jsonMonaco.setValue(this.currentEditorJson())
+      }
       if (!silent) {
         this.$message.success('已根据表单内容更新 JSON')
       }
@@ -911,6 +974,43 @@ export default {
         this.importMonaco = null
       }
     },
+    // 导出对话框打开后初始化 Monaco
+    onExportDialogOpened() {
+      this.$nextTick(() => {
+        if (!this.$refs.exportMonacoRef) {
+          return
+        }
+        if (!this.exportMonaco) {
+          this.exportMonaco = monaco.editor.create(this.$refs.exportMonacoRef, {
+            value: this.exportDialog.json || '',
+            language: 'json',
+            theme: 'vs',
+            readOnly: true,
+            minimap: { enabled: false },
+            automaticLayout: true,
+            scrollBeyondLastLine: false,
+            folding: true,
+            wordWrap: 'on',
+            fontSize: 12
+          })
+        } else {
+          this.exportMonaco.setValue(this.exportDialog.json || '')
+        }
+      })
+    },
+    disposeExportEditor() {
+      if (this.exportMonaco) {
+        this.exportMonaco.dispose()
+        this.exportMonaco = null
+      }
+    },
+    // 导出 JSON 写入 Monaco(编辑器未创建时先放数据, 打开后同步)
+    setExportJson(text) {
+      this.exportDialog.json = text || ''
+      if (this.exportMonaco) {
+        this.exportMonaco.setValue(this.exportDialog.json)
+      }
+    },
     // 文件内容写入 Monaco(编辑器未创建时先放 text, 打开后同步)
     setImportText(text) {
       this.importDialog.text = text
@@ -1021,8 +1121,8 @@ export default {
       this.exportDialog.scope = this.selectedRows.length > 0 ? 'selected' : 'current'
       this.exportDialog.allLangcode = true
       this.exportDialog.withUuid = true
-      this.exportDialog.json = ''
       this.exportDialog.total = 0
+      this.setExportJson('')
       this.exportDialog.visible = true
     },
     async loadExportData() {
@@ -1078,7 +1178,7 @@ export default {
           }
         })
         this.exportDialog.total = rows.length
-        this.exportDialog.json = JSON.stringify({ [this.config.listKey]: rows }, null, 2)
+        this.setExportJson(JSON.stringify({ [this.config.listKey]: rows }, null, 2))
       } catch (e) {
         this.$message.error('导出失败: ' + (e.message || String(e)))
       } finally {
@@ -1100,14 +1200,14 @@ export default {
       })
       if (objectNames.length === 0) {
         this.exportDialog.total = 0
-        this.exportDialog.json = ''
+        this.setExportJson('')
         return
       }
       const res = await exportConfigurMl({ objectNames, attributeFilters }, { _langcode: this.queryLang })
       const data = this.parseScriptResponse(res)
       const maxObjects = data.maxObjects || []
       this.exportDialog.total = maxObjects.length
-      this.exportDialog.json = JSON.stringify({ maxObjects }, null, 2)
+      this.setExportJson(JSON.stringify({ maxObjects }, null, 2))
     },
     copyExport() {
       const text = this.exportDialog.json
@@ -1235,6 +1335,11 @@ export default {
     height: 320px;
   }
 
+  .export-monaco {
+    height: 46vh;
+    min-height: 320px;
+  }
+
   .import-drop-mask {
     position: absolute;
     top: 0;
@@ -1262,6 +1367,10 @@ export default {
 
     .editor-json-toolbar {
       margin-bottom: 8px;
+    }
+
+    .editor-json-monaco {
+      height: 220px;
     }
 
     .el-collapse-item__content {

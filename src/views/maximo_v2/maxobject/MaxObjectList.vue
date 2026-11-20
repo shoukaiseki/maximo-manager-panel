@@ -67,6 +67,9 @@
       <el-checkbox v-model="importDialog.dmDeploySet" class="dm-deploy-checkbox">
         dmDeploySet（迁移模式：等同属性引用的对象/属性在目标环境还不存在时必须开启，先显式设置 MAXTYPE/LENGTH/SCALE 再设置 sameAs）
       </el-checkbox>
+      <el-checkbox v-model="importDialog.importMl" class="dm-deploy-checkbox">
+        导入多语言数据（对象 DESCRIPTION、属性 TITLE/REMARKS 等 sks:langdata，取消勾选只导入结构）
+      </el-checkbox>
       <div v-loading="importDialog.loading" element-loading-text="导入中...">
         <div ref="importMonacoContainer" style="height:340px;border:1px solid #dcdfe6"></div>
       </div>
@@ -260,7 +263,7 @@ select 1 from WFASSIGNMENT
     },
     // ===== 导入对象配置(SKS.AUTOSCRIPT.LIBRARY) =====
     openImportDialog() {
-      this.importDialog = { visible: true, loading: false, error: '', text: '', dmDeploySet: false, result: null, rawResult: '' }
+      this.importDialog = { visible: true, loading: false, error: '', text: '', dmDeploySet: false, importMl: true, result: null, rawResult: '' }
     },
     onImportDialogOpened() {
       this.$nextTick(() => {
@@ -328,7 +331,14 @@ select 1 from WFASSIGNMENT
       d.result = null
       d.rawResult = ''
       const merged = { total: importData.maxObjects.length, processed: 0, added: 0, updated: 0, deleted: 0, failed: 0, results: [] }
-      importMaxObjectsConfigur(importData, { dmDeploySet: d.dmDeploySet ? 'true' : 'false' }).then(res => {
+      const importParams = { dmDeploySet: d.dmDeploySet ? 'true' : 'false' }
+      // 勾选: 按 sks:langdata 导入所有语言(EN/ZH/JA 等); 取消勾选只导入结构
+      if (d.importMl) {
+        importParams._allLangcode = 'true'
+      } else {
+        importParams._onlyFunctions = 'configur'
+      }
+      importMaxObjectsConfigur(importData, importParams).then(res => {
         const body = res.data || {}
         if (body.status === 'error') {
           d.error = body.message || '导入失败'

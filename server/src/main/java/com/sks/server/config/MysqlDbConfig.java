@@ -155,6 +155,23 @@ public class MysqlDbConfig {
                 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='保存的查询'
                 """,
             """
+                CREATE TABLE IF NOT EXISTS cond_debug_record (
+                    id BIGINT AUTO_INCREMENT PRIMARY KEY COMMENT '记录ID',
+                    record_name VARCHAR(200) NOT NULL COMMENT '记录名称',
+                    mbo_name VARCHAR(100) NOT NULL COMMENT 'MBO对象名称',
+                    mbo_where TEXT COMMENT 'MBO记录过滤条件',
+                    cond_type VARCHAR(30) NOT NULL DEFAULT 'WORKFLOW' COMMENT '表达式类型: WORKFLOW=工作流 / SIGOPTION=签名',
+                    parser_type VARCHAR(20) NOT NULL DEFAULT 'SYSTEM' COMMENT '解析器: SYSTEM=系统 / CUSTOM=自定义SQL',
+                    expression LONGTEXT COMMENT '条件表达式内容',
+                    fields TEXT COMMENT '附加输出字段',
+                    max_rows INT DEFAULT 10 COMMENT '多条匹配候选条数',
+                    description VARCHAR(500) DEFAULT '' COMMENT '描述',
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+                    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+                    UNIQUE KEY uk_record_name (record_name)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='条件表达式调试记录'
+                """,
+            """
                 CREATE TABLE IF NOT EXISTS logger_level_config (
                     id BIGINT AUTO_INCREMENT PRIMARY KEY COMMENT '配置ID',
                     logger_name VARCHAR(300) NOT NULL COMMENT '日志器名称(如 maximo.script)',
@@ -255,6 +272,14 @@ public class MysqlDbConfig {
                         System.out.println("[MySQL] Adding group_id column to logger_mx_config...");
                         stmt.execute("ALTER TABLE logger_mx_config ADD COLUMN group_id BIGINT DEFAULT NULL COMMENT '所属组ID(为NULL为旧数据)' AFTER id");
                         stmt.execute("ALTER TABLE logger_mx_config ADD KEY idx_group (group_id)");
+                    }
+                }
+
+                // 检查并添加 cond_debug_record.parser_type 列（兼容升级前已存在表）
+                try (var rs = stmt.executeQuery("SHOW COLUMNS FROM cond_debug_record LIKE 'parser_type'")) {
+                    if (!rs.next()) {
+                        System.out.println("[MySQL] Adding parser_type column to cond_debug_record...");
+                        stmt.execute("ALTER TABLE cond_debug_record ADD COLUMN parser_type VARCHAR(20) NOT NULL DEFAULT 'SYSTEM' COMMENT '解析器: SYSTEM=系统 / CUSTOM=自定义SQL' AFTER cond_type");
                     }
                 }
 

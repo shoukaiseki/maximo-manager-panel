@@ -258,7 +258,7 @@ export default {
     async initializeLogging() {
       return new Promise((resolve, reject) => {
         request({
-          url: '/api/script/SHARPTREE.AUTOSCRIPT.LOGGING',
+          url: '/api/script/SKS.AUTOSCRIPT.LOGGING',
           method: 'get',
           headers: {
             ...this.authHeaders,
@@ -290,7 +290,7 @@ export default {
         
         // 构建 SSE URL
         const timeout = this.refreshInterval  // 转换为毫秒
-        const url = `${baseUrl}/maximo/api/script/SHARPTREE.AUTOSCRIPT.LOGGING?timeout=${timeout}`
+        const url = `${baseUrl}/maximo/api/script/SKS.AUTOSCRIPT.LOGGING?timeout=${timeout}`
         
         console.log('Connecting to SSE:', url)
         console.log('Timeout parameter:', timeout, 'seconds')
